@@ -1,0 +1,3 @@
+[submodule "android-app/app/src/main/cpp/libretro-common"]
+	path = android-app/app/src/main/cpp/libretro-common
+	url = https://github.com/libretro/libretro-common.git

@@ -1,0 +1,68 @@
+name: Bug Report
+description: Report a bug in Arc Emulator
+labels: bug
+body:
+  - type: input
+    id: version
+    label: App Version
+    placeholder: "e.g., 1.1.0"
+    attributes:
+      required: true
+
+  - type: textarea
+    id: description
+    label: Bug Description
+    placeholder: "Describe what's wrong. Be specific about what you were doing."
+    attributes:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    label: How to Reproduce
+    placeholder: |
+      1. Open the app
+      2. Go to Library
+      3. Tap on a game
+      4. See the error
+    attributes:
+      required: true
+
+  - type: textarea
+    id: expected
+    label: Expected Behavior
+    placeholder: "What should have happened?"
+
+  - type: input
+    id: device
+    label: Device Model
+    placeholder: "e.g., Samsung Galaxy S21, Pixel 7"
+
+  - type: dropdown
+    id: os
+    label: Operating System (Android)
+    options:
+      - "13 (Android 13)"
+      - "14 (Android 14)"
+      - "15 (Android 15)"
+
+  - type: textarea
+    id: graphics
+    label: Graphics Driver / GPU
+    placeholder: "e.g., Adreno 730, Mali-G710"
+
+  - type: textarea
+    id: notes
+    label: Additional Notes
+    placeholder: |
+      Any other information? (Screenshots, logs, steps to fix, etc.)
+      
+      Tip: You can take a screenshot by holding Power + Volume Down
+
+  - type: checkboxes
+    id: checklist
+    label: 
+    options:
+      - label: "I have searched for similar issues"
+        required: true
+      - label: "This is a new bug, not a known issue"
+        required: true

@@ -1,0 +1,41 @@
+# Built files
+*.apk
+*.aab
+build/
+.gradle/
+local.properties
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Kotlin
+.kotlin/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+*.logcat
+logs/
+
+# Secrets
+*.keystore
+*.jks
+secrets.properties
+
+# Generated files
+*.class
+
+# Excluded project folders (third-party, see NOTICES.txt)
+web-app/
+docs/
+examples/
+
+# Development notes (not tracked)
+README-DEV.md

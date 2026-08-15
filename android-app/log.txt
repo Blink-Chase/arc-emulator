@@ -1,0 +1,642 @@
+--------- beginning of main
+02-06 22:11:46.361  2146  2349 I Finsky  : [46] Current account updated in PVS
+02-06 22:11:46.361  2146  2349 I Finsky  : [46] Current account updated in PVS
+02-06 22:11:46.361  2146  2349 I Finsky  : [46] Current account updated in PVS
+02-06 22:11:46.361  2501  7927 I Finsky:background: [149] Wrote row to frosting DB: 1105
+02-06 22:11:46.361  2501  2501 I Finsky:background: [2] Memory trim requested to level 40
+02-06 22:11:46.362  2146  2349 I Finsky  : [46] Current account updated in PVS
+02-06 22:11:46.362  1404  1404 I faht    : (REDACTED) O received %s
+02-06 22:11:46.364  2501  2547 I Finsky:background: [41] Current account updated in PVS
+02-06 22:11:46.364  2146  2349 I Finsky  : [46] Current account updated in PVS
+02-06 22:11:46.364  2146  2353 I Finsky  : [50] Current account updated in PVS
+02-06 22:11:46.366  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:11:46.375  2146  2434 I PlayCommon: [75] Successfully uploaded logs.
+02-06 22:11:46.387  1404  1404 I faht    : (REDACTED) O received %s
+02-06 22:11:46.394  2501  7927 I Finsky:background: [149] Wrote row to frosting DB: 1106
+02-06 22:11:46.398  2146  2349 I Finsky  : [46] Current account updated in PVS
+02-06 22:11:46.398  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:11:46.399  1067  1112 D PackageUpdatedTask: Package updated: mOp=UPDATE packages=[com.nova], user=UserHandle{0}
+02-06 22:11:46.400  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:11:46.400  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:11:46.401  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:11:46.401   689   727 I system_server: AssetManager2(0x715eee525838) locale list changing from [] to [en-US]
+02-06 22:11:46.408  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:11:46.409  2146  2146 I Finsky  : [2] Memory trim requested to level 40
+02-06 22:11:46.409  2146  2146 I Finsky  : [2] Flushing in-memory image cache
+02-06 22:11:46.409  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:11:46.409  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:11:46.410  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:11:46.410  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:11:46.410  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:11:46.410  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:11:46.410  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:11:46.411  1385  7957 I AiAiEcho: AppIndexer Package:[com.nova] UserProfile:[0] Enabled:[true].
+02-06 22:11:46.411  1385  7957 I AiAiEcho: AppFetcherImplV2 updateApps package:[com.nova], userId:[0], reason:[package is updated.].
+02-06 22:11:46.416  2146  2353 I Finsky  : [50] Current account updated in PVS
+02-06 22:11:46.416  2146  2353 I Finsky  : [50] Current account updated in PVS
+02-06 22:11:46.416   689  1940 V SafetySourceDataValidat: Package: com.android.vending has expected signature
+02-06 22:11:46.416   689  1940 V SafetySourceDataValidat: Package: com.android.vending has expected signature
+02-06 22:11:46.418  2146  2353 I Finsky  : [50] Current account updated in PVS
+02-06 22:11:46.418  2146  2353 I Finsky  : [50] Current account updated in PVS
+02-06 22:11:46.419  2146  2353 I Finsky  : [50] Current account updated in PVS
+02-06 22:11:46.420  2146  2352 I Finsky  : [49] Current account updated in PVS
+02-06 22:11:46.421  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:11:46.422  2501  7927 I Finsky:background: [149] Wrote row to frosting DB: 1107
+02-06 22:11:46.423  2146  2352 I Finsky  : [49] Current account updated in PVS
+02-06 22:11:46.424  2146  2352 I Finsky  : [49] Current account updated in PVS
+02-06 22:11:46.428  2146  2357 I Finsky  : [51] WM::SCH: Logging work initialize for 12-1
+02-06 22:11:46.431  2146  2352 I Finsky  : [49] Current account updated in PVS
+02-06 22:11:46.432  2146  2352 I Finsky  : [49] Current account updated in PVS
+02-06 22:11:46.432  2146  2349 I Finsky  : [46] Current account updated in PVS
+02-06 22:11:46.432  2146  2349 I Finsky  : [46] Current account updated in PVS
+02-06 22:11:46.432  2146  2349 I Finsky  : [46] Current account updated in PVS
+--------- beginning of system
+02-06 22:11:46.441  1393  1393 D ActivityThread: Package [com.nova] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-06 22:11:46.442  1385  7957 I ogle.android.as: AssetManager2(0x715eee52a978) locale list changing from [] to [en-US]
+02-06 22:11:46.443  2146  2416 I Finsky  : [61] SCH: Scheduling phonesky job Id: 12-1, CT: 1770415906280, Constraints: [{ L: 15000, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_ANY, B: BATTERY_ANY }]
+02-06 22:11:46.446  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:11:46.446  2146  2352 I Finsky  : [49] Current account updated in PVS
+02-06 22:11:46.447  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:11:46.451  1393  1393 D ActivityThread: Package [com.nova] reported as REPLACED, but missing application info. Assuming REMOVED.
+02-06 22:11:46.455  2146  2349 I Finsky  : [46] WM::SCH: Logging work initialize for 12-1
+02-06 22:11:46.456  2146  2417 I Finsky  : [62] SCH: Scheduling 1 system job(s)
+02-06 22:11:46.463  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:11:46.463  2146  2353 I Finsky  : [50] Current account updated in PVS
+02-06 22:11:46.464  2146  2353 I Finsky  : [50] Current account updated in PVS
+02-06 22:11:46.464  2146  2353 I Finsky  : [50] Current account updated in PVS
+02-06 22:11:46.464  2146  2353 I Finsky  : [50] Current account updated in PVS
+02-06 22:11:46.464  2146  2417 I Finsky  : [62] SCH: Scheduling system job Id: 9048, L: 14824, D: 68811417, C: false, I: false, N: 1
+02-06 22:11:46.467   689   727 I system_server: AssetManager2(0x715eee529cf8) locale list changing from [] to [en-US]
+02-06 22:11:46.474   689   727 I system_server: AssetManager2(0x715eee5283f8) locale list changing from [] to [en-US]
+02-06 22:11:46.477   689   727 I system_server: AssetManager2(0x715eee5332f8) locale list changing from [] to [en-US]
+02-06 22:11:46.533  1067  1619 W HWUI    : Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+02-06 22:11:46.533  1067  1619 W HWUI    : Failed to initialize 101010-2 format, error = EGL_SUCCESS
+02-06 22:11:46.574  1067  1112 W HWUI    : Image decoding logging dropped!
+02-06 22:11:46.574  1067  1112 D AlphabeticIndexCompat: computeSectionName: cs: AetherEmu sectionName: A
+02-06 22:11:46.575  1067  1067 D AllAppsStore: setApps: apps.length=20
+02-06 22:11:46.575  1067  1067 D AllAppsStore: notifyUpdate: notifying listeners
+02-06 22:11:46.575  1067  1067 D ActivityAllAppsContainerView: onAppsUpdated; number of apps: 20
+02-06 22:11:46.575  1067  1067 D ActivityAllAppsContainerView: rebindAdapters: force: false
+02-06 22:11:46.575  1067  1067 D ActivityAllAppsContainerView: rebindAdapters: Not needed.
+02-06 22:11:46.575  1067  1067 D StatsLog: LAUNCHER_ALLAPPS_COUNT
+02-06 22:11:46.575  1067  1067 D AlphabeticalAppsList: Clearing FastScrollerSections.
+02-06 22:11:46.576  1067  1067 D AlphabeticalAppsList: Adding apps with sections. HasPrivateApps: false
+02-06 22:11:46.576  1067  1067 D AlphabeticalAppsList: addAppsWithSections: adding sectionName: A with appInfoTitle: AetherEmu
+02-06 22:11:46.576  1067  1067 D AlphabeticalAppsList: addAppsWithSections: adding sectionName: C with appInfoTitle: Calendar
+02-06 22:11:46.576  1067  1067 D AlphabeticalAppsList: addAppsWithSections: adding sectionName: D with appInfoTitle: Drive
+02-06 22:11:46.576  1067  1067 D AlphabeticalAppsList: addAppsWithSections: adding sectionName: F with appInfoTitle: Files
+02-06 22:11:46.576  1067  1067 D AlphabeticalAppsList: addAppsWithSections: adding sectionName: G with appInfoTitle: Gmail
+02-06 22:11:46.576  1067  1067 D AlphabeticalAppsList: addAppsWithSections: adding sectionName: M with appInfoTitle: Maps
+02-06 22:11:46.576  1067  1067 D AlphabeticalAppsList: addAppsWithSections: adding sectionName: P with appInfoTitle: Phone
+02-06 22:11:46.576  1067  1067 D AlphabeticalAppsList: addAppsWithSections: adding sectionName: S with appInfoTitle: Safety
+02-06 22:11:46.576  1067  1067 D AlphabeticalAppsList: addAppsWithSections: adding sectionName: T with appInfoTitle: TMoble
+02-06 22:11:46.576  1067  1067 D AlphabeticalAppsList: addAppsWithSections: adding sectionName: Y with appInfoTitle: YouTube
+02-06 22:11:46.576  1067  1067 D AlphabeticalAppsList: Adding FastScrollSection duplicate to scroll to the bottom.
+02-06 22:11:46.576  1067  1067 D AlphabeticalAppsList: Clearing FastScrollerSections.
+02-06 22:11:46.576  1067  1067 D AlphabeticalAppsList: Adding apps with sections. HasPrivateApps: false
+02-06 22:11:46.576  1067  1067 D AlphabeticalAppsList: addAppsWithSections: adding sectionName: A with appInfoTitle: AetherEmu
+02-06 22:11:46.576  1067  1067 D AlphabeticalAppsList: addAppsWithSections: adding sectionName: C with appInfoTitle: Calendar
+02-06 22:11:46.576  1067  1067 D AlphabeticalAppsList: addAppsWithSections: adding sectionName: D with appInfoTitle: Drive
+02-06 22:11:46.576  1067  1067 D AlphabeticalAppsList: addAppsWithSections: adding sectionName: F with appInfoTitle: Files
+02-06 22:11:46.576  1067  1067 D AlphabeticalAppsList: addAppsWithSections: adding sectionName: G with appInfoTitle: Gmail
+02-06 22:11:46.576  1067  1067 D AlphabeticalAppsList: addAppsWithSections: adding sectionName: M with appInfoTitle: Maps
+02-06 22:11:46.576  1067  1067 D AlphabeticalAppsList: addAppsWithSections: adding sectionName: P with appInfoTitle: Phone
+02-06 22:11:46.576  1067  1067 D AlphabeticalAppsList: addAppsWithSections: adding sectionName: S with appInfoTitle: Safety
+02-06 22:11:46.576  1067  1067 D AlphabeticalAppsList: addAppsWithSections: adding sectionName: T with appInfoTitle: TMoble
+02-06 22:11:46.576  1067  1067 D AlphabeticalAppsList: addAppsWithSections: adding sectionName: Y with appInfoTitle: YouTube
+02-06 22:11:46.576  1067  1067 D AlphabeticalAppsList: Adding FastScrollSection duplicate to scroll to the bottom.
+02-06 22:11:46.580  2146  2353 I Finsky  : [50] [ContentSync] finished, scheduled=true
+02-06 22:11:46.581   689  2051 W ActivityTaskManager: callingPackage for (uid=2000, pid=7971) has no WPC
+02-06 22:11:46.581  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:11:46.582  2146  2416 I Finsky  : [61] SCH: Scheduling phonesky job Id: 12-1, CT: 1770415906213, Constraints: [{ L: 15000, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_ANY, B: BATTERY_ANY }]
+02-06 22:11:46.582   689  2051 V GrammaticalInflectionUtils: AttributionSource: android.content.AttributionSource@6fc3949 does not have READ_SYSTEM_GRAMMATICAL_GENDER permission.
+02-06 22:11:46.583   689  2051 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_USER_ASPECT_RATIO_OVERRIDE
+02-06 22:11:46.583   689  2051 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_USER_ASPECT_RATIO_FULLSCREEN_OVERRIDE
+02-06 22:11:46.585   689  2051 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_RESIZEABLE_ACTIVITY_OVERRIDES
+02-06 22:11:46.586   689  2051 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_MIN_ASPECT_RATIO_OVERRIDE
+02-06 22:11:46.588  2146  2417 I Finsky  : [62] SCH: Scheduling 1 system job(s)
+02-06 22:11:46.588  2146  2417 I Finsky  : [62] SCH: Scheduling system job Id: 9048, L: 14625, D: 68811285, C: false, I: false, N: 1
+02-06 22:11:46.591   689  2051 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_ORIENTATION_OVERRIDE
+02-06 22:11:46.593  1201  7961 I Fitness : (REDACTED) FitCleanupIntentOperation received Intent %s
+02-06 22:11:46.593  1067  1067 D BaseAllAppsAdapter: onBindViewHolder: isPrivateSpaceItem: false isStateTransitioning: false isScrolling: false readyToAnimate: false currentState: 0 currentAlpha: 1.0
+02-06 22:11:46.593  1067  1067 D BaseAllAppsAdapter: onBindViewHolder: isPrivateSpaceItem: false isStateTransitioning: false isScrolling: false readyToAnimate: false currentState: 0 currentAlpha: 1.0
+02-06 22:11:46.594  1067  1067 D BaseAllAppsAdapter: onBindViewHolder: isPrivateSpaceItem: false isStateTransitioning: false isScrolling: false readyToAnimate: false currentState: 0 currentAlpha: 1.0
+02-06 22:11:46.594  1067  1067 D BaseAllAppsAdapter: onBindViewHolder: isPrivateSpaceItem: false isStateTransitioning: false isScrolling: false readyToAnimate: false currentState: 0 currentAlpha: 1.0
+02-06 22:11:46.594  1067  1067 D BaseAllAppsAdapter: onBindViewHolder: isPrivateSpaceItem: false isStateTransitioning: false isScrolling: false readyToAnimate: false currentState: 0 currentAlpha: 1.0
+02-06 22:11:46.594  1067  1067 D BaseAllAppsAdapter: onBindViewHolder: isPrivateSpaceItem: false isStateTransitioning: false isScrolling: false readyToAnimate: false currentState: 0 currentAlpha: 1.0
+02-06 22:11:46.594  1067  1067 D BaseAllAppsAdapter: onBindViewHolder: isPrivateSpaceItem: false isStateTransitioning: false isScrolling: false readyToAnimate: false currentState: 0 currentAlpha: 1.0
+02-06 22:11:46.594  1067  1067 D BaseAllAppsAdapter: onBindViewHolder: isPrivateSpaceItem: false isStateTransitioning: false isScrolling: false readyToAnimate: false currentState: 0 currentAlpha: 1.0
+02-06 22:11:46.595  1067  1067 D BaseAllAppsAdapter: onBindViewHolder: isPrivateSpaceItem: false isStateTransitioning: false isScrolling: false readyToAnimate: false currentState: 0 currentAlpha: 1.0
+02-06 22:11:46.595  1067  1067 D BaseAllAppsAdapter: onBindViewHolder: isPrivateSpaceItem: false isStateTransitioning: false isScrolling: false readyToAnimate: false currentState: 0 currentAlpha: 1.0
+02-06 22:11:46.595  1067  1067 D BaseAllAppsAdapter: onBindViewHolder: isPrivateSpaceItem: false isStateTransitioning: false isScrolling: false readyToAnimate: false currentState: 0 currentAlpha: 1.0
+02-06 22:11:46.596  1067  1067 D BaseAllAppsAdapter: onBindViewHolder: isPrivateSpaceItem: false isStateTransitioning: false isScrolling: false readyToAnimate: false currentState: 0 currentAlpha: 1.0
+02-06 22:11:46.596  1067  1067 D BaseAllAppsAdapter: onBindViewHolder: isPrivateSpaceItem: false isStateTransitioning: false isScrolling: false readyToAnimate: false currentState: 0 currentAlpha: 1.0
+02-06 22:11:46.596  1067  1067 D BaseAllAppsAdapter: onBindViewHolder: isPrivateSpaceItem: false isStateTransitioning: false isScrolling: false readyToAnimate: false currentState: 0 currentAlpha: 1.0
+02-06 22:11:46.596  1067  1067 D BaseAllAppsAdapter: onBindViewHolder: isPrivateSpaceItem: false isStateTransitioning: false isScrolling: false readyToAnimate: false currentState: 0 currentAlpha: 1.0
+02-06 22:11:46.597  1067  1067 D BaseAllAppsAdapter: onBindViewHolder: isPrivateSpaceItem: false isStateTransitioning: false isScrolling: false readyToAnimate: false currentState: 0 currentAlpha: 1.0
+02-06 22:11:46.597  1067  1067 D BaseAllAppsAdapter: onBindViewHolder: isPrivateSpaceItem: false isStateTransitioning: false isScrolling: false readyToAnimate: false currentState: 0 currentAlpha: 1.0
+02-06 22:11:46.598  1067  1067 D BaseAllAppsAdapter: onBindViewHolder: isPrivateSpaceItem: false isStateTransitioning: false isScrolling: false readyToAnimate: false currentState: 0 currentAlpha: 1.0
+02-06 22:11:46.598  1067  1067 D BaseAllAppsAdapter: onBindViewHolder: isPrivateSpaceItem: false isStateTransitioning: false isScrolling: false readyToAnimate: false currentState: 0 currentAlpha: 1.0
+02-06 22:11:46.598   946  1113 I ndroid.systemui: AssetManager2(0x715eee511fb8) locale list changing from [] to [en-US]
+02-06 22:11:46.598  1067  1067 D BaseAllAppsAdapter: onBindViewHolder: isPrivateSpaceItem: false isStateTransitioning: false isScrolling: false readyToAnimate: false currentState: 0 currentAlpha: 1.0
+02-06 22:11:46.598   689  1926 D CompatChangeReporter: Compat change id reported: 377864165; UID 10219; state: ENABLED
+02-06 22:11:46.606   551   625 I BpBinder: onLastStrongRef automatically unlinking death recipients: 
+02-06 22:11:46.619   607   683 W IPCThreadState: Sending oneway calls to frozen process.
+02-06 22:11:46.627  2146  2151 W android.vending: Reducing the number of considered missed Gc histogram windows from 196 to 100
+02-06 22:11:46.629   689  2051 I ActivityTaskManager: START u0 {flg=0x10000000 xflg=0x5 cmp=com.nova/.MainActivity} with LAUNCH_SINGLE_TASK from uid 2000 (BAL_ALLOW_PERMISSION) result code=0
+02-06 22:11:46.630   946  1042 V WindowManagerShell: Transition requested (#47): android.os.BinderProxy@d8fca01 TransitionRequestInfo { type = OPEN, triggerTask = TaskInfo{userId=0 taskId=201 effectiveUid=10219 displayId=0 isRunning=true baseIntent=Intent { flg=0x10000000 cmp=com.nova/.MainActivity } baseActivity=ComponentInfo{com.nova/com.nova.MainActivity} topActivity=ComponentInfo{com.nova/com.nova.MainActivity} origActivity=null realActivity=ComponentInfo{com.nova/com.nova.MainActivity} numActivities=1 lastActiveTime=7801069 supportsMultiWindow=true resizeMode=2 isResizeable=true minWidth=-1 minHeight=-1 defaultMinSize=220 token=WCT{android.window.IWindowContainerToken$Stub$Proxy@38b80a6} topActivityType=1 pictureInPictureParams=null shouldDockBigOverlays=false launchIntoPipHostTaskId=-1 lastParentTaskIdBeforePip=-1 displayCutoutSafeInsets=Rect(0, 0 - 0, 0) topActivityInfo=ActivityInfo{9fc8ae7 com.nova.MainActivity} launchCookies=[] positionInParent=Point(0, 0) parentTaskId=-1 isFocused=false isVisible=false isVisibleRequested=false isTopActivityNoDisplay=false isSleeping=false locusId=null displayAreaFeatureId=1 isTopActivityTransparent=false isActivityStackTransparent=false lastNonFullscreenBounds=Rect(269, 600 - 812, 1680) capturedLink=null capturedLinkTimestamp=0 requestedVisibleTypes=-9 topActivityRequestOpenInBrowserEducationTimestamp=0 appCompatTaskInfo=AppCompatTaskInfo { topActivityInSizeCompat=false eligibleForLetterboxEducation= false isLetterboxEducationEnabled= true isLetterboxDoubleTapEnabled= false eligibleForUserAspectRatioButton= false topActivityBoundsLetterboxed= false isFromLetterboxDoubleTap= false topActivityLetterboxVerticalPosition= -1 topActivityLetterboxHorizontalPosition= -1 topActivityLetterboxWidth=-1 topActivityLetterboxHeight=-1 topActivityAppBounds=Rect(0, 0 - 1080, 2280) isUserFullscreenOverrideEnabled=false isSystemFullscreenOverrideEnabled=false hasMinAspectRatioOverride=false topActivityLetterboxBounds=null cameraCompatTaskInfo=CameraCompatTaskInfo { freeformCameraCompatMode=inactive}} topActivityMainWindowFrame=null}, pipChange = null, remoteTransition = null, displayChange = null, flags = 0, debugId = 47 }
+02-06 22:11:46.630   946  1042 D ShellSplitScreen: logExit: no-op, mLoggerSessionId is null
+02-06 22:11:46.632  1067  1067 W SplitSelectStateCtor: Missing session instanceIds
+02-06 22:11:46.632  1067  1067 D StatsLog: LAUNCHER_SPLIT_SELECTION_EXIT_INTERRUPTED
+02-06 22:11:46.642   551   551 I BpBinder: onLastStrongRef automatically unlinking death recipients: 
+02-06 22:11:46.650  1694  1964 W achh    : Abort, client detached.
+02-06 22:11:46.650  1694  1964 W achh    : Abort, client detached.
+02-06 22:11:46.663  1393  7981 I gle.android.gms: AssetManager2(0x715eee4dab58) locale list changing from [] to [en-US]
+02-06 22:11:46.670  1393  7984 I Auth    : (REDACTED) [SupervisedAccountIntentOperation] onHandleIntent: %s
+02-06 22:11:46.714   689   722 V GrammaticalInflectionUtils: AttributionSource: android.content.AttributionSource@6fc3949 does not have READ_SYSTEM_GRAMMATICAL_GENDER permission.
+02-06 22:11:46.720   689   710 I system_server: Background concurrent mark compact GC freed 21MB AllocSpace bytes, 34(800KB) LOS objects, 42% free, 32MB/56MB, paused 17.952ms,3.517ms total 927.329ms
+02-06 22:11:46.726  2146  2357 I Finsky  : [51] [ContentSync] finished, scheduled=true
+02-06 22:11:46.727  2146  2352 I Finsky  : [49] Current account updated in PVS
+02-06 22:11:46.734  1393  7996 W SQLiteLog: (28) double-quoted string literal: "com.nova"
+02-06 22:11:46.735   689   897 D BackgroundInstallControlService: Package event received: 0
+02-06 22:11:46.740  1393  7966 I gle.android.gms: AssetManager2(0x715eee4db7d8) locale list changing from [] to [en-US]
+02-06 22:11:46.758  1393  7984 I NearbyDiscovery: (REDACTED) processGrantSlicePermission: %s
+02-06 22:11:46.760   689   712 W System  : A resource failed to call close. 
+02-06 22:11:46.763   477   477 D Zygote  : Forked child process 8001
+02-06 22:11:46.764   946  1763 V WindowManagerShell: onTransitionReady(transaction=2959232468970)
+02-06 22:11:46.765   689   719 V WindowManager: Sent Transition (#47) createdAt=02-06 22:11:46.586 via request=TransitionRequestInfo { type = OPEN, triggerTask = TaskInfo{userId=0 taskId=201 effectiveUid=10219 displayId=0 isRunning=true baseIntent=Intent { flg=0x10000000 cmp=com.nova/.MainActivity } baseActivity=ComponentInfo{com.nova/com.nova.MainActivity} topActivity=ComponentInfo{com.nova/com.nova.MainActivity} origActivity=null realActivity=ComponentInfo{com.nova/com.nova.MainActivity} numActivities=1 lastActiveTime=7801069 supportsMultiWindow=true resizeMode=2 isResizeable=true minWidth=-1 minHeight=-1 defaultMinSize=220 token=WCT{RemoteToken{2e91d5b Task{25c1575 #201 type=standard A=10219:com.nova}}} topActivityType=1 pictureInPictureParams=null shouldDockBigOverlays=false launchIntoPipHostTaskId=-1 lastParentTaskIdBeforePip=-1 displayCutoutSafeInsets=Rect(0, 0 - 0, 0) topActivityInfo=ActivityInfo{39569f8 com.nova.MainActivity} launchCookies=[] positionInParent=Point(0, 0) parentTaskId=-1 isFocused=false isVisible=false isVisibleRequested=false isTopActivityNoDisplay=false isSleeping=false locusId=null displayAreaFeatureId=1 isTopActivityTransparent=false isActivityStackTransparent=false lastNonFullscreenBounds=Rect(269, 600 - 812, 1680) capturedLink=null capturedLinkTimestamp=0 requestedVisibleTypes=-9 topActivityRequestOpenInBrowserEducationTimestamp=0 appCompatTaskInfo=AppCompatTaskInfo { topActivityInSizeCompat=false eligibleForLetterboxEducation= false isLetterboxEducationEnabled= true isLetterboxDoubleTapEnabled= false eligibleForUserAspectRatioButton= false topActivityBoundsLetterboxed= false isFromLetterboxDoubleTap= false topActivityLetterboxVerticalPosition= -1 topActivityLetterboxHorizontalPosition= -1 topActivityLetterboxWidth=-1 topActivityLetterboxHeight=-1 topActivityAppBounds=Rect(0, 0 - 1080, 2280) isUserFullscreenOverrideEnabled=false isSystemFullscreenOverrideEnabled=false hasMinAspectRatioOverride=false topActivityLetterboxBounds=null cameraCompatTaskInfo=CameraCompatTaskInfo { freeformCameraCompatMode=inactive}} topActivityMainWindowFrame=null}, pipChange = null, remoteTransition = null, displayChange = null, flags = 0, debugId = 47 }
+02-06 22:11:46.765   689   719 V WindowManager:     startWCT=WindowContainerTransaction { changes= {} hops= [] errorCallbackToken=null taskFragmentOrganizer=null }
+02-06 22:11:46.765   689   719 V WindowManager:     info={id=47 t=OPEN f=0x0 trk=0 r=[0@Point(0, 0)] c=[
+02-06 22:11:46.765   689   719 V WindowManager:         {WCT{RemoteToken{2e91d5b Task{25c1575 #201 type=standard A=10219:com.nova}}} m=OPEN f=NONE leash=Surface(name=Task=201)/@0x276fc3f sb=Rect(0, 0 - 1080, 2280) eb=Rect(0, 0 - 1080, 2280) epz=Point(1080, 2280) d=0 taskParent=-1},
+02-06 22:11:46.765   689   719 V WindowManager:         {WCT{RemoteToken{8744ac9 Task{3b98312 #1 type=home}}} m=TO_BACK f=SHOW_WALLPAPER leash=Surface(name=Task=1)/@0xd46fcb8 sb=Rect(0, 0 - 1080, 2280) eb=Rect(0, 0 - 1080, 2280) epz=Point(1080, 2280) d=0 taskParent=-1},
+02-06 22:11:46.765   689   719 V WindowManager:         {m=TO_BACK f=IS_WALLPAPER leash=Surface(name=WallpaperWindowToken{d1dda08 showWhenLocked=false})/@0x46e431b sb=Rect(0, 0 - 1080, 2280) eb=Rect(0, 0 - 1080, 2280) epz=Point(1080, 2280) d=0}
+02-06 22:11:46.765   689   719 V WindowManager:     ]}
+02-06 22:11:46.766   946  1042 V WindowManagerShell: onTransitionReady (#47) android.os.BinderProxy@d8fca01: {id=47 t=OPEN f=0x0 trk=0 r=[0@Point(0, 0)] c=[
+02-06 22:11:46.766   946  1042 V WindowManagerShell:         {m=OPEN f=NONE leash=Surface(name=Task=201)/@0xbe7442c sb=Rect(0, 0 - 1080, 2280) eb=Rect(0, 0 - 1080, 2280) epz=Point(1080, 2280) d=0 taskParent=-1},
+02-06 22:11:46.766   946  1042 V WindowManagerShell:         {m=TO_BACK f=SHOW_WALLPAPER leash=Surface(name=Task=1)/@0xe459ef5 sb=Rect(0, 0 - 1080, 2280) eb=Rect(0, 0 - 1080, 2280) epz=Point(1080, 2280) d=0 taskParent=-1},
+02-06 22:11:46.766   946  1042 V WindowManagerShell:         {m=TO_BACK f=IS_WALLPAPER leash=Surface(name=WallpaperWindowToken{d1dda08 showWhenLocked=false})/@0x91848a sb=Rect(0, 0 - 1080, 2280) eb=Rect(0, 0 - 1080, 2280) epz=Point(1080, 2280) d=0}
+02-06 22:11:46.766   946  1042 V WindowManagerShell:     ]}
+02-06 22:11:46.771   946  1042 V WindowManagerShell: Playing animation for (#47) android.os.BinderProxy@d8fca01@0
+02-06 22:11:46.772   946  1042 V ShellRecents: RecentsTransitionHandler.startAnimation: no controller found
+02-06 22:11:46.772   946  1042 V WindowManagerShell: Transition doesn't have explicit remote, search filters for match for {id=47 t=OPEN f=0x0 trk=0 r=[0@Point(0, 0)] c=[{m=OPEN f=NONE leash=Surface(name=Task=201)/@0xbe7442c sb=Rect(0, 0 - 1080, 2280) eb=Rect(0, 0 - 1080, 2280) epz=Point(1080, 2280) d=0 taskParent=-1},{m=TO_BACK f=SHOW_WALLPAPER leash=Surface(name=Task=1)/@0xe459ef5 sb=Rect(0, 0 - 1080, 2280) eb=Rect(0, 0 - 1080, 2280) epz=Point(1080, 2280) d=0 taskParent=-1},{m=TO_BACK f=IS_WALLPAPER leash=Surface(name=WallpaperWindowToken{d1dda08 showWhenLocked=false})/@0x91848a sb=Rect(0, 0 - 1080, 2280) eb=Rect(0, 0 - 1080, 2280) epz=Point(1080, 2280) d=0}]}
+02-06 22:11:46.772   946  1042 V WindowManagerShell:  Checking filter Pair{{types=[] flags=0x0] notFlags=0x0 checks=[{atype=undefined independent=true modes=[CLOSE,TO_BACK] flags=IN_TASK_WITH_EMBEDDED_ACTIVITY mustBeTask=false order=ANY topActivity=null launchCookie=null taskFragmentToken=android.os.BinderProxy@dfe790b windowingMode=undefined}]} RemoteTransition { remoteTransition = android.window.IRemoteTransition$Stub$Proxy@7bd13e8, appThread = android.app.IApplicationThread$Stub$Proxy@5025a01, debugName = overlayBackTransition }}
+02-06 22:11:46.772   946  1042 V WindowManagerShell:  Checking filter Pair{{types=[] flags=0x0] notFlags=0x0 checks=[{atype=dream independent=true modes=[OPEN,TO_FRONT] flags=NONE mustBeTask=false order=ANY topActivity=null launchCookie=null windowingMode=undefined},{atype=home independent=true modes=[CLOSE,TO_BACK] flags=NONE mustBeTask=false order=ANY topActivity=null launchCookie=null windowingMode=undefined}]} RemoteTransition { remoteTransition = android.window.IRemoteTransition$Stub$Proxy@732d0a6, appThread = android.app.IApplicationThread$Stub$Proxy@2999ae7, debugName = LauncherToDream }}
+02-06 22:11:46.779  1393  1393 D BoundBrokerSvc: onBind: Intent { act=com.google.android.gms.common.BIND_SHARED_PREFS xflg=0x4 pkg=com.google.android.gms }
+02-06 22:11:46.779  1393  1393 D BoundBrokerSvc: Loading bound service for intent: Intent { act=com.google.android.gms.common.BIND_SHARED_PREFS xflg=0x4 pkg=com.google.android.gms }
+02-06 22:11:46.781  1201  7961 I ProximityAuth: [RecentAppsMediator] Package added: (user=UserHandle{0}) com.nova
+02-06 22:11:46.782   946  1042 V WindowManagerShell:  Checking filter Pair{{types=[] flags=0x0] notFlags=0x100 checks=[{atype=home independent=true modes=[OPEN,TO_FRONT] flags=NONE mustBeTask=false order=TOP topActivity=ComponentInfo{com.google.android.apps.nexuslauncher/com.google.android.apps.nexuslauncher.NexusLauncherActivity} launchCookie=null windowingMode=undefined},{atype=standard independent=true modes=[CLOSE,TO_BACK] flags=NONE mustBeTask=false order=ANY topActivity=null launchCookie=null windowingMode=undefined},{NOT atype=undefined independent=true modes=[] flags=NONE mustBeTask=true order=ANY topActivity=null launchCookie=null customAnim=true windowingMode=undefined}]} RemoteTransition { remoteTransition = android.window.IRemoteTransition$Stub$Proxy@e438694, appThread = android.app.IApplicationThread$Stub$Proxy@39953d, debugName = QuickstepLaunchHome }}
+02-06 22:11:46.782   946  1042 V WindowManagerShell:  Delegate animation for (#47) to null
+02-06 22:11:46.782   946  1042 V WindowManagerShell: start default transition animation, info = {id=47 t=OPEN f=0x0 trk=0 r=[0@Point(0, 0)] c=[{m=OPEN f=NONE leash=Surface(name=Task=201)/@0xbe7442c sb=Rect(0, 0 - 1080, 2280) eb=Rect(0, 0 - 1080, 2280) epz=Point(1080, 2280) d=0 taskParent=-1},{m=TO_BACK f=SHOW_WALLPAPER leash=Surface(name=Task=1)/@0xe459ef5 sb=Rect(0, 0 - 1080, 2280) eb=Rect(0, 0 - 1080, 2280) epz=Point(1080, 2280) d=0 taskParent=-1},{m=TO_BACK f=IS_WALLPAPER leash=Surface(name=WallpaperWindowToken{d1dda08 showWhenLocked=false})/@0x91848a sb=Rect(0, 0 - 1080, 2280) eb=Rect(0, 0 - 1080, 2280) epz=Point(1080, 2280) d=0}]}
+02-06 22:11:46.782   946  1042 V WindowManagerShell: loadAnimation: anim=android.view.animation.AnimationSet@29e3571 animAttr=0x13 type=OPEN isEntrance=false
+02-06 22:11:46.783  1694  1964 W achh    : Abort, client detached.
+02-06 22:11:46.784  1201  7961 I .gms.persistent: AssetManager2(0x715eee4e1bd8) locale list changing from [] to [en-US]
+02-06 22:11:46.784  8001  8001 I com.nova: Late-enabling -Xcheck:jni
+02-06 22:11:46.785   946  1042 V WindowManagerShell: loadAnimation: anim=android.view.animation.AnimationSet@80b5f56 animAttr=0x12 type=OPEN isEntrance=true
+02-06 22:11:46.786   946  1042 V WindowManagerShell:  animated by com.android.wm.shell.transition.DefaultTransitionHandler@75bdab4
+02-06 22:11:46.787   689   729 W ActivityManager: Slow operation: 73ms so far, now at startProcess: done updating battery stats
+02-06 22:11:46.787   689   729 W ActivityManager: Slow operation: 73ms so far, now at startProcess: building log message
+02-06 22:11:46.787   689   729 I ActivityManager: Start proc 8001:com.nova/u0a219 for next-top-activity {com.nova/com.nova.MainActivity}
+02-06 22:11:46.787   689   729 W ActivityManager: Slow operation: 73ms so far, now at startProcess: starting to update pids map
+02-06 22:11:46.788   689   729 I ActivityManager: ProcessObserver broadcast disabled
+02-06 22:11:46.788   689   729 W ActivityManager: Slow operation: 73ms so far, now at startProcess: done updating pids map
+02-06 22:11:46.793  1201  7961 I FontLog : (REDACTED) Package %s has no metadata
+02-06 22:11:46.800  8001  8001 I com.nova: Using CollectorTypeCMC GC.
+02-06 22:11:46.800  8001  8001 W com.nova: Unexpected CPU variant for x86: x86_64.
+02-06 22:11:46.800  8001  8001 W com.nova: Known variants: atom, sandybridge, silvermont, goldmont, goldmont-plus, goldmont-without-sha-xsaves, tremont, kabylake, alderlake, default
+02-06 22:11:46.805   558   573 I adbd    : jdwp connection from 8001
+02-06 22:11:46.806  8001  8001 D nativeloader: Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+02-06 22:11:46.815   689   897 D BackgroundInstallControlService: Package event received: 0
+02-06 22:11:46.847  1393  4016 I Icing   : IndexChimeraService.getServiceInterface callingPackage=com.google.android.gms componentName=AppsCorpus serviceId=36
+02-06 22:11:46.855  1393  1393 D BoundBrokerSvc: onBind: Intent { act=com.google.android.gms.feedback.internal.IFeedbackService dat=chimera-action:/... xflg=0x4 cmp=com.google.android.gms/.chimera.GmsBoundBrokerService }
+02-06 22:11:46.855  1393  1393 D BoundBrokerSvc: Loading bound service for intent: Intent { act=com.google.android.gms.feedback.internal.IFeedbackService dat=chimera-action:/... xflg=0x4 cmp=com.google.android.gms/.chimera.GmsBoundBrokerService }
+02-06 22:11:46.876   689  1925 E AppOps  : attributionTag VCN not declared in manifest of android
+02-06 22:11:46.892  1393  6679 I gle.android.gms: Explicit concurrent mark compact GC freed 4746KB AllocSpace bytes, 21(1820KB) LOS objects, 25% free, 12MB/16MB, paused 1.345ms,1.982ms total 459.849ms
+02-06 22:11:46.892  1393  6679 W gle.android.gms: Reducing the number of considered missed Gc histogram windows from 196 to 100
+02-06 22:11:46.892  1393  1407 I gle.android.gms: WaitForGcToComplete blocked Background on Explicit for 198.004ms
+02-06 22:11:46.898   689   897 D BackgroundInstallControlService: Package event received: 0
+02-06 22:11:46.914  1393  1584 I Icing   : IndexChimeraService.getServiceInterface callingPackage=com.google.android.gms componentName=null serviceId=30
+02-06 22:11:46.923  1393  6685 I gle.android.gms: AssetManager2(0x715eee4db7d8) locale list changing from [] to [en-US]
+02-06 22:11:46.931  1393  6685 I Icing   : Usage reports ok 1, Failed Usage reports 0, indexed 0, rejected 0
+02-06 22:11:46.957  1393  6685 I Icing   : Usage reports ok 0, Failed Usage reports 0, indexed 0, rejected 0
+02-06 22:11:46.973  1393  6685 I Icing   : Indexing com.google.android.gms-apps from com.google.android.gms
+02-06 22:11:46.978  8001  8001 D nativeloader: Configuring clns-9 for other apk /data/app/~~HC9C0uyVpj6yvgWuiNv11g==/com.nova-gTr-SWZHjGeEvr4RRn9y6A==/base.apk. target_sdk_version=36, uses_libraries=, library_path=/data/app/~~HC9C0uyVpj6yvgWuiNv11g==/com.nova-gTr-SWZHjGeEvr4RRn9y6A==/lib/x86_64:/data/app/~~HC9C0uyVpj6yvgWuiNv11g==/com.nova-gTr-SWZHjGeEvr4RRn9y6A==/base.apk!/lib/x86_64, permitted_path=/data:/mnt/expand:/data/user/0/com.nova
+02-06 22:11:46.980  8001  8001 I com.nova: AssetManager2(0x715eee4d1238) locale list changing from [] to [en-US]
+02-06 22:11:46.983  1393  6685 I Icing   : Indexing done com.google.android.gms-apps
+02-06 22:11:46.984  1393  6685 I Icing   : Indexing com.google.android.gms-apps from com.google.android.gms
+02-06 22:11:46.984  1393  6685 I Icing   : Indexing done com.google.android.gms-apps
+02-06 22:11:46.985  8001  8001 V GraphicsEnvironment: Currently set values for:
+02-06 22:11:46.985  8001  8001 V GraphicsEnvironment:   angle_gl_driver_selection_pkgs=[]
+02-06 22:11:46.985  8001  8001 V GraphicsEnvironment:   angle_gl_driver_selection_values=[]
+02-06 22:11:46.985  8001  8001 V GraphicsEnvironment: com.nova is not listed in per-application setting
+02-06 22:11:46.986  8001  8001 V GraphicsEnvironment: ANGLE allowlist from config: com.dreamgames.royalmatch com.dts.freefiremax com.dxx.firenow com.gramgames.mergedragons com.ludo.king com.mojang.minecraftpe com.my.defense com.nintendo.zaka com.os.airforce com.playrix.fishdomdd.gplay io.teslatech.callbreak jp.konami.prospia net.peakgames.toonblast
+02-06 22:11:46.986  8001  8001 V GraphicsEnvironment: com.nova is not listed in ANGLE allowlist or settings, returning default
+02-06 22:11:46.986  8001  8001 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+02-06 22:11:47.060   689  1916 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ENABLE_FAKE_FOCUS
+02-06 22:11:47.063   689   897 D BackgroundInstallControlService: Package event received: 0
+02-06 22:11:47.064   689   897 D BackgroundInstallControlService: Package event received: 0
+02-06 22:11:47.067  8001  8020 I DisplayManager: Choreographer implicitly registered for the refresh rate.
+02-06 22:11:47.068  8001  8001 I com.nova: AssetManager2(0x715eee4d08d8) locale list changing from [] to [en-US]
+02-06 22:11:47.081   946  1042 V WindowManagerShell: Transition animation finished (aborted=false), notifying core (#47) android.os.BinderProxy@d8fca01@0
+02-06 22:11:47.082   689   719 V WindowManager: Finish Transition (#47): created at 02-06 22:11:46.586 collect-started=0.172ms request-sent=43.125ms started=51.734ms ready=176.155ms sent=177.222ms commit=29.304ms finished=495.619ms
+02-06 22:11:47.085  1067  1067 D VRI[NexusLauncherActivity]: visibilityChanged oldVisibility=true newVisibility=false
+02-06 22:11:47.088   946  1042 V WindowManagerShell: Track 0 became idle
+02-06 22:11:47.088   946  1042 V WindowManagerShell: All active transition animations finished
+02-06 22:11:47.093  1067  1067 D NexusLauncherModelDelegate: notifySmartspaceEvent: SmartspaceTargetEvent{mSmartspaceTarget=null, mSmartspaceActionId='null', mEventType=7}
+02-06 22:11:47.100  8001  8001 D nativeloader: Load /data/app/~~HC9C0uyVpj6yvgWuiNv11g==/com.nova-gTr-SWZHjGeEvr4RRn9y6A==/base.apk!/lib/x86_64/libnova_native.so using class loader ns clns-9 (caller=/data/app/~~HC9C0uyVpj6yvgWuiNv11g==/com.nova-gTr-SWZHjGeEvr4RRn9y6A==/base.apk!classes4.dex): ok
+02-06 22:11:47.114  8001  8020 I EGL_emulation: Opening libGLESv1_CM_emulation.so
+02-06 22:11:47.114  8001  8020 I EGL_emulation: Opening libGLESv2_emulation.so
+02-06 22:11:47.119  8001  8020 W HWUI    : Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+02-06 22:11:47.119  8001  8020 W HWUI    : Failed to initialize 101010-2 format, error = EGL_SUCCESS
+02-06 22:11:47.121  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e0918) locale list changing from [] to [en-US]
+02-06 22:11:47.126  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f5138) locale list changing from [] to [en-US]
+02-06 22:11:47.127  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4fabd8) locale list changing from [] to [en-US]
+02-06 22:11:47.128  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f1f38) locale list changing from [] to [en-US]
+02-06 22:11:47.130  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e82f8) locale list changing from [] to [en-US]
+02-06 22:11:47.132  8001  8001 E ashmem  : Pinning is deprecated since Android Q. Please use trim or other methods.
+02-06 22:11:47.133  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e7678) locale list changing from [] to [en-US]
+02-06 22:11:47.137  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4d6058) locale list changing from [] to [en-US]
+02-06 22:11:47.139  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f2898) locale list changing from [] to [en-US]
+02-06 22:11:47.144  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e2b78) locale list changing from [] to [en-US]
+02-06 22:11:47.145  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f0318) locale list changing from [] to [en-US]
+02-06 22:11:47.151  8001  8001 D CompatChangeReporter: Compat change id reported: 377864165; UID 10219; state: ENABLED
+02-06 22:11:47.153  8001  8001 D DesktopModeFlags: Toggle override initialized to: OVERRIDE_UNSET
+02-06 22:11:47.154  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e6d18) locale list changing from [] to [en-US]
+02-06 22:11:47.154  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f0958) locale list changing from [] to [en-US]
+02-06 22:11:47.155  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f44b8) locale list changing from [] to [en-US]
+02-06 22:11:47.157  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4ea878) locale list changing from [] to [en-US]
+02-06 22:11:47.167  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f3518) locale list changing from [] to [en-US]
+02-06 22:11:47.168  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4df978) locale list changing from [] to [en-US]
+02-06 22:11:47.173  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4fbe98) locale list changing from [] to [en-US]
+02-06 22:11:47.181  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4eda78) locale list changing from [] to [en-US]
+02-06 22:11:47.181  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f2bb8) locale list changing from [] to [en-US]
+02-06 22:11:47.182  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4da518) locale list changing from [] to [en-US]
+02-06 22:11:47.182  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4dfc98) locale list changing from [] to [en-US]
+02-06 22:11:47.183  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4d82b8) locale list changing from [] to [en-US]
+02-06 22:11:47.183  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e8c58) locale list changing from [] to [en-US]
+02-06 22:11:47.184  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4decf8) locale list changing from [] to [en-US]
+02-06 22:11:47.184  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4dd718) locale list changing from [] to [en-US]
+02-06 22:11:47.185  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e4158) locale list changing from [] to [en-US]
+02-06 22:11:47.185  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4d7c78) locale list changing from [] to [en-US]
+02-06 22:11:47.186  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e4ab8) locale list changing from [] to [en-US]
+02-06 22:11:47.186  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e9bf8) locale list changing from [] to [en-US]
+02-06 22:11:47.186  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f31f8) locale list changing from [] to [en-US]
+02-06 22:11:47.187  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4dda38) locale list changing from [] to [en-US]
+02-06 22:11:47.188  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e8f78) locale list changing from [] to [en-US]
+02-06 22:11:47.188  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4fb538) locale list changing from [] to [en-US]
+02-06 22:11:47.189  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4efcd8) locale list changing from [] to [en-US]
+02-06 22:11:47.190  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f3838) locale list changing from [] to [en-US]
+02-06 22:11:47.191  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4dcdb8) locale list changing from [] to [en-US]
+02-06 22:11:47.191  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4fb218) locale list changing from [] to [en-US]
+02-06 22:11:47.191  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f0638) locale list changing from [] to [en-US]
+02-06 22:11:47.192  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f63f8) locale list changing from [] to [en-US]
+02-06 22:11:47.193  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4fb858) locale list changing from [] to [en-US]
+02-06 22:11:47.195  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f8658) locale list changing from [] to [en-US]
+02-06 22:11:47.195  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f7078) locale list changing from [] to [en-US]
+02-06 22:11:47.196  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f4e18) locale list changing from [] to [en-US]
+02-06 22:11:47.197  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4eab98) locale list changing from [] to [en-US]
+02-06 22:11:47.197  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4dd0d8) locale list changing from [] to [en-US]
+02-06 22:11:47.198  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f2578) locale list changing from [] to [en-US]
+02-06 22:11:47.198  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4eea18) locale list changing from [] to [en-US]
+02-06 22:11:47.200  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4d7f98) locale list changing from [] to [en-US]
+02-06 22:11:47.201  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4ee6f8) locale list changing from [] to [en-US]
+02-06 22:11:47.202  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4eb4f8) locale list changing from [] to [en-US]
+02-06 22:11:47.203  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4dffb8) locale list changing from [] to [en-US]
+02-06 22:11:47.203  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4da1f8) locale list changing from [] to [en-US]
+02-06 22:11:47.204  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e1bd8) locale list changing from [] to [en-US]
+02-06 22:11:47.205  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e02d8) locale list changing from [] to [en-US]
+02-06 22:11:47.205  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e95b8) locale list changing from [] to [en-US]
+02-06 22:11:47.206  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4eaeb8) locale list changing from [] to [en-US]
+02-06 22:11:47.207  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e2e98) locale list changing from [] to [en-US]
+02-06 22:11:47.210  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4df018) locale list changing from [] to [en-US]
+02-06 22:11:47.211  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e1598) locale list changing from [] to [en-US]
+02-06 22:11:47.212  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e3e38) locale list changing from [] to [en-US]
+02-06 22:11:47.212  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e50f8) locale list changing from [] to [en-US]
+02-06 22:11:47.213  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e2858) locale list changing from [] to [en-US]
+02-06 22:11:47.216  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4d69b8) locale list changing from [] to [en-US]
+02-06 22:11:47.217  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e34d8) locale list changing from [] to [en-US]
+02-06 22:11:47.219  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4d9578) locale list changing from [] to [en-US]
+02-06 22:11:47.221  8001  8001 W HWUI    : Unknown dataspace 0
+02-06 22:11:47.221  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e3b18) locale list changing from [] to [en-US]
+02-06 22:11:47.222  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e1278) locale list changing from [] to [en-US]
+02-06 22:11:47.222  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4d8f38) locale list changing from [] to [en-US]
+02-06 22:11:47.224  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e1ef8) locale list changing from [] to [en-US]
+02-06 22:11:47.225  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4d6ff8) locale list changing from [] to [en-US]
+02-06 22:11:47.226  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e98d8) locale list changing from [] to [en-US]
+02-06 22:11:47.227  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4d5d38) locale list changing from [] to [en-US]
+02-06 22:11:47.228  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4ec178) locale list changing from [] to [en-US]
+02-06 22:11:47.228  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f8978) locale list changing from [] to [en-US]
+02-06 22:11:47.229  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4db198) locale list changing from [] to [en-US]
+02-06 22:11:47.230  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f5778) locale list changing from [] to [en-US]
+02-06 22:11:47.230  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4ef698) locale list changing from [] to [en-US]
+02-06 22:11:47.230  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4ea238) locale list changing from [] to [en-US]
+02-06 22:11:47.231  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e7cb8) locale list changing from [] to [en-US]
+02-06 22:11:47.231  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4ebb38) locale list changing from [] to [en-US]
+02-06 22:11:47.232  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4fc1b8) locale list changing from [] to [en-US]
+02-06 22:11:47.232  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4d9258) locale list changing from [] to [en-US]
+02-06 22:11:47.233  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4fc4d8) locale list changing from [] to [en-US]
+02-06 22:11:47.233  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e7038) locale list changing from [] to [en-US]
+02-06 22:11:47.234  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4eb1d8) locale list changing from [] to [en-US]
+02-06 22:11:47.235  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4d7958) locale list changing from [] to [en-US]
+02-06 22:11:47.237  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e4798) locale list changing from [] to [en-US]
+02-06 22:11:47.237  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4dab58) locale list changing from [] to [en-US]
+02-06 22:11:47.237  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e0f58) locale list changing from [] to [en-US]
+02-06 22:11:47.238  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4de6b8) locale list changing from [] to [en-US]
+02-06 22:11:47.238  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4d9898) locale list changing from [] to [en-US]
+02-06 22:11:47.240  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4ea558) locale list changing from [] to [en-US]
+02-06 22:11:47.240  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e5a58) locale list changing from [] to [en-US]
+02-06 22:11:47.241  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4d2e58) locale list changing from [] to [en-US]
+02-06 22:11:47.250  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4ee0b8) locale list changing from [] to [en-US]
+02-06 22:11:47.251   689  1503 D CoreBackPreview: Window{98d7f21 u0 com.nova/com.nova.MainActivity}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.IOnBackInvokedCallback$Stub$Proxy@2411507, mPriority=-1, mIsAnimationCallback=false, mOverrideBehavior=0}
+02-06 22:11:47.261  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4ee3d8) locale list changing from [] to [en-US]
+02-06 22:11:47.262  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f4af8) locale list changing from [] to [en-US]
+02-06 22:11:47.264  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4ed758) locale list changing from [] to [en-US]
+02-06 22:11:47.265  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4ed438) locale list changing from [] to [en-US]
+02-06 22:11:47.266  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4ef9b8) locale list changing from [] to [en-US]
+02-06 22:11:47.268  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4e05f8) locale list changing from [] to [en-US]
+02-06 22:11:47.268  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f47d8) locale list changing from [] to [en-US]
+02-06 22:11:47.269  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f1c18) locale list changing from [] to [en-US]
+02-06 22:11:47.271  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4eed38) locale list changing from [] to [en-US]
+02-06 22:11:47.272  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f3e78) locale list changing from [] to [en-US]
+02-06 22:11:47.273  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f2ed8) locale list changing from [] to [en-US]
+02-06 22:11:47.274  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f7cf8) locale list changing from [] to [en-US]
+02-06 22:11:47.275  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f12b8) locale list changing from [] to [en-US]
+02-06 22:11:47.276  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f5a98) locale list changing from [] to [en-US]
+02-06 22:11:47.276  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4faef8) locale list changing from [] to [en-US]
+02-06 22:11:47.277  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4fbb78) locale list changing from [] to [en-US]
+02-06 22:11:47.277  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4fc7f8) locale list changing from [] to [en-US]
+02-06 22:11:47.278  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4fa278) locale list changing from [] to [en-US]
+02-06 22:11:47.279  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f8c98) locale list changing from [] to [en-US]
+02-06 22:11:47.279  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f9918) locale list changing from [] to [en-US]
+02-06 22:11:47.280  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f8fb8) locale list changing from [] to [en-US]
+02-06 22:11:47.281  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f6d58) locale list changing from [] to [en-US]
+02-06 22:11:47.282  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f5db8) locale list changing from [] to [en-US]
+02-06 22:11:47.284  1057  1219 D SatelliteController: iisInCarrierRoamingNbIotNtn: satellite is disabled
+02-06 22:11:47.296  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4fb858) locale list changing from [] to [en-US]
+02-06 22:11:47.300  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f5db8) locale list changing from [] to [en-US]
+02-06 22:11:47.303  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f6d58) locale list changing from [] to [en-US]
+02-06 22:11:47.306  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f8fb8) locale list changing from [] to [en-US]
+02-06 22:11:47.307  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee503238) locale list changing from [] to [en-US]
+02-06 22:11:47.308  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f8c98) locale list changing from [] to [en-US]
+02-06 22:11:47.309  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4f6718) locale list changing from [] to [en-US]
+02-06 22:11:47.310  1319  1522 I .apps.wellbeing: AssetManager2(0x715eee4fa278) locale list changing from [] to [en-US]
+02-06 22:11:47.663  8001  8001 I com.nova: hiddenapi: Accessing hidden method Landroid/os/SystemProperties;->addChangeCallback(Ljava/lang/Runnable;)V (runtime_flags=0, domain=platform, api=unsupported) from Landroidx/compose/ui/platform/AndroidComposeView$Companion; (domain=app) using reflection: allowed
+02-06 22:11:47.756  8001  8008 I com.nova: Compiler allocated 5042KB to compile void android.view.ViewRootImpl.performTraversals()
+02-06 22:11:48.100   689   719 I ActivityTaskManager: Displayed com.nova/.MainActivity for user 0: +1s518ms
+02-06 22:11:48.105  8001  8028 D Nova    : Copying cores from APK to Downloads...
+02-06 22:11:48.105  8001  8028 D Nova    : Copied 0 cores to Downloads
+02-06 22:11:48.109  8001  8001 I Choreographer: Skipped 44 frames!  The application may be doing too much work on its main thread.
+02-06 22:11:48.116  8001  8015 I HWUI    : Davey! duration=855ms; Flags=1, FrameTimelineVsyncId=1402926, IntendedVsync=7801681339150, Vsync=7801681339150, InputEventId=0, HandleInputStart=7801682746704, AnimationStart=7801682795904, PerformTraversalsStart=7801682818204, DrawStart=7802507811004, FrameDeadline=7801698005816, FrameStartTime=7801682731604, FrameInterval=16666666, WorkloadTarget=16666666, SyncQueued=7802519821504, SyncStart=7802520620904, IssueDrawCommandsStart=7802520696404, SwapBuffers=7802534670504, FrameCompleted=7802537522804, DequeueBufferDuration=16000, QueueBufferDuration=310500, GpuCompleted=7802537386904, SwapBuffersCompleted=7802537522804, DisplayPresentTime=0, CommandSubmissionCompleted=7802534670504, 
+02-06 22:11:48.117  8001  8028 W System  : Attempt to load writable file: /data/user/0/com.nova/files/cores/libc++_shared.so. This will throw on a future Android version
+02-06 22:11:48.112  8001  8001 W DefaultDispatch: type=1400 audit(0.0:794): avc:  granted  { execute } for  path="/data/data/com.nova/files/cores/libc++_shared.so" dev="dm-55" ino=524290 scontext=u:r:untrusted_app:s0:c219,c256,c512,c768 tcontext=u:object_r:app_data_file:s0:c219,c256,c512,c768 tclass=file app=com.nova
+02-06 22:11:48.123  8001  8028 D nativeloader: Load /data/user/0/com.nova/files/cores/libc++_shared.so using class loader ns clns-9 (caller=/data/app/~~HC9C0uyVpj6yvgWuiNv11g==/com.nova-gTr-SWZHjGeEvr4RRn9y6A==/base.apk!classes4.dex): ok
+02-06 22:11:48.123  8001  8028 D Nova    : Loaded libc++_shared.so
+02-06 22:11:48.134   946   946 I ndroid.systemui: AssetManager2(0x715eee4ff3b8) locale list changing from [] to [en-US]
+02-06 22:11:48.137   689   811 I ImeTracker: com.nova:8ee266e2: onRequestHide at ORIGIN_SERVER reason HIDE_UNSPECIFIED_WINDOW fromUser false
+02-06 22:11:48.137   946   946 I ndroid.systemui: AssetManager2(0x715eee4e5418) locale list changing from [] to [en-US]
+02-06 22:11:48.142  8001  8030 D NovaScanner: Scanning directory: /storage/emulated/0/Emulator Games/PS1
+02-06 22:11:48.146  1067  1067 D BaseDepthController: setSurface:
+02-06 22:11:48.146  1067  1067 D BaseDepthController: 	mWaitingOnSurfaceValidity: false
+02-06 22:11:48.146  1067  1067 D BaseDepthController: 	mBaseSurface: null
+02-06 22:11:48.146  1067  1067 D BaseDepthController: mSurface is null and mCurrentBlur is: 23
+02-06 22:11:48.147  1067  1067 D StatsLog: LAUNCHER_ONSTOP
+02-06 22:11:48.147  1282  1282 I GoogleInputMethodService: GoogleInputMethodService.onFinishInput():2043 
+02-06 22:11:48.147  1067  1067 D StatsLog: LAUNCHER_GOOGLE_SEARCH_RESTORE_LIST_SIZE_AFTER_ACTIVITY_RESTART
+02-06 22:11:48.148  1282  1282 I Module  : DeviceLockedStatusModuleProvider$Module.updateDeviceLockedStatus():100 repeatCheckTimes = 0, locked = false
+02-06 22:11:48.148  1067  1970 D GmsPlayProvider: Forcefully shut down the binder channel
+02-06 22:11:48.148   689  2051 I ImeTracker: system_server:e3ad0a74: onRequestHide at ORIGIN_SERVER reason IME_REQUESTED_CHANGED_LISTENER fromUser false
+02-06 22:11:48.149  1282  1282 I GoogleInputMethodService: GoogleInputMethodService.onStartInput():1293 onStartInput(EditorInfo{EditorInfo{packageName=com.nova, inputType=0, inputTypeString=NULL, enableLearning=false, autoCorrection=false, autoComplete=false, imeOptions=0, privateImeOptions=null, actionName=UNSPECIFIED, actionLabel=null, initialSelStart=-1, initialSelEnd=-1, initialCapsMode=0, label=null, fieldId=0, fieldName=null, extras=null, hintText=null, hintLocales=[]}}, false)
+02-06 22:11:48.149  1282  1282 I EmojiCompatManager: EmojiCompatManager.getEmojiCompatIfLoaded():343 EmojiCompat.init() was never called.
+02-06 22:11:48.149  1282  1282 I EmojiCompatManager: java.lang.IllegalStateException: EmojiCompat is not initialized. Please call EmojiCompat.init() first
+02-06 22:11:48.149  1282  1282 I EmojiCompatManager: 	at asx.p(PG:6)
+02-06 22:11:48.149  1282  1282 I EmojiCompatManager: 	at axb.b(PG:13)
+02-06 22:11:48.149  1282  1282 I EmojiCompatManager: 	at jnr.b(PG:2)
+02-06 22:11:48.149  1282  1282 I EmojiCompatManager: 	at jnr.c(PG:4)
+02-06 22:11:48.149  1282  1282 I EmojiCompatManager: 	at jnr.f(PG:3)
+02-06 22:11:48.149  1282  1282 I EmojiCompatManager: 	at jnx.c(PG:3)
+02-06 22:11:48.149  1282  1282 I EmojiCompatManager: 	at kif.cz(PG:47)
+02-06 22:11:48.149  1282  1282 I EmojiCompatManager: 	at lhl.run(PG:1025)
+02-06 22:11:48.149  1282  1282 I EmojiCompatManager: 	at jaf.execute(PG:12)
+02-06 22:11:48.149  1282  1282 I EmojiCompatManager: 	at nco.v(PG:13)
+02-06 22:11:48.149  1282  1282 I EmojiCompatManager: 	at lhn.m(PG:96)
+02-06 22:11:48.149  1282  1282 I EmojiCompatManager: 	at lhn.k(PG:25)
+02-06 22:11:48.149  1282  1282 I EmojiCompatManager: 	at kgn.onStartInput(PG:250)
+02-06 22:11:48.149  1282  1282 I EmojiCompatManager: 	at android.inputmethodservice.InputMethodService.doStartInput(InputMethodService.java:3521)
+02-06 22:11:48.149  1282  1282 I EmojiCompatManager: 	at android.inputmethodservice.InputMethodService$InputMethodImpl.startInput(InputMethodService.java:879)
+02-06 22:11:48.149  1282  1282 I EmojiCompatManager: 	at android.inputmethodservice.InputMethodService$InputMethodImpl.dispatchStartInput(InputMethodService.java:908)
+02-06 22:11:48.149  1282  1282 I EmojiCompatManager: 	at android.inputmethodservice.IInputMethodWrapper.executeMessage(IInputMethodWrapper.java:201)
+02-06 22:11:48.149  1282  1282 I EmojiCompatManager: 	at com.android.internal.os.HandlerCaller$MyHandler.handleMessage(HandlerCaller.java:44)
+02-06 22:11:48.149  1282  1282 I EmojiCompatManager: 	at android.os.Handler.dispatchMessage(Handler.java:110)
+02-06 22:11:48.149  1282  1282 I EmojiCompatManager: 	at android.os.Looper.loopOnce(Looper.java:248)
+02-06 22:11:48.149  1282  1282 I EmojiCompatManager: 	at android.os.Looper.loop(Looper.java:338)
+02-06 22:11:48.149  1282  1282 I EmojiCompatManager: 	at android.app.ActivityThread.main(ActivityThread.java:9067)
+02-06 22:11:48.149  1282  1282 I EmojiCompatManager: 	at java.lang.reflect.Method.invoke(Native Method)
+02-06 22:11:48.149  1282  1282 I EmojiCompatManager: 	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:593)
+02-06 22:11:48.149  1282  1282 I EmojiCompatManager: 	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:932)
+02-06 22:11:48.150  1282  1282 I Module  : DeviceLockedStatusModuleProvider$Module.updateDeviceLockedStatus():100 repeatCheckTimes = 1, locked = false
+02-06 22:11:48.152   689  1503 W PackageConfigPersister: App-specific configuration not found for packageName: com.nova and userId: 0
+02-06 22:11:48.152   689   722 I ImeTracker: system_server:e3ad0a74: onCancelled at PHASE_SERVER_SHOULD_HIDE
+02-06 22:11:48.155  8001  8001 D InsetsController: hide(ime(), fromIme=false)
+02-06 22:11:48.155  8001  8001 I ImeTracker: com.nova:8ee266e2: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+02-06 22:11:48.160  1201  1209 I FontLog : (REDACTED) Received query %s, URI %s
+02-06 22:11:48.160  1201  1209 I FontLog : (REDACTED) Query [%s] resolved to %s
+02-06 22:11:48.163  1201  1209 I FontLog : (REDACTED) Fetch %s end status %s
+02-06 22:11:48.163   689   897 D BackgroundInstallControlService: Package event received: 0
+02-06 22:11:48.165  1201  1391 I FontLog : (REDACTED) Pulling font file for id = %d, cache size = %d
+02-06 22:11:48.170  1201  1391 I FontLog : (REDACTED) Pulling font file for id = %d, cache size = %d
+02-06 22:11:48.197  8001  8030 D NovaScanner: Found Game: Gran Turismo 2 (USA) (Arcade Mode) (Rev 1).cue (PS1)
+02-06 22:11:48.201  8001  8030 D NovaScanner: Found Game: Gran Turismo 2 (USA) (Arcade Mode) (Rev 1).cue (PS1)
+02-06 22:11:48.203  8001  8030 D NovaScanner: Scanning directory: /storage/emulated/0/Emulator Games/N64
+02-06 22:11:48.208  8001  8030 D NovaScanner: Found Game: Super Mario 64 (USA).z64 (N64)
+02-06 22:11:48.208  8001  8030 D NovaScanner: Found Game: Mario Kart 64 (USA).z64 (N64)
+02-06 22:11:48.208  8001  8030 D NovaScanner: Found Game: Legend of Zelda, The - Majora's Mask (USA).z64 (N64)
+02-06 22:11:48.208  8001  8030 D NovaScanner: Found Game: GoldenEye 007 (USA).z64 (N64)
+02-06 22:11:48.208  8001  8030 D NovaScanner: Found Game: Cruis'n USA (U) (V1.2) [!].z64 (N64)
+02-06 22:11:48.209  8001  8030 D NovaScanner: Scanning directory: /storage/emulated/0/Emulator Games/GENSIS
+02-06 22:11:48.218  8001  8030 D NovaScanner: Found Game: Mortal Kombat II (World).md (GENESIS)
+02-06 22:11:48.218  8001  8030 D NovaScanner: Found Game: Street Fighter II' - Special Champion Edition (Europe).md (GENESIS)
+02-06 22:11:48.218  8001  8030 D NovaScanner: Found Game: Streets of Rage 3 (USA).md (GENESIS)
+02-06 22:11:48.218  8001  8030 D NovaScanner: Found Game: Bare Knuckle - Ikari no Tekken ~ Streets of Rage (World) (Rev A).md (GENESIS)
+02-06 22:11:48.218  8001  8030 D NovaScanner: Found Game: Streets of Rage 2 (USA).md (GENESIS)
+02-06 22:11:48.219  8001  8030 D NovaScanner: Scanning directory: /storage/emulated/0/Emulator Games/SNES
+02-06 22:11:48.223  8001  8030 D NovaScanner: Found Game: F-Zero (USA).sfc (SNES)
+02-06 22:11:48.223  8001  8030 D NovaScanner: Found Game: Street Fighter II Turbo (V1.0) (E) [!].smc (SNES)
+02-06 22:11:48.223  8001  8030 D NovaScanner: Found Game: Super Mario Kart (USA).sfc (SNES)
+02-06 22:11:48.223  8001  8030 D NovaScanner: Found Game: Super Mario World (U) [!].smc (SNES)
+02-06 22:11:48.224  8001  8030 D NovaScanner: Found Game: Ultimate Mortal Kombat 3 (USA).sfc (SNES)
+02-06 22:11:48.231  8001  8030 D NovaScanner: Scanning directory: /storage/emulated/0/Emulator Games/GAMECUBE
+02-06 22:11:48.238  8001  8030 D NovaScanner: Found Game: Mario Kart - Double Dash!! (USA).nkit.iso (GAMECUBE)
+02-06 22:11:48.472   607   607 W IPCThreadState: Sending oneway calls to frozen process.
+02-06 22:11:50.058  8001  8001 D GameScreen: Creating new SurfaceView for: /storage/emulated/0/Emulator Games/PS1/Gran Turismo 2/Gran Turismo 2 (USA) (Arcade Mode) (Rev 1)/Gran Turismo 2 (USA) (Arcade Mode) (Rev 1).cue
+02-06 22:11:50.111  8001  8001 D GameScreen: Surface created for: /storage/emulated/0/Emulator Games/PS1/Gran Turismo 2/Gran Turismo 2 (USA) (Arcade Mode) (Rev 1)/Gran Turismo 2 (USA) (Arcade Mode) (Rev 1).cue
+02-06 22:11:50.112  8001  8001 D GameScreen: Surface changed: 1080x810
+02-06 22:11:50.122  8001  8001 D GameScreen: Checking load conditions: surfaceReady=false, loadAttempted=false, gamePath=/storage/emulated/0/Emulator Games/PS1/Gran Turismo 2/Gran Turismo 2 (USA) (Arcade Mode) (Rev 1)/Gran Turismo 2 (USA) (Arcade Mode) (Rev 1).cue
+02-06 22:11:50.255   689  1417 E TaskPersister: File error accessing recents directory (directory doesn't exist?).
+02-06 22:11:50.731   689  2051 W NotificationService: Toast already killed. pkg=com.nova token=android.os.BinderProxy@b388fad
+02-06 22:11:51.192  1201  1201 D BoundBrokerSvc: onUnbind: Intent { act=com.google.android.gms.common.telemetry.service.START dat=chimera-action:/... xflg=0x4 cmp=com.google.android.gms/.chimera.PersistentApiService }
+02-06 22:11:51.389  1694  3930 I IPCThreadState: oneway function results for code 2 on binder at 0x715e4e4ff500 will be dropped but finished with status UNKNOWN_TRANSACTION
+02-06 22:11:52.767  8001  8037 D ProfileInstaller: Installing profile for com.nova
+02-06 22:11:55.310  8038  8038 W dumpsys : Thread Pool max thread count is 0. Cannot cache binder as linkToDeath cannot be implemented. serviceName: package
+02-06 22:11:55.368  2208  2208 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/base.odex) is kOatUpToDate with filter 'speed-profile' executable 'false'
+02-06 22:11:55.369  2208  2208 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/split_AdsDynamite_installtime.odex) is kOatUpToDate with filter 'speed' executable 'false'
+02-06 22:11:55.370  2208  2210 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/split_CronetDynamite_installtime.odex) is kOatUpToDate with filter 'speed' executable 'false'
+02-06 22:11:55.372  2208  2210 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/split_DynamiteLoader_installtime.odex) is kOatUpToDate with filter 'speed' executable 'false'
+02-06 22:11:55.372  2208  2210 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/split_DynamiteModulesA_installtime.odex) is kOatUpToDate with filter 'speed' executable 'false'
+02-06 22:11:55.373  2208  2208 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/split_DynamiteModulesC_installtime.odex) is kOatUpToDate with filter 'speed' executable 'false'
+02-06 22:11:55.374  2208  2208 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/split_GoogleCertificates_installtime.odex) is kOatUpToDate with filter 'speed' executable 'false'
+02-06 22:11:55.375  2208  2208 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/split_MapsDynamite_installtime.odex) is kOatUpToDate with filter 'speed' executable 'false'
+02-06 22:11:55.376  2208  2208 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/split_MeasurementDynamite_installtime.odex) is kOatUpToDate with filter 'speed' executable 'false'
+02-06 22:11:55.377  2208  2208 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/split_all_locale_splits.odex) is kOatUpToDate with filter 'speed' executable 'false'
+02-06 22:11:55.378  2208  2208 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/00000013/dl-MlkitBarcodeUi.optional_260235100800.apk has no usable artifacts
+02-06 22:11:55.378  2208  2208 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/00000001/CronetDynamite.apk has no usable artifacts
+02-06 22:11:55.379  2208  2208 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/0000000b/dl-Appsearch.optional_250834100800.apk has no usable artifacts
+02-06 22:11:55.380  2208  2208 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/00000002/DynamiteLoader.apk has no usable artifacts
+02-06 22:11:55.380  2208  2208 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/00000005/GoogleCertificates.apk has no usable artifacts
+02-06 22:11:55.381  2208  2208 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/00000015/dl-MlkitOcrCommon.optional_260235100800.apk has no usable artifacts
+02-06 22:11:55.382  2208  2208 I artd    : GetBestInfo: vdex next to the dex file (/data/user/0/com.google.android.gms/app_dg_cache/CF98DA544914DD75038B6CE6DBC852B6C43EC876/oat/x86_64/the.vdex) is kOatUpToDate with filter 'verify' executable 'false'
+02-06 22:11:55.383  2208  2208 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/0000000c/dl-TfliteDynamiteDynamite.integ_252130102100800.apk has no usable artifacts
+02-06 22:11:55.383  2208  2208 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/00000010/dl-Appsearch.optional_260235100800.apk has no usable artifacts
+02-06 22:11:55.384  2208  2208 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/0000000f/dl-PlayCloudSearch.optional_260235100000.apk has no usable artifacts
+02-06 22:11:55.385  2208  2208 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/0000000d/dl-MlkitBarcodeUi.optional_250834100800.apk has no usable artifacts
+02-06 22:11:55.385  2208  2208 I artd    : GetBestInfo: vdex next to the dex file (/data/user/0/com.google.android.gms/app_dg_cache/A3CA675C42809307C9989FB51FF5403F49F05332/oat/x86_64/the.vdex) is kOatUpToDate with filter 'verify' executable 'false'
+02-06 22:11:55.386  2208  2208 W artd    : Could not get dex checksums for location /data/app/~~V4tzkpr_KUXC_c2VLNTuDg==/com.android.vending-Pf4mo0JraDXwPkjC3ew0bQ==/base.apk, fd=-1
+02-06 22:11:55.386  2208  2208 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/00000014/dl-VisionOcr.optional_260235100000.apk has no usable artifacts
+02-06 22:11:56.259  1289  1296 W ssioncontroller: Reducing the number of considered missed Gc histogram windows from 773 to 100
+02-06 22:11:56.362   689   794 D ActivityManager: freezing 2501 com.android.vending:background
+02-06 22:11:56.431   689   794 D ActivityManager: freezing 2146 com.android.vending
+02-06 22:11:56.434   689   851 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET, states=14
+02-06 22:11:56.435   689   851 D InetDiagMessage: Destroyed 2 sockets, proto=IPPROTO_TCP, family=AF_INET6, states=14
+02-06 22:11:56.435   689   851 D InetDiagMessage: Destroyed live tcp sockets for uids={10144} in 1ms
+02-06 22:11:56.820   689   794 D ActivityManager: freezing 1694 com.google.android.googlequicksearchbox:search
+02-06 22:11:57.280  1057  1219 D SatelliteController: iisInCarrierRoamingNbIotNtn: satellite is disabled
+02-06 22:11:58.965   689   909 E ClipboardService: Denying clipboard access to com.android.chrome, application is not in focus nor is it a system service for user 0
+02-06 22:11:58.968  1385  1725 I AiAiTranslate: C2T - not in a conversation
+02-06 22:11:58.969   946   946 I ClipboardListener: Clipboard overlay suppressed.
+02-06 22:12:01.948  1393  1393 D BoundBrokerSvc: onUnbind: Intent { act=com.google.android.gms.feedback.internal.IFeedbackService dat=chimera-action:/... xflg=0x4 cmp=com.google.android.gms/.chimera.GmsBoundBrokerService }
+02-06 22:12:03.422  1404  2017 I bbax    : (REDACTED) getHotwordActive::active query: %s, watch: %s, devices connected: %s
+02-06 22:12:05.307  8043  8043 W dumpsys : Thread Pool max thread count is 0. Cannot cache binder as linkToDeath cannot be implemented. serviceName: package
+02-06 22:12:05.369  2208  2208 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/base.odex) is kOatUpToDate with filter 'speed-profile' executable 'false'
+02-06 22:12:05.372  2208  2208 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/split_AdsDynamite_installtime.odex) is kOatUpToDate with filter 'speed' executable 'false'
+02-06 22:12:05.373  2208  2208 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/split_CronetDynamite_installtime.odex) is kOatUpToDate with filter 'speed' executable 'false'
+02-06 22:12:05.374  2208  2208 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/split_DynamiteLoader_installtime.odex) is kOatUpToDate with filter 'speed' executable 'false'
+02-06 22:12:05.374  2208  2208 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/split_DynamiteModulesA_installtime.odex) is kOatUpToDate with filter 'speed' executable 'false'
+02-06 22:12:05.375  2208  2208 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/split_DynamiteModulesC_installtime.odex) is kOatUpToDate with filter 'speed' executable 'false'
+02-06 22:12:05.376  2208  2208 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/split_GoogleCertificates_installtime.odex) is kOatUpToDate with filter 'speed' executable 'false'
+02-06 22:12:05.377  2208  2208 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/split_MapsDynamite_installtime.odex) is kOatUpToDate with filter 'speed' executable 'false'
+02-06 22:12:05.378  2208  2208 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/split_MeasurementDynamite_installtime.odex) is kOatUpToDate with filter 'speed' executable 'false'
+02-06 22:12:05.379  2208  2208 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/split_all_locale_splits.odex) is kOatUpToDate with filter 'speed' executable 'false'
+02-06 22:12:05.380  2208  2208 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/00000013/dl-MlkitBarcodeUi.optional_260235100800.apk has no usable artifacts
+02-06 22:12:05.381  2208  2208 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/00000001/CronetDynamite.apk has no usable artifacts
+02-06 22:12:05.382  2208  2208 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/0000000b/dl-Appsearch.optional_250834100800.apk has no usable artifacts
+02-06 22:12:05.382  2208  2208 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/00000002/DynamiteLoader.apk has no usable artifacts
+02-06 22:12:05.382  2208  2208 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/00000005/GoogleCertificates.apk has no usable artifacts
+02-06 22:12:05.383  2208  2208 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/00000015/dl-MlkitOcrCommon.optional_260235100800.apk has no usable artifacts
+02-06 22:12:05.384  2208  2208 I artd    : GetBestInfo: vdex next to the dex file (/data/user/0/com.google.android.gms/app_dg_cache/CF98DA544914DD75038B6CE6DBC852B6C43EC876/oat/x86_64/the.vdex) is kOatUpToDate with filter 'verify' executable 'false'
+02-06 22:12:05.384  2208  2208 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/0000000c/dl-TfliteDynamiteDynamite.integ_252130102100800.apk has no usable artifacts
+02-06 22:12:05.385  2208  2208 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/00000010/dl-Appsearch.optional_260235100800.apk has no usable artifacts
+02-06 22:12:05.386  2208  2208 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/0000000f/dl-PlayCloudSearch.optional_260235100000.apk has no usable artifacts
+02-06 22:12:05.386  2208  2208 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/0000000d/dl-MlkitBarcodeUi.optional_250834100800.apk has no usable artifacts
+02-06 22:12:05.387  2208  2208 I artd    : GetBestInfo: vdex next to the dex file (/data/user/0/com.google.android.gms/app_dg_cache/A3CA675C42809307C9989FB51FF5403F49F05332/oat/x86_64/the.vdex) is kOatUpToDate with filter 'verify' executable 'false'
+02-06 22:12:05.387  2208  2208 W artd    : Could not get dex checksums for location /data/app/~~V4tzkpr_KUXC_c2VLNTuDg==/com.android.vending-Pf4mo0JraDXwPkjC3ew0bQ==/base.apk, fd=-1
+02-06 22:12:05.388  2208  2208 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/00000014/dl-VisionOcr.optional_260235100000.apk has no usable artifacts
+02-06 22:12:06.236   689   794 D ActivityManager: freezing 1289 com.google.android.permissioncontroller
+02-06 22:12:06.238   689   851 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET, states=14
+02-06 22:12:06.238   689   851 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET6, states=14
+02-06 22:12:06.238   689   851 D InetDiagMessage: Destroyed live tcp sockets for uids={10216} in 1ms
+02-06 22:12:07.279  1057  1219 D SatelliteController: iisInCarrierRoamingNbIotNtn: satellite is disabled
+02-06 22:12:07.693   607   607 I AttributionAndPermissionUtils: checkPermission checkPermission (forDataDelivery 0 startDataDelivery 0): Permission soft denied for client attribution [uid 10187, pid 946, packageName "<unknown>"]
+02-06 22:12:07.694   607   607 I AttributionAndPermissionUtils: checkPermission checkPermission (forDataDelivery 0 startDataDelivery 0): Permission soft denied for client attribution [uid 10187, pid 946, packageName "<unknown>"]
+02-06 22:12:07.701   946  1130 D ControlsListingControllerImpl: Subscribing callback, service count: 0
+02-06 22:12:07.703   946  1130 D ControlsListingControllerImpl: Unsubscribing callback
+02-06 22:12:08.700   946  1130 I QuickAccessWalletTile: QAW service is unavailable, recreating the wallet client.
+02-06 22:12:12.000   689   794 D ActivityManager: freezing 1393 com.google.android.gms
+02-06 22:12:12.122   689   787 D ActivityManager: sync unfroze 2146 com.android.vending for 6
+02-06 22:12:12.133   689  1939 W ProcessStats: Tracking association SourceState{73b6815 system/1000 ImpBg #3654} whose proc state 6 is better than process ProcessState{cab337a com.android.vending/10144 pkg=com.android.vending} proc state 14 (7 skipped)
+02-06 22:12:12.133  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:12:12.134  2146  2352 I Finsky  : [49] Current account updated in PVS
+02-06 22:12:12.134  2146  2146 I Finsky  : [2] SCH: job service start with id 9048.
+02-06 22:12:12.134  2146  2352 I Finsky  : [49] Current account updated in PVS
+02-06 22:12:12.134  2146  2352 I Finsky  : [49] Current account updated in PVS
+02-06 22:12:12.144  2146  7939 I Finsky  : [242] SCH: Satisfied jobs for 9048 are: 12-1
+02-06 22:12:12.145  2146  2349 I Finsky  : [46] Current account updated in PVS
+02-06 22:12:12.145  2146  8046 I Finsky  : [248] SCH: Job 12-1 starting
+02-06 22:12:12.146  2146  2349 I Finsky  : [46] Current account updated in PVS
+02-06 22:12:12.146  2146  2349 I Finsky  : [46] Current account updated in PVS
+02-06 22:12:12.146  2146  2146 I Finsky  : [2] WM::SCH: Logging work start for 12-1
+02-06 22:12:12.148  2146  2349 I Finsky  : [46] Current account updated in PVS
+02-06 22:12:12.148  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:12:12.149  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:12:12.149  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:12:12.149  2146  2146 I Finsky  : [2] [ContentSync] job started
+02-06 22:12:12.150  2146  2353 I Finsky  : [50] Current account updated in PVS
+02-06 22:12:12.150  2146  2353 I Finsky  : [50] Current account updated in PVS
+02-06 22:12:12.150  2146  2353 I Finsky  : [50] Current account updated in PVS
+02-06 22:12:12.150  2146  2349 I Finsky  : [46] Current account updated in PVS
+02-06 22:12:12.150  2146  2349 I Finsky  : [46] Current account updated in PVS
+02-06 22:12:12.152  2146  2349 I Finsky  : [46] Current account updated in PVS
+02-06 22:12:12.188  2146  2150 W android.vending: Missing inline cache for java.lang.Object ppo.apply(java.lang.Object)
+02-06 22:12:12.188  2146  2150 W android.vending: Missing inline cache for java.lang.Object ppo.apply(java.lang.Object)
+02-06 22:12:12.188  2146  2150 W android.vending: Missing inline cache for java.lang.Object ppo.apply(java.lang.Object)
+02-06 22:12:12.188  2146  2150 W android.vending: Missing inline cache for java.lang.Object ppo.apply(java.lang.Object)
+02-06 22:12:12.188  2146  2150 W android.vending: Missing inline cache for java.lang.Object ppo.apply(java.lang.Object)
+02-06 22:12:12.188  2146  2150 W android.vending: Missing inline cache for java.lang.Object ppo.apply(java.lang.Object)
+02-06 22:12:12.210  2146  2247 I android.vending: Waiting for a blocking GC ProfileSaver
+02-06 22:12:12.212  2146  8047 I Finsky  : [249] App states replicator found 6 unowned apps
+02-06 22:12:12.214  2146  2353 I Finsky  : [50] Current account updated in PVS
+02-06 22:12:12.217  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:12:12.217  2146  2416 I Finsky  : [61] Completed 0 account content syncs with 0 successful.
+02-06 22:12:12.217  2146  2146 I Finsky  : [2] [ContentSync] Installation state replication succeeded.
+02-06 22:12:12.217  2146  2146 I Finsky  : [2] SCH: jobFinished: 12-1. TimeElapsed: 70ms.
+02-06 22:12:12.217  2146  2146 I Finsky  : [2] WM::SCH: Logging work end for 12-1
+02-06 22:12:12.218  2146  2352 I Finsky  : [49] Current account updated in PVS
+02-06 22:12:12.218  2146  2352 I Finsky  : [49] Current account updated in PVS
+02-06 22:12:12.221  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:12:12.222  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:12:12.235  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:12:12.235  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:12:12.236  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:12:12.236  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:12:12.238  2146  2353 I Finsky  : [50] Current account updated in PVS
+02-06 22:12:12.238  2146  2357 I Finsky  : [51] Current account updated in PVS
+02-06 22:12:12.240  2146  2247 I android.vending: WaitForGcToComplete blocked ProfileSaver on Background for 29.727ms
+02-06 22:12:12.241  2146  2417 I Finsky  : [62] SCH: Scheduling phonesky job Id: 1-1337, CT: 1770407400498, Constraints: [{ L: 34117375, D: 77317375, C: CHARGING_NONE, I: IDLE_NONE, N: NET_ANY, B: BATTERY_ANY }]
+02-06 22:12:12.249  2146  2384 I Finsky  : [52] SCH: Scheduling 1 system job(s)
+02-06 22:12:12.249  2146  2384 I Finsky  : [52] SCH: Scheduling system job Id: 9051, L: 25585624, D: 68785624, C: false, I: false, N: 1
+02-06 22:12:12.258  2146  8046 I Finsky  : [248] SCH: job service finished with id 9048.
+02-06 22:12:12.267  2146  2146 I Finsky  : [2] Memory trim requested to level 40
+02-06 22:12:12.267  2146  2146 I Finsky  : [2] Flushing in-memory image cache
+02-06 22:12:12.267  2146  2349 I Finsky  : [46] Current account updated in PVS
+02-06 22:12:12.288   689   909 D androidtc: Initializing SystemTextClassifier, type = System
+02-06 22:12:12.289   689   909 E ClipboardService: Denying clipboard access to com.android.chrome, application is not in focus nor is it a system service for user 0
+02-06 22:12:12.289  1385  1385 I AiAiTextClassifier: onCreateTextClassificationSession = TextClassificationSessionId {b12116dd-228f-4684-8797-ea0c56538b82}
+02-06 22:12:12.292  1385  1725 I AiAiTranslate: C2T - not in a conversation
+02-06 22:12:12.293   946   946 I ClipboardListener: Clipboard overlay suppressed.
+02-06 22:12:12.295  1385  1755 I AiAiTextClassifier: GenerateLinks did not find valid links, returning empty result
+02-06 22:12:12.297   689   910 E ClipboardService: Denying clipboard access to com.android.chrome, application is not in focus nor is it a system service for user 0
+02-06 22:12:12.298  1385  1755 I AiAiTextClassifier: GenerateLinks did not find valid links, returning empty result
+02-06 22:12:12.302   946   946 I ClipboardListener: Clipboard overlay suppressed.
+02-06 22:12:15.312  8054  8054 W dumpsys : Thread Pool max thread count is 0. Cannot cache binder as linkToDeath cannot be implemented. serviceName: package
+02-06 22:12:15.380  2208  2210 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/base.odex) is kOatUpToDate with filter 'speed-profile' executable 'false'
+02-06 22:12:15.382  2208  2210 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/split_AdsDynamite_installtime.odex) is kOatUpToDate with filter 'speed' executable 'false'
+02-06 22:12:15.382  2208  2210 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/split_CronetDynamite_installtime.odex) is kOatUpToDate with filter 'speed' executable 'false'
+02-06 22:12:15.384  2208  2210 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/split_DynamiteLoader_installtime.odex) is kOatUpToDate with filter 'speed' executable 'false'
+02-06 22:12:15.384  2208  2210 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/split_DynamiteModulesA_installtime.odex) is kOatUpToDate with filter 'speed' executable 'false'
+02-06 22:12:15.388  2208  2210 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/split_DynamiteModulesC_installtime.odex) is kOatUpToDate with filter 'speed' executable 'false'
+02-06 22:12:15.389  2208  2210 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/split_GoogleCertificates_installtime.odex) is kOatUpToDate with filter 'speed' executable 'false'
+02-06 22:12:15.390  2208  2210 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/split_MapsDynamite_installtime.odex) is kOatUpToDate with filter 'speed' executable 'false'
+02-06 22:12:15.391  2208  2210 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/split_MeasurementDynamite_installtime.odex) is kOatUpToDate with filter 'speed' executable 'false'
+02-06 22:12:15.392  2208  2210 I artd    : GetBestInfo: odex next to the dex file (/data/app/~~5KoU0IUjs6dp0xUyjknx5w==/com.google.android.gms-krUQbUdGpM-pPhvIrBuplg==/oat/x86_64/split_all_locale_splits.odex) is kOatUpToDate with filter 'speed' executable 'false'
+02-06 22:12:15.394  2208  2210 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/00000013/dl-MlkitBarcodeUi.optional_260235100800.apk has no usable artifacts
+02-06 22:12:15.394  2208  2210 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/00000001/CronetDynamite.apk has no usable artifacts
+02-06 22:12:15.395  2208  2210 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/0000000b/dl-Appsearch.optional_250834100800.apk has no usable artifacts
+02-06 22:12:15.396  2208  2210 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/00000002/DynamiteLoader.apk has no usable artifacts
+02-06 22:12:15.397  2208  2210 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/00000005/GoogleCertificates.apk has no usable artifacts
+02-06 22:12:15.398  2208  2210 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/00000015/dl-MlkitOcrCommon.optional_260235100800.apk has no usable artifacts
+02-06 22:12:15.400  2208  2210 I artd    : GetBestInfo: vdex next to the dex file (/data/user/0/com.google.android.gms/app_dg_cache/CF98DA544914DD75038B6CE6DBC852B6C43EC876/oat/x86_64/the.vdex) is kOatUpToDate with filter 'verify' executable 'false'
+02-06 22:12:15.402  2208  2208 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/0000000c/dl-TfliteDynamiteDynamite.integ_252130102100800.apk has no usable artifacts
+02-06 22:12:15.403  2208  2208 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/00000010/dl-Appsearch.optional_260235100800.apk has no usable artifacts
+02-06 22:12:15.404  2208  2208 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/0000000f/dl-PlayCloudSearch.optional_260235100000.apk has no usable artifacts
+02-06 22:12:15.405  2208  2208 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/0000000d/dl-MlkitBarcodeUi.optional_250834100800.apk has no usable artifacts
+02-06 22:12:15.406  2208  2208 I artd    : GetBestInfo: vdex next to the dex file (/data/user/0/com.google.android.gms/app_dg_cache/A3CA675C42809307C9989FB51FF5403F49F05332/oat/x86_64/the.vdex) is kOatUpToDate with filter 'verify' executable 'false'
+02-06 22:12:15.407  2208  2208 W artd    : Could not get dex checksums for location /data/app/~~V4tzkpr_KUXC_c2VLNTuDg==/com.android.vending-Pf4mo0JraDXwPkjC3ew0bQ==/base.apk, fd=-1
+02-06 22:12:15.409  2208  2208 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/00000014/dl-VisionOcr.optional_260235100000.apk has no usable artifacts
+02-06 22:12:17.280  1057  1219 D SatelliteController: iisInCarrierRoamingNbIotNtn: satellite is disabled
