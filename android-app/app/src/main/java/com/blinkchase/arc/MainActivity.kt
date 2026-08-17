@@ -65,15 +65,15 @@ class MainActivity : ComponentActivity() {
         const val KEY_LAST_CRASHED_LAYOUT = "last_crashed_layout"
 
         val AVAILABLE_CORES = mapOf(
-            Platform.SNES to listOf("snes9x_libretro_android", "snes9x2010_libretro_android"),
-            Platform.GBA to listOf("mgba_libretro_android", "vba_next_libretro_android"),
-            Platform.GB to listOf("mgba_libretro_android", "gambatte_libretro_android"),
-            Platform.GBC to listOf("mgba_libretro_android", "gambatte_libretro_android"),
-            Platform.GENESIS to listOf("genesis_plus_gx_libretro_android", "picodrive_libretro_android"),
-            Platform.N64 to listOf("mupen64plus_next_libretro_android", "parallel_n64_libretro_android"),
-            Platform.PS1 to listOf("pcsx_rearmed_libretro_android", "swanstation_libretro_android"),
-            Platform.GAMECUBE to listOf("dolphin_libretro_android"),
-            Platform.WII to listOf("dolphin_libretro_android")
+            Platform.SNES to listOf("snes9x_libretro_android", "snes9x2010_libretro_android", "snes9x"),
+            Platform.GBA to listOf("mgba_libretro_android", "vba_next_libretro_android", "mgba"),
+            Platform.GB to listOf("mgba_libretro_android", "gambatte_libretro_android", "mgba", "gambatte"),
+            Platform.GBC to listOf("mgba_libretro_android", "gambatte_libretro_android", "mgba", "gambatte"),
+            Platform.GENESIS to listOf("genesis_plus_gx_libretro_android", "picodrive_libretro_android", "genesis_plus_gx"),
+            Platform.N64 to listOf("parallel_n64_libretro_android", "mupen64plus_next_gles3", "mupen64plus_next_gles2", "mupen64plus_next_libretro", "mupen64plus_next_libretro_android", "mupen64plus_next"),
+            Platform.PS1 to listOf("pcsx_rearmed_libretro_android", "swanstation_libretro_android", "pcsx_rearmed"),
+            Platform.GAMECUBE to listOf("dolphin_libretro_android", "dolphin"),
+            Platform.WII to listOf("dolphin_libretro_android", "dolphin")
         )
     }
 
@@ -368,11 +368,17 @@ class MainActivity : ComponentActivity() {
                 val mode = prefs.getInt(KEY_SCAN_MODE, 0)
                 val pathsToScan = if (mode == 1) {
                     try {
-                        val set = prefs.getStringSet(KEY_CUSTOM_PATHS, emptySet())
-                        set?.map { File(it) } ?: emptyList()
+                        val allPrefs = prefs.all
+                        val value = allPrefs[KEY_CUSTOM_PATHS]
+                        if (value is Set<*>) {
+                            @Suppress("UNCHECKED_CAST")
+                            (value as Set<String>).map { File(it) }
+                        } else {
+                            Log.w("Arc", "Custom paths not a set, skipping. Type: ${value?.javaClass?.name}")
+                            emptyList()
+                        }
                     } catch (e: Exception) {
-                        Log.e("Arc", "Failed to read custom paths, resetting", e)
-                        prefs.edit().remove(KEY_CUSTOM_PATHS).apply()
+                        Log.e("Arc", "Failed to read custom paths", e)
                         emptyList()
                     }
                 } else {
@@ -458,15 +464,46 @@ class MainActivity : ComponentActivity() {
             activeGameName = game.name
             activeGamePlatform = game.platform
 
-            // Smart Core Detection: Find a core that matches the device architecture
             val platformCores = AVAILABLE_CORES[game.platform] ?: emptyList()
             val savedCore = prefs.getString("core_pref_${game.platform.name}", null)
 
             var finalCorePath: String? = null
 
+            fun getCoreFile(coreName: String): File {
+                val searchNames = mutableListOf<String>()
+                searchNames.add(coreName)
+                if (!coreName.endsWith(".so")) searchNames.add("$coreName.so")
+                
+                if (!coreName.startsWith("lib")) {
+                    val withLib = "lib$coreName"
+                    searchNames.add(withLib)
+                    if (!withLib.endsWith(".so")) searchNames.add("$withLib.so")
+                } else {
+                    val noLib = coreName.removePrefix("lib")
+                    searchNames.add(noLib)
+                    if (!noLib.endsWith(".so")) searchNames.add("$noLib.so")
+                }
+
+                val searchDirs = listOf(internalCoresDir, File(context.applicationInfo.nativeLibraryDir))
+                for (name in searchNames) {
+                    for (dir in searchDirs) {
+                        val file = File(dir, name)
+                        if (file.exists()) return file
+                    }
+                }
+                
+                // Fallback
+                val defaultLibName = if (coreName.startsWith("lib")) {
+                    if (coreName.endsWith(".so")) coreName else "$coreName.so"
+                } else {
+                    if (coreName.endsWith(".so")) "lib$coreName" else "lib$coreName.so"
+                }
+                return File(internalCoresDir, defaultLibName)
+            }
+
             // 1. Check saved core (if valid arch)
             if (savedCore != null) {
-                val file = File(internalCoresDir, "lib$savedCore.so")
+                val file = getCoreFile(savedCore)
                 if (file.exists() && LibraryDiagnostics.checkLibraryArchitecture(file).status == "MATCH") {
                     finalCorePath = file.absolutePath
                 }
@@ -475,7 +512,7 @@ class MainActivity : ComponentActivity() {
             // 2. Check known cores for this platform
             if (finalCorePath == null) {
                 for (name in platformCores) {
-                    val file = File(internalCoresDir, "lib$name.so")
+                    val file = getCoreFile(name)
                     if (file.exists() && LibraryDiagnostics.checkLibraryArchitecture(file).status == "MATCH") {
                         finalCorePath = file.absolutePath
                         break
@@ -485,26 +522,34 @@ class MainActivity : ComponentActivity() {
 
             // 3. Fuzzy search for any valid core for this platform
             if (finalCorePath == null) {
-                val keywords = when(game.platform) {
+                val keywords = when (game.platform) {
                     Platform.SNES -> listOf("snes")
                     Platform.GBA -> listOf("gba", "vba")
                     Platform.GB, Platform.GBC -> listOf("gambatte", "mgba", "sameboy")
                     Platform.GENESIS -> listOf("genesis", "picodrive", "md")
-                    Platform.N64 -> listOf("n64", "mupen", "parallel")
+            Platform.N64 -> listOf("n64", "mupen", "parallel", "gles3")
                     Platform.PS1 -> listOf("pcsx", "swan", "duck")
                     Platform.GAMECUBE, Platform.WII -> listOf("dolphin")
                     else -> emptyList()
                 }
-                val bestMatch = internalCoresDir.listFiles()?.find { file ->
-                    file.name.endsWith(".so") &&
-                    keywords.any { k -> file.name.contains(k, ignoreCase = true) } &&
-                    LibraryDiagnostics.checkLibraryArchitecture(file).status == "MATCH"
+                
+                // Search both internal and native directories
+                val searchDirs = listOf(internalCoresDir, File(context.applicationInfo.nativeLibraryDir))
+                for (dir in searchDirs) {
+                    val bestMatch = dir.listFiles()?.find { file ->
+                        file.name.endsWith(".so") &&
+                                keywords.any { k -> file.name.contains(k, ignoreCase = true) } &&
+                                LibraryDiagnostics.checkLibraryArchitecture(file).status == "MATCH"
+                    }
+                    if (bestMatch != null) {
+                        finalCorePath = bestMatch.absolutePath
+                        break
+                    }
                 }
-                if (bestMatch != null) finalCorePath = bestMatch.absolutePath
             }
 
-            val defaultCore = savedCore ?: platformCores.firstOrNull() ?: "snes9x_libretro_android"
-            activeGameCorePath = finalCorePath ?: File(internalCoresDir, "lib$defaultCore.so").absolutePath
+            val firstCore = platformCores.firstOrNull() ?: "snes9x_libretro_android"
+            activeGameCorePath = finalCorePath ?: getCoreFile(savedCore ?: firstCore).absolutePath
             buttonOffsets = loadLayout(game.name)
         }
 

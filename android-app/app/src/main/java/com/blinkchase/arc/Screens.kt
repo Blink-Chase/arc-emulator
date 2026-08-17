@@ -17,7 +17,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -95,7 +94,7 @@ fun ArcHomeScreen(
                 Spacer(modifier = Modifier.height(16.dp))
                 Text("Recent Games", style = MaterialTheme.typography.titleMedium, modifier = Modifier.fillMaxWidth())
             }
-            items(recentGames) { game ->
+            items(items = recentGames) { game ->
                 GameListItem(game = game, onToggleFavorite = {}, onClick = onGameClick)
             }
         }
@@ -108,7 +107,7 @@ fun ImportScreen(
     onScanCores: () -> Unit,
     onScanLayouts: () -> Unit,
     coresCount: Int,
-    layoutsCount: Int
+    layoutsCount: Int,
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Text("Scan Library", style = MaterialTheme.typography.headlineMedium)
@@ -166,13 +165,13 @@ fun SearchScreen(games: List<GameFile>, onGameSelected: (GameFile) -> Unit) {
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
             value = query,
-            onValueChange = { query = it },
+            onValueChange = { newValue -> query = newValue },
             label = { Text("Game Name") },
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(16.dp))
         LazyColumn {
-            items(filteredGames) { game ->
+            items(items = filteredGames) { game ->
                 GameListItem(game = game, onToggleFavorite = {}, onClick = onGameSelected)
             }
         }
@@ -262,7 +261,7 @@ fun LibraryScreen(
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
-                items(favorites) { game ->
+                items(items = favorites) { game ->
                     GameListItem(game, onToggleFavorite, onGameSelected)
                 }
             }
@@ -276,7 +275,7 @@ fun LibraryScreen(
                         color = MaterialTheme.colorScheme.secondary
                     )
                 }
-                items(others) { game ->
+                items(items = others) { game ->
                     GameListItem(game, onToggleFavorite, onGameSelected)
                 }
             }
@@ -313,28 +312,6 @@ fun LibraryScreen(
 }
 }
 
-@Composable
-fun GameCard(game: GameFile, isFavorite: Boolean, onToggleFavorite: (GameFile) -> Unit, onClick: (GameFile) -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { onClick(game) },
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp).fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(text = game.name, modifier = Modifier.weight(1f))
-            IconButton(onClick = { onToggleFavorite(game) }) {
-                Icon(
-                    Icons.Default.Star,
-                    contentDescription = "Favorite",
-                    tint = if (isFavorite) Color(0xFFDAA520) else Color.Gray
-                )
-            }
-        }
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -363,7 +340,7 @@ fun SettingsScreen(
     var autoPauseMenu by remember { mutableStateOf(prefs.getBoolean(MainActivity.KEY_AUTO_PAUSE_MENU, true)) }
     var controllerStyle by remember { mutableStateOf(InputStyle.entries[prefs.getInt(MainActivity.KEY_CONTROLLER_STYLE, 0)]) }
     var showCoreSelectorFor by remember { mutableStateOf<Platform?>(null) }
-    var showDiagnostics by remember { mutableStateOf(false) }
+    var showDiagnostics by remember { mutableStateOf(value = false) }
     
     val context = LocalContext.current
     val installedCores = remember(refreshKey) { Utils.scanInstalledCores(context) }
@@ -601,7 +578,7 @@ fun SettingsScreen(
             Text("Custom Paths:", style = MaterialTheme.typography.bodyMedium)
             
             LazyColumn(modifier = Modifier.height(150.dp).fillMaxWidth().border(1.dp, Color.Gray).padding(4.dp)) {
-                items(customPaths.toList()) { path ->
+                items(items = customPaths.toList()) { path ->
                     Row(
                         modifier = Modifier.fillMaxWidth(), 
                         horizontalArrangement = Arrangement.SpaceBetween, 
@@ -692,7 +669,7 @@ fun SettingsScreen(
         }
         
         LazyColumn(modifier = Modifier.height(100.dp).fillMaxWidth().border(1.dp, Color.Gray).padding(4.dp)) {
-            items(biosList) { name ->
+            items(items = biosList) { name ->
                 Text(name, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(2.dp))
             }
         }
@@ -778,7 +755,7 @@ fun SettingsScreen(
             title = { Text("Select Core for ${platform.name}") },
             text = {
                 LazyColumn {
-                    items(knownCores) { core ->
+                    items(items = knownCores) { core ->
                         val isInstalled = installedCores.contains(core)
                         val isSelected = currentCore == core
                         
@@ -788,8 +765,8 @@ fun SettingsScreen(
                         val nativeFile = File(nativeDir, fileName)
                         val finalFile = if (customFile.exists()) customFile else nativeFile
                         val arch = Utils.getLibArchitecture(finalFile)
-                        val isCompatible = (arch == "x86_64" && Build.SUPPORTED_ABIS.contains("x86_64")) || 
-                                          (arch == "ARM64" && Build.SUPPORTED_ABIS.contains("arm64-v8a"))
+                        val isCompatible = ((arch == "x86_64") && Build.SUPPORTED_ABIS.contains("x86_64")) || 
+                                          ((arch == "ARM64") && Build.SUPPORTED_ABIS.contains("arm64-v8a"))
 
                         Row(
                             modifier = Modifier
@@ -832,9 +809,8 @@ fun SettingsScreen(
     // Diagnostics dialog
     if (showDiagnostics) {
         DiagnosticsDialog(
-            context = context,
-            onDismiss = { showDiagnostics = false }
-        )
+            context = context
+        ) { showDiagnostics = false }
     }
 }
 

@@ -58,8 +58,9 @@ object Utils {
         return cores.toList().sorted()
     }
 
-    fun getLibArchitecture(file: File): String? {
-        if (!file.exists()) return null
+    fun getLibArchitecture(file: File): String {
+        if (!file.exists()) return "Missing"
+        if (file.isDirectory) return "Error: Is Directory"
         
         try {
             RandomAccessFile(file, "r").use { raf ->
@@ -78,9 +79,9 @@ object Utils {
                     0x03 -> "x86"
                     0x3E -> "x86-64"
                     0x28 -> "ARM"
-                    0xB7 -> "AArch64"
+                    0xB7 -> "ARM64"
                     0x08 -> "MIPS"
-                    else -> "Unknown"
+                    else -> "Unknown ($machineType)"
                 }
             }
         } catch (e: Exception) {
@@ -187,8 +188,8 @@ object LibraryDiagnostics {
         
         try {
             val libArch = Utils.getLibArchitecture(file)
-            if (libArch == null || libArch == "Error" || libArch.startsWith("Error:")) {
-                return ArchitectureCheckResult("ERROR", libArch ?: "Cannot read file", null)
+            if (libArch == "Error" || libArch.startsWith("Error:")) {
+                return ArchitectureCheckResult("ERROR", libArch, null)
             }
             
             if (libArch == "Not ELF") {
@@ -201,7 +202,7 @@ object LibraryDiagnostics {
             val isMatch = when {
                 devicePrimaryArch.contains("x86_64") && libArch == "x86-64" -> true
                 devicePrimaryArch.contains("x86") && !devicePrimaryArch.contains("64") && libArch == "x86" -> true
-                devicePrimaryArch.contains("arm64") && libArch == "AArch64" -> true
+                devicePrimaryArch.contains("arm64") && libArch == "ARM64" -> true
                 devicePrimaryArch.contains("armeabi") && libArch == "ARM" -> true
                 else -> false
             }

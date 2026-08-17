@@ -187,6 +187,7 @@ object GameLoader {
                     } else {
                         lastError = "Core loaded but game failed to start"
                         Log.e(TAG, lastError)
+                        // Don't break, try next core
                     }
                 } else {
                     lastError = errorMsg
@@ -198,9 +199,10 @@ object GameLoader {
                             lastError = "Architecture mismatch detected"
                         }
                         errorMsg.contains("dlopen failed") -> {
-                            lastError = "Failed to open library: $errorMsg"
+                            lastError = "Native library error: $errorMsg"
                         }
                     }
+                    // Try next core
                 }
             } catch (e: Exception) {
                 lastError = "Exception while loading: ${e.message}"
@@ -238,15 +240,30 @@ object GameLoader {
         val nativeDir = File(context.applicationInfo.nativeLibraryDir)
         
         fun getCoreFile(coreName: String): File {
-            val libName = if (coreName.startsWith("lib")) coreName else "lib$coreName"
-            val fileName = if (libName.endsWith(".so")) libName else "$libName.so"
+            val searchNames = mutableListOf<String>()
+            searchNames.add(coreName)
+            if (!coreName.endsWith(".so")) searchNames.add("$coreName.so")
             
-            // Check internal directory first
-            val internalCore = File(internalCoresDir, fileName)
-            if (internalCore.exists()) return internalCore
+            if (!coreName.startsWith("lib")) {
+                val withLib = "lib$coreName"
+                searchNames.add(withLib)
+                if (!withLib.endsWith(".so")) searchNames.add("$withLib.so")
+            } else {
+                val noLib = coreName.removePrefix("lib")
+                searchNames.add(noLib)
+                if (!noLib.endsWith(".so")) searchNames.add("$noLib.so")
+            }
+
+            for (name in searchNames) {
+                val internalFile = File(internalCoresDir, name)
+                if (internalFile.exists()) return internalFile
+                val nativeFile = File(nativeDir, name)
+                if (nativeFile.exists()) return nativeFile
+            }
             
-            // Fall back to native lib directory
-            return File(nativeDir, fileName)
+            val defaultName = if (coreName.startsWith("lib")) coreName else "lib$coreName"
+            val defaultFileName = if (defaultName.endsWith(".so")) defaultName else "$defaultName.so"
+            return File(internalCoresDir, defaultFileName)
         }
         
         // Add preferred core first
