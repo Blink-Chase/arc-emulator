@@ -81,7 +81,12 @@ object NovaMigrator {
                                 for (i in 0 until value.length()) {
                                     set.add(value.getString(i))
                                 }
-                                editor.putStringSet(key, set)
+                                val current = prefs.all[key]
+                                if (current == null || current is Set<*>) {
+                                    editor.putStringSet(key, set)
+                                } else {
+                                    Log.w(TAG, "Skipping migration for $key: existing type mismatch")
+                                }
                             }
                         }
                     }
@@ -100,6 +105,7 @@ object NovaMigrator {
                         val name = g.optString("name", File(path).nameWithoutExtension)
                         val platformName = g.optString("platform", guessPlatform(path).name)
                         
+                        Log.d(TAG, "Migrating game from JSON: $name ($path)")
                         val platform = try { Platform.valueOf(platformName) } catch (_: Exception) { guessPlatform(path) }
 
                         // ONLY migrate if it actually looks like a game or has a known platform
@@ -126,13 +132,39 @@ object NovaMigrator {
                         gameDao.insertGames(gamesToInsert)
                     }
                 }
-                Log.d(TAG, "JSON metadata migration complete")
+                
+                // 3. Physical ROM Scan (in case JSON is missing games)
+                val romsDir = File(novaDir, "roms")
+                if (romsDir.exists() && romsDir.isDirectory) {
+                    Log.d(TAG, "Scanning Nova ROMs directory for physical games...")
+                    val physicalGames = mutableListOf<GameFile>()
+                    romsDir.walkTopDown().filter { it.isFile }.forEach { file ->
+                        val platform = guessPlatform(file.absolutePath)
+                        if (platform != Platform.UNKNOWN) {
+                            val existing = gameDao.getGameByPath(file.absolutePath)
+                            if (existing == null) {
+                                Log.d(TAG, "Found physical game not in JSON: ${file.name}")
+                                physicalGames.add(GameFile(
+                                    name = file.nameWithoutExtension,
+                                    path = file.absolutePath,
+                                    platform = platform,
+                                    lastPlayed = 0,
+                                    isFavorite = false
+                                ))
+                            }
+                        }
+                    }
+                    if (physicalGames.isNotEmpty()) {
+                        gameDao.insertGames(physicalGames)
+                    }
+                }
+                Log.d(TAG, "Data migration complete")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to parse migration JSON: ${e.message}")
             }
         }
 
-        // 3. Cleanup: rename old folder to backup
+        // 4. Cleanup: rename old folder to backup
         val backupDir = File(novaDir.parentFile, "Nova_Backup_${System.currentTimeMillis()}")
         novaDir.renameTo(backupDir)
 
@@ -146,15 +178,15 @@ object NovaMigrator {
     private fun guessPlatform(path: String): Platform {
         val p = path.lowercase()
         return when {
-            p.contains("snes") || p.endsWith(".sfc") || p.endsWith(".smc") -> Platform.SNES
-            p.contains("gba") || p.endsWith(".gba") -> Platform.GBA
+            p.contains("snes") || p.endsWith(".sfc") || p.endsWith(".smc") || p.endsWith(".swc") || p.endsWith(".fig") -> Platform.SNES
+            p.contains("gba") || p.endsWith(".gba") || p.endsWith(".agb") -> Platform.GBA
             p.contains("gbc") || p.endsWith(".gbc") -> Platform.GBC
-            p.contains("gb") || p.endsWith(".gb") -> Platform.GB
-            p.contains("genesis") || p.contains("megadrive") || p.endsWith(".md") || p.endsWith(".gen") -> Platform.GENESIS
-            p.contains("n64") || p.endsWith(".z64") || p.endsWith(".n64") -> Platform.N64
-            p.contains("ps1") || p.contains("psx") || p.endsWith(".cue") || p.endsWith(".bin") -> Platform.PS1
-            p.contains("gc") || p.contains("gamecube") || p.endsWith(".iso") -> Platform.GAMECUBE
-            p.contains("wii") || p.endsWith(".wbfs") -> Platform.WII
+            p.contains("gb") || p.endsWith(".gb") || p.endsWith(".sgb") -> Platform.GB
+            p.contains("genesis") || p.contains("megadrive") || p.contains("md") || p.endsWith(".md") || p.endsWith(".gen") || p.endsWith(".smd") || (p.endsWith(".bin") && p.contains("sega")) -> Platform.GENESIS
+            p.contains("n64") || p.endsWith(".z64") || p.endsWith(".n64") || p.endsWith(".v64") -> Platform.N64
+            p.contains("ps1") || p.contains("psx") || p.endsWith(".cue") || p.endsWith(".bin") || p.endsWith(".chd") || p.endsWith(".pbp") -> Platform.PS1
+            p.contains("gc") || p.contains("gamecube") || p.endsWith(".iso") || p.endsWith(".gcm") -> Platform.GAMECUBE
+            p.contains("wii") || p.endsWith(".wbfs") || p.endsWith(".rvz") -> Platform.WII
             else -> Platform.UNKNOWN
         }
     }
