@@ -10,9 +10,13 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
+import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.Surface
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
@@ -34,6 +38,10 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.atomic.AtomicLong
 import androidx.core.net.toUri
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
 
 class MainActivity : ComponentActivity() {
 
@@ -340,14 +348,130 @@ class MainActivity : ComponentActivity() {
     override fun onStop() { super.onStop(); resetAudio() }
     override fun onDestroy() { super.onDestroy(); resetAudio() }
 
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (event.source and android.view.InputDevice.SOURCE_GAMEPAD == android.view.InputDevice.SOURCE_GAMEPAD || 
+            event.source and android.view.InputDevice.SOURCE_JOYSTICK == android.view.InputDevice.SOURCE_JOYSTICK ||
+            keyCode in listOf(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT)) {
+            val mappedButton = mapKeyCodeToButton(keyCode)
+            if (mappedButton != -1) {
+                sendInput(mappedButton, 1)
+                return true
+            }
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
+        if (event.source and android.view.InputDevice.SOURCE_GAMEPAD == android.view.InputDevice.SOURCE_GAMEPAD || 
+            event.source and android.view.InputDevice.SOURCE_JOYSTICK == android.view.InputDevice.SOURCE_JOYSTICK ||
+            keyCode in listOf(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT)) {
+            val mappedButton = mapKeyCodeToButton(keyCode)
+            if (mappedButton != -1) {
+                sendInput(mappedButton, 0)
+                return true
+            }
+        }
+        return super.onKeyUp(keyCode, event)
+    }
+
+    override fun onGenericMotionEvent(event: MotionEvent): Boolean {
+        if (event.source and android.view.InputDevice.SOURCE_JOYSTICK == android.view.InputDevice.SOURCE_JOYSTICK &&
+            event.action == MotionEvent.ACTION_MOVE) {
+            
+            // Left Stick
+            val lsX = event.getAxisValue(MotionEvent.AXIS_X)
+            val lsY = event.getAxisValue(MotionEvent.AXIS_Y)
+            setAnalogInput((lsX * 32767).toInt(), (lsY * 32767).toInt())
+
+            // Right Stick
+            val rsX = event.getAxisValue(MotionEvent.AXIS_Z)
+            val rsY = event.getAxisValue(MotionEvent.AXIS_RZ)
+            setRightAnalogInput((rsX * 32767).toInt(), (rsY * 32767).toInt())
+
+            // DPAD as Axes (Some controllers use HAT axes)
+            val hatX = event.getAxisValue(MotionEvent.AXIS_HAT_X)
+            val hatY = event.getAxisValue(MotionEvent.AXIS_HAT_Y)
+            
+            if (hatX != 0f || hatY != 0f) {
+                sendInput(BTN_LEFT, if (hatX < -0.5f) 1 else 0)
+                sendInput(BTN_RIGHT, if (hatX > 0.5f) 1 else 0)
+                sendInput(BTN_UP, if (hatY < -0.5f) 1 else 0)
+                sendInput(BTN_DOWN, if (hatY > 0.5f) 1 else 0)
+            }
+
+            return true
+        }
+        return super.onGenericMotionEvent(event)
+    }
+
+    private fun mapKeyCodeToButton(keyCode: Int): Int {
+        return when (keyCode) {
+            KeyEvent.KEYCODE_BUTTON_A -> BTN_A
+            KeyEvent.KEYCODE_BUTTON_B -> BTN_B
+            KeyEvent.KEYCODE_BUTTON_X -> BTN_X
+            KeyEvent.KEYCODE_BUTTON_Y -> BTN_Y
+            KeyEvent.KEYCODE_BUTTON_L1 -> BTN_L
+            KeyEvent.KEYCODE_BUTTON_R1 -> BTN_R
+            KeyEvent.KEYCODE_BUTTON_L2 -> BTN_L2
+            KeyEvent.KEYCODE_BUTTON_R2 -> BTN_R2
+            KeyEvent.KEYCODE_BUTTON_THUMBL -> BTN_L3
+            KeyEvent.KEYCODE_BUTTON_THUMBR -> BTN_R3
+            KeyEvent.KEYCODE_BUTTON_START -> BTN_START
+            KeyEvent.KEYCODE_BUTTON_SELECT -> BTN_SELECT
+            KeyEvent.KEYCODE_DPAD_UP -> BTN_UP
+            KeyEvent.KEYCODE_DPAD_DOWN -> BTN_DOWN
+            KeyEvent.KEYCODE_DPAD_LEFT -> BTN_LEFT
+            KeyEvent.KEYCODE_DPAD_RIGHT -> BTN_RIGHT
+            else -> -1
+        }
+    }
+
     @Composable
     fun ArcApp(storageDir: File, savesDir: File) {
         val context = LocalContext.current
+        val navController = rememberNavController()
         val prefs = remember { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
         val scope = rememberCoroutineScope()
 
         val gameList by gameDao.getAllGames().collectAsState(initial = emptyList())
-        var currentScreen by rememberSaveable { mutableStateOf(Screen.HOME) }
+        val navBackStackEntry by navController.currentBackStackEntryAsState()
+        val currentRoute = navBackStackEntry?.destination?.route
+
+        val romImporter = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+            if (uris.isNotEmpty()) {
+                scope.launch(Dispatchers.IO) {
+                    val importedGames = mutableListOf<GameFile>()
+                    uris.forEach { uri ->
+                        val fileName = Utils.getFileName(context, uri) ?: return@forEach
+                        // We try to get a path, but SAF uris don't always have one.
+                        // For now, we'll log them. A better approach would be to copy them to Arc/Roms/
+                        Log.d("Arc", "Importing file: $fileName via $uri")
+                        
+                        // Simple guess platform logic for imported files
+                        val platform = when {
+                            fileName.endsWith(".sfc", true) -> Platform.SNES
+                            fileName.endsWith(".gba", true) -> Platform.GBA
+                            fileName.endsWith(".gb", true) -> Platform.GB
+                            fileName.endsWith(".gbc", true) -> Platform.GBC
+                            fileName.endsWith(".n64", true) -> Platform.N64
+                            fileName.endsWith(".chd", true) || fileName.endsWith(".cue", true) -> Platform.PS1
+                            else -> Platform.UNKNOWN
+                        }
+                        
+                        if (platform != Platform.UNKNOWN) {
+                            importedGames.add(GameFile(name = fileName, path = uri.toString(), platform = platform))
+                        }
+                    }
+                    if (importedGames.isNotEmpty()) {
+                        gameDao.insertGames(importedGames)
+                        withContext(Dispatchers.Main) {
+                            android.widget.Toast.makeText(context, "Imported ${importedGames.size} games", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            }
+        }
+
         var activeGamePath by rememberSaveable { mutableStateOf("") }
         var activeGameName by rememberSaveable { mutableStateOf("") }
         var activeGamePlatform by rememberSaveable { mutableStateOf(Platform.UNKNOWN) }
@@ -555,56 +679,77 @@ class MainActivity : ComponentActivity() {
 
         Scaffold(
             bottomBar = {
-                if (currentScreen != Screen.GAME && currentScreen != Screen.ABOUT && currentScreen != Screen.HELP) {
+                val hideBottomBarRoutes = listOf(Screen.GAME.name, Screen.ABOUT.name, Screen.HELP.name)
+                if (currentRoute !in hideBottomBarRoutes) {
                     NavigationBar {
                         NavigationBarItem(
                             icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
                             label = { Text("Home") },
-                            selected = currentScreen == Screen.HOME,
-                            onClick = { currentScreen = Screen.HOME }
+                            selected = currentRoute == Screen.HOME.name,
+                            onClick = { 
+                                if (currentRoute != Screen.HOME.name) {
+                                    navController.navigate(Screen.HOME.name) {
+                                        popUpTo(Screen.HOME.name) { inclusive = true }
+                                    }
+                                }
+                            }
                         )
                         NavigationBarItem(
                             icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Library") },
                             label = { Text("Library") },
-                            selected = currentScreen == Screen.LIBRARY,
-                            onClick = { currentScreen = Screen.LIBRARY }
-                        )
-                        NavigationBarItem(
-                            icon = { Icon(Icons.Default.Add, contentDescription = "Import") },
-                            label = { Text("Import") },
-                            selected = currentScreen == Screen.IMPORT,
-                            onClick = { currentScreen = Screen.IMPORT }
+                            selected = currentRoute == Screen.LIBRARY.name,
+                            onClick = { 
+                                if (currentRoute != Screen.LIBRARY.name) {
+                                    navController.navigate(Screen.LIBRARY.name)
+                                }
+                            }
                         )
                         NavigationBarItem(
                             icon = { Icon(Icons.Default.Search, contentDescription = "Search") },
                             label = { Text("Search") },
-                            selected = currentScreen == Screen.SEARCH,
-                            onClick = { currentScreen = Screen.SEARCH }
+                            selected = currentRoute == Screen.SEARCH.name,
+                            onClick = { 
+                                if (currentRoute != Screen.SEARCH.name) {
+                                    navController.navigate(Screen.SEARCH.name)
+                                }
+                            }
                         )
                         NavigationBarItem(
                             icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
                             label = { Text("Settings") },
-                            selected = currentScreen == Screen.SETTINGS,
-                            onClick = { currentScreen = Screen.SETTINGS }
+                            selected = currentRoute == Screen.SETTINGS.name,
+                            onClick = { 
+                                if (currentRoute != Screen.SETTINGS.name) {
+                                    navController.navigate(Screen.SETTINGS.name)
+                                }
+                            }
                         )
                     }
                 }
             }
         ) { innerPadding ->
             Box(modifier = Modifier.padding(innerPadding)) {
-                when (currentScreen) {
-                    Screen.HOME -> {
+                NavHost(navController = navController, startDestination = Screen.HOME.name) {
+                    composable(Screen.HOME.name) {
                         ArcHomeScreen(
                             games = gameList,
                             recentGames = gameList.filter { it.lastPlayed > 0 }.sortedByDescending { it.lastPlayed }.take(5),
                             storageDir = storageDir,
                             gameDao = gameDao,
                             prefs = prefs,
-                            onGameClick = { launchGame(it); currentScreen = Screen.GAME },
-                            onGoToLibrary = { currentScreen = Screen.LIBRARY }
+                            onGameClick = { game ->
+                                launchGame(game)
+                                navController.navigate(Screen.GAME.name)
+                            },
+                            onToggleFavorite = { game ->
+                                scope.launch(Dispatchers.IO) {
+                                    gameDao.updateGame(game.copy(isFavorite = !game.isFavorite))
+                                }
+                            },
+                            onGoToLibrary = { navController.navigate(Screen.LIBRARY.name) }
                         )
                     }
-                    Screen.LIBRARY -> {
+                    composable(Screen.LIBRARY.name) {
                         LibraryScreen(
                             games = gameList,
                             onToggleFavorite = { game ->
@@ -612,51 +757,101 @@ class MainActivity : ComponentActivity() {
                                     gameDao.updateGame(game.copy(isFavorite = !game.isFavorite))
                                 }
                             },
-                            onGameSelected = { launchGame(it); currentScreen = Screen.GAME }
+                            onGameSelected = { game ->
+                                launchGame(game)
+                                navController.navigate(Screen.GAME.name)
+                            },
+                            onNavigateToImport = {
+                                navController.navigate(Screen.IMPORT.name)
+                            }
                         )
                     }
-                    Screen.IMPORT -> {
-                        ImportScreen(onScanGames = { performScan() }, onScanCores = { val cores = scanCores(); android.widget.Toast.makeText(context, "Found ${cores.size} cores", android.widget.Toast.LENGTH_SHORT).show() }, onScanLayouts = { val layouts = scanLayouts(); android.widget.Toast.makeText(context, "Found ${layouts.size} layouts", android.widget.Toast.LENGTH_SHORT).show() }, coresCount = scanCores().size, layoutsCount = scanLayouts().size)
+                    composable(Screen.IMPORT.name) {
+                        ImportScreen(
+                            onScanGames = { performScan() },
+                            onScanCores = {
+                                val cores = scanCores()
+                                android.widget.Toast.makeText(context, "Found ${cores.size} cores", android.widget.Toast.LENGTH_SHORT).show()
+                            },
+                            onScanLayouts = {
+                                val layouts = scanLayouts()
+                                android.widget.Toast.makeText(context, "Found ${layouts.size} layouts", android.widget.Toast.LENGTH_SHORT).show()
+                            },
+                            onImportFiles = { romImporter.launch("*/*") },
+                            coresCount = scanCores().size,
+                            layoutsCount = scanLayouts().size,
+                            onBack = { navController.popBackStack() }
+                        )
                     }
-                    Screen.SEARCH -> {
-                        SearchScreen(games = gameList, onGameSelected = { launchGame(it); currentScreen = Screen.GAME })
+                    composable(Screen.SEARCH.name) {
+                        SearchScreen(
+                            games = gameList,
+                            onToggleFavorite = { game ->
+                                scope.launch(Dispatchers.IO) {
+                                    gameDao.updateGame(game.copy(isFavorite = !game.isFavorite))
+                                }
+                            },
+                            onGameSelected = { game ->
+                                launchGame(game)
+                                navController.navigate(Screen.GAME.name)
+                            }
+                        )
                     }
-                    Screen.SETTINGS -> {
+                    composable(Screen.SETTINGS.name) {
                         SettingsScreen(
                             prefs = prefs,
                             rootStorageDir = storageDir,
                             gameDao = gameDao,
                             onReportBug = { android.widget.Toast.makeText(context, "Check logs in console", android.widget.Toast.LENGTH_SHORT).show() },
-                            onGoToAbout = { currentScreen = Screen.ABOUT },
-                            onGoToHelp = { currentScreen = Screen.HELP }
+                            onGoToAbout = { navController.navigate(Screen.ABOUT.name) },
+                            onGoToHelp = { navController.navigate(Screen.HELP.name) }
                         )
                     }
-                    Screen.ABOUT -> {
+                    composable(Screen.ABOUT.name) {
                         AboutScreen(
                             storageDir = storageDir,
                             gameDao = gameDao,
                             prefs = prefs,
-                            onBack = { currentScreen = Screen.SETTINGS }
+                            onBack = { navController.popBackStack() }
                         )
                     }
-                    Screen.HELP -> {
-                        HelpScreen(onBack = { currentScreen = Screen.SETTINGS })
+                    composable(Screen.HELP.name) {
+                        HelpScreen(onBack = { navController.popBackStack() })
                     }
-                    Screen.GAME -> {
-                        // Create a safe directory for this game
+                    composable(Screen.GAME.name) {
                         val gameSafeName = remember(activeGameName) {
                             activeGameName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
                         }
                         val gameSaveDir = remember(gameSafeName) {
                             File(savesDir, gameSafeName).also { it.mkdirs() }
                         }
-                        GameScreen(gameName = activeGameName, platform = activeGamePlatform, gamePath = activeGamePath, corePath = activeGameCorePath, storageDir = storageDir, savesDir = gameSaveDir, layoutsDir = layoutsDir, buttonOffsets = buttonOffsets, onUpdateOffset = { id, offset -> buttonOffsets = buttonOffsets + (id to offset) }, onResetControls = { buttonOffsets = emptyMap() }, onBack = { saveLayout(activeGameName); currentScreen = Screen.HOME }, onTogglePause = { if (it) pauseGame() else resumeGame() }, onSaveState = { filePath ->
-                            android.util.Log.d("MainActivity", "Saving state to: $filePath")
-                            saveState(filePath)
-                        }, onLoadState = { filePath ->
-                            android.util.Log.d("MainActivity", "Loading state from: $filePath")
-                            loadState(filePath)
-                        }, onReset = { resetGame() }, onFastForward = { setFastForward(it) })
+                        GameScreen(
+                            gameName = activeGameName,
+                            platform = activeGamePlatform,
+                            gamePath = activeGamePath,
+                            corePath = activeGameCorePath,
+                            storageDir = storageDir,
+                            savesDir = gameSaveDir,
+                            layoutsDir = layoutsDir,
+                            buttonOffsets = buttonOffsets,
+                            onUpdateOffset = { id, offset -> buttonOffsets = buttonOffsets + (id to offset) },
+                            onResetControls = { buttonOffsets = emptyMap() },
+                            onBack = {
+                                saveLayout(activeGameName)
+                                navController.popBackStack()
+                            },
+                            onTogglePause = { if (it) pauseGame() else resumeGame() },
+                            onSaveState = { filePath ->
+                                Log.d("MainActivity", "Saving state to: $filePath")
+                                saveState(filePath)
+                            },
+                            onLoadState = { filePath ->
+                                Log.d("MainActivity", "Loading state from: $filePath")
+                                loadState(filePath)
+                            },
+                            onReset = { resetGame() },
+                            onFastForward = { setFastForward(it) }
+                        )
                     }
                 }
             }

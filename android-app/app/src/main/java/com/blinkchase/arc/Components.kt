@@ -18,8 +18,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -33,6 +35,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import java.io.File
 import kotlin.math.roundToInt
 
@@ -58,43 +61,58 @@ fun GameListItem(
     onToggleFavorite: (GameFile) -> Unit,
     onClick: (GameFile) -> Unit
 ) {
+    val context = LocalContext.current
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .clickable { onClick(game) },
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        modifier = Modifier.fillMaxWidth().clickable { onClick(game) },
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
     ) {
         Row(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    PlatformBadge(game.platform)
-                    Text(
-                        text = game.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                    )
+            Box(modifier = Modifier.size(48.dp)) {
+                val coversDir = remember { 
+                    val documentsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+                    File(File(documentsDir, "Arc"), "Covers")
                 }
-                if (game.lastPlayed > 0) {
-                    Text(
-                        text = "Last played: ${DateUtils.getRelativeTimeSpanString(game.lastPlayed)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.Gray
+                val coverFile = remember(game.name) {
+                    val baseName = game.name.substringBeforeLast(".")
+                    val extensions = listOf(".png", ".jpg", ".jpeg")
+                    extensions.map { File(coversDir, "$baseName$it") }.find { it.exists() }
+                }
+
+                if (coverFile != null) {
+                    AsyncImage(
+                        model = coverFile,
+                        contentDescription = game.name,
+                        modifier = Modifier.fillMaxSize().border(1.dp, Color.Gray, androidx.compose.foundation.shape.RoundedCornerShape(4.dp)),
+                        contentScale = ContentScale.Crop
                     )
+                } else {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = game.platform.getColor().copy(alpha = 0.2f),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(game.platform.name.take(2), style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
                 }
             }
+            
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            Column(modifier = Modifier.weight(1f)) {
+                Text(game.name.substringBeforeLast("."), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Text(game.platform.name, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            }
+            
             IconButton(onClick = { onToggleFavorite(game) }) {
                 Icon(
-                    imageVector = androidx.compose.material.icons.Icons.Default.Star,
+                    if (game.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                     contentDescription = "Favorite",
-                    tint = if (game.isFavorite) Color(0xFFDAA520) else Color.Gray
+                    tint = if (game.isFavorite) Color.Red else Color.Gray
                 )
             }
         }
