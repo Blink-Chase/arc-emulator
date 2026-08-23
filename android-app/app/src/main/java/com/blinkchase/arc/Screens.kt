@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,6 +43,72 @@ import androidx.core.content.edit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import coil.compose.AsyncImage
+
+@Composable
+fun ScreenHeader(
+    title: String,
+    navigationIcon: ImageVector? = null,
+    onNavigationClick: (() -> Unit)? = null,
+    actions: @Composable RowScope.() -> Unit = {}
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(64.dp)
+            .padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (navigationIcon != null && onNavigationClick != null) {
+                IconButton(onClick = onNavigationClick) {
+                    Icon(navigationIcon, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
+                }
+            } else {
+                Spacer(modifier = Modifier.width(12.dp))
+            }
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            actions()
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+    }
+}
+
+@Composable
+fun DestructiveActionDialog(
+    title: String,
+    message: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title, color = MaterialTheme.colorScheme.error) },
+        text = { Text(message) },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onConfirm()
+                    onDismiss()
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+            ) {
+                Text("Confirm")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
 
 @Composable
 fun ArcHomeScreen(
@@ -115,7 +182,6 @@ fun ArcHomeScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ImportScreen(
     onScanGames: () -> Unit,
@@ -126,19 +192,14 @@ fun ImportScreen(
     layoutsCount: Int,
     onBack: () -> Unit
 ) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Import & Scan") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                }
-            )
-        }
-    ) { innerPadding ->
-        Column(modifier = Modifier.fillMaxSize().padding(innerPadding).padding(16.dp)) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        ScreenHeader(
+            title = "Import & Scan",
+            navigationIcon = Icons.AutoMirrored.Filled.ArrowBack,
+            onNavigationClick = onBack
+        )
+        
+        Column(modifier = Modifier.padding(16.dp)) {
             Text("Games", style = MaterialTheme.typography.titleMedium)
             Text("Scan configured locations or import specific files.")
             Spacer(modifier = Modifier.height(8.dp))
@@ -198,68 +259,69 @@ fun SearchScreen(
         }.sortedBy { it.name }
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Search & Filter", style = MaterialTheme.typography.headlineMedium)
-        Spacer(modifier = Modifier.height(8.dp))
+    Column(modifier = Modifier.fillMaxSize()) {
+        ScreenHeader(title = "Search")
         
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            label = { Text("Game Name") },
-            modifier = Modifier.fillMaxWidth(),
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            trailingIcon = {
-                if (query.isNotEmpty()) {
-                    IconButton(onClick = { query = "" }) {
-                        Icon(Icons.Default.Clear, contentDescription = "Clear")
+        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                label = { Text("Game Name") },
+                modifier = Modifier.fillMaxWidth(),
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { query = "" }) {
+                            Icon(Icons.Default.Clear, contentDescription = "Clear")
+                        }
+                    }
+                },
+                shape = RoundedCornerShape(12.dp)
+            )
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            // Quick Filters
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = filterPlatform == null,
+                    onClick = { filterPlatform = null },
+                    label = { Text("All Platforms", style = MaterialTheme.typography.labelSmall) }
+                )
+                Platform.entries.filter { it != Platform.UNKNOWN }.forEach { platform ->
+                    FilterChip(
+                        selected = filterPlatform == platform,
+                        onClick = { filterPlatform = platform },
+                        label = { Text(platform.name, style = MaterialTheme.typography.labelSmall) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            if (query.isBlank() && filterPlatform == null) {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(64.dp), tint = Color.Gray.copy(alpha = 0.3f))
+                        Text("Enter a name or select a platform", color = Color.Gray)
                     }
                 }
-            },
-            shape = RoundedCornerShape(12.dp)
-        )
-        
-        Spacer(modifier = Modifier.height(12.dp))
-        
-        // Quick Filters
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            FilterChip(
-                selected = filterPlatform == null,
-                onClick = { filterPlatform = null },
-                label = { Text("All Platforms", style = MaterialTheme.typography.labelSmall) }
-            )
-            Platform.entries.filter { it != Platform.UNKNOWN }.forEach { platform ->
-                FilterChip(
-                    selected = filterPlatform == platform,
-                    onClick = { filterPlatform = platform },
-                    label = { Text(platform.name, style = MaterialTheme.typography.labelSmall) }
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        if (query.isBlank() && filterPlatform == null) {
-            Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(64.dp), tint = Color.Gray.copy(alpha = 0.3f))
-                    Text("Enter a name or select a platform", color = Color.Gray)
-                }
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(items = filteredGames) { game ->
-                    GameListItem(game = game, onToggleFavorite = onToggleFavorite, onClick = onGameSelected)
-                }
-                
-                if (filteredGames.isEmpty()) {
-                    item {
-                        Text("No games found matching your search.", modifier = Modifier.fillMaxWidth().padding(32.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center, color = Color.Gray)
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(items = filteredGames) { game ->
+                        GameListItem(game = game, onToggleFavorite = onToggleFavorite, onClick = onGameSelected)
+                    }
+                    
+                    if (filteredGames.isEmpty()) {
+                        item {
+                            Text("No games found matching your search.", modifier = Modifier.fillMaxWidth().padding(32.dp), textAlign = TextAlign.Center, color = Color.Gray)
+                        }
                     }
                 }
             }
@@ -267,7 +329,6 @@ fun SearchScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
     games: List<GameFile>, 
@@ -291,14 +352,10 @@ fun LibraryScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Library", style = MaterialTheme.typography.headlineMedium)
-            Row {
+    Column(modifier = Modifier.fillMaxSize()) {
+        ScreenHeader(
+            title = "Library",
+            actions = {
                 IconButton(onClick = { isGridView = isGridView.not() }) {
                     Icon(
                         if (isGridView) Icons.AutoMirrored.Filled.List else Icons.Default.GridView,
@@ -310,123 +367,123 @@ fun LibraryScreen(
                     Icon(Icons.Default.Add, contentDescription = "Import", tint = MaterialTheme.colorScheme.primary)
                 }
             }
-        }
+        )
         
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        // Sorting Chips
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            SortMode.entries.forEach { mode ->
-                FilterChip(
-                    selected = sortMode == mode,
-                    onClick = { sortMode = mode },
-                    label = { Text(mode.name.lowercase().replace("_", " ").replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelSmall) }
-                )
-            }
-        }
-        
-        // Platform Filter Chips
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            FilterChip(
-                selected = filterPlatform == null,
-                onClick = { filterPlatform = null },
-                label = { Text("All", style = MaterialTheme.typography.labelSmall) }
-            )
-            Platform.entries.filter { it != Platform.UNKNOWN }.forEach { platform ->
-                FilterChip(
-                    selected = filterPlatform == platform,
-                    onClick = { filterPlatform = platform },
-                    label = { Text(platform.name, style = MaterialTheme.typography.labelSmall) }
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        Box(modifier = Modifier.weight(1f)) {
-            if (isGridView) {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(120.dp),
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(items = sortedGames) { game ->
-                        GameGridItem(game, onToggleFavorite, onGameSelected)
-                    }
+        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+            // Sorting Chips
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                SortMode.entries.forEach { mode ->
+                    FilterChip(
+                        selected = sortMode == mode,
+                        onClick = { sortMode = mode },
+                        label = { Text(mode.name.lowercase().replace("_", " ").replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelSmall) }
+                    )
                 }
-            } else {
-                val listState = rememberLazyListState()
-                val scope = rememberCoroutineScope()
-                
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    val favorites = sortedGames.filter { it.isFavorite }
-                    val others = sortedGames.filter { !it.isFavorite }
+            }
+            
+            // Platform Filter Chips
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = filterPlatform == null,
+                    onClick = { filterPlatform = null },
+                    label = { Text("All", style = MaterialTheme.typography.labelSmall) }
+                )
+                Platform.entries.filter { it != Platform.UNKNOWN }.forEach { platform ->
+                    FilterChip(
+                        selected = filterPlatform == platform,
+                        onClick = { filterPlatform = platform },
+                        label = { Text(platform.name, style = MaterialTheme.typography.labelSmall) }
+                    )
+                }
+            }
 
-                    if (favorites.isNotEmpty()) {
-                        item {
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Box(modifier = Modifier.weight(1f)) {
+                if (isGridView) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(120.dp),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(items = sortedGames) { game ->
+                            GameGridItem(game, onToggleFavorite, onGameSelected)
+                        }
+                    }
+                } else {
+                    val listState = rememberLazyListState()
+                    val scope = rememberCoroutineScope()
+                    
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        val favorites = sortedGames.filter { it.isFavorite }
+                        val others = sortedGames.filter { !it.isFavorite }
+
+                        if (favorites.isNotEmpty()) {
+                            item {
+                                Text(
+                                    text = "Favorites",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    modifier = Modifier.padding(vertical = 4.dp),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            items(items = favorites) { game ->
+                                GameListItem(game, onToggleFavorite, onGameSelected)
+                            }
+                        }
+
+                        if (others.isNotEmpty()) {
+                            item {
+                                Text(
+                                    text = if (favorites.isNotEmpty()) "All Games" else "",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    modifier = Modifier.padding(vertical = 4.dp),
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                            }
+                            items(items = others) { game ->
+                                GameListItem(game, onToggleFavorite, onGameSelected)
+                            }
+                        }
+                    }
+                    
+                    // Letter scroll for list view
+                    Column(
+                        modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        ('A'..'Z').forEach { letter ->
                             Text(
-                                text = "Favorites",
-                                style = MaterialTheme.typography.titleSmall,
-                                modifier = Modifier.padding(vertical = 4.dp),
-                                color = MaterialTheme.colorScheme.primary
+                                text = letter.toString(),
+                                modifier = Modifier.clickable {
+                                    val favoritesCount = if (sortedGames.any { it.isFavorite }) 1 + sortedGames.count { it.isFavorite } else 0
+                                    val allGamesHeader = if (favoritesCount > 0) 1 else 0
+                                    val othersBefore = sortedGames.filter { !it.isFavorite }.takeWhile { !it.name.startsWith(letter, ignoreCase = true) }.size
+                                    
+                                    val targetIndex = if (sortedGames.filter { !it.isFavorite }.any { it.name.startsWith(letter, ignoreCase = true) }) {
+                                        favoritesCount + allGamesHeader + othersBefore
+                                    } else -1
+                                    
+                                    if (targetIndex >= 0) {
+                                        scope.launch { listState.scrollToItem(targetIndex) }
+                                    }
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
                             )
                         }
-                        items(items = favorites) { game ->
-                            GameListItem(game, onToggleFavorite, onGameSelected)
-                        }
-                    }
-
-                    if (others.isNotEmpty()) {
-                        item {
-                            Text(
-                                text = if (favorites.isNotEmpty()) "All Games" else "",
-                                style = MaterialTheme.typography.titleSmall,
-                                modifier = Modifier.padding(vertical = 4.dp),
-                                color = MaterialTheme.colorScheme.secondary
-                            )
-                        }
-                        items(items = others) { game ->
-                            GameListItem(game, onToggleFavorite, onGameSelected)
-                        }
-                    }
-                }
-                
-                // Letter scroll for list view
-                Column(
-                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    ('A'..'Z').forEach { letter ->
-                        Text(
-                            text = letter.toString(),
-                            modifier = Modifier.clickable {
-                                val favoritesCount = if (sortedGames.any { it.isFavorite }) 1 + sortedGames.count { it.isFavorite } else 0
-                                val allGamesHeader = if (favoritesCount > 0) 1 else 0
-                                val othersBefore = sortedGames.filter { !it.isFavorite }.takeWhile { !it.name.startsWith(letter, ignoreCase = true) }.size
-                                
-                                val targetIndex = if (sortedGames.filter { !it.isFavorite }.any { it.name.startsWith(letter, ignoreCase = true) }) {
-                                    favoritesCount + allGamesHeader + othersBefore
-                                } else -1
-                                
-                                if (targetIndex >= 0) {
-                                    scope.launch { listState.scrollToItem(targetIndex) }
-                                }
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-                        )
                     }
                 }
             }
@@ -560,6 +617,91 @@ fun SettingsItem(
     }
 }
 
+@Composable
+fun BiosScreen(
+    storageDir: File,
+    onBack: () -> Unit
+) {
+    val biosRequirements = mapOf(
+        "PlayStation 1" to listOf("scph5501.bin", "scph5500.bin", "scph5502.bin"),
+        "Game Boy Advance" to listOf("gba_bios.bin"),
+        "Nintendo DS" to listOf("bios7.bin", "bios9.bin", "firmware.bin"),
+        "Sega CD" to listOf("bios_CD_US.bin", "bios_CD_EU.bin", "bios_CD_JA.bin")
+    )
+
+    val systemDir = File(storageDir, "system")
+    val context = LocalContext.current
+    var refreshKey by remember { mutableIntStateOf(0) }
+    val detectedFiles = remember(refreshKey) { systemDir.listFiles()?.map { it.name } ?: emptyList() }
+
+    val biosImporter = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let {
+            val fileName = Utils.getFileName(context, it)
+            if (fileName != null) {
+                try {
+                    context.contentResolver.openInputStream(it)?.use { input ->
+                        File(systemDir, fileName).outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    refreshKey++
+                } catch (e: Exception) {
+                    android.widget.Toast.makeText(context, "Failed to import: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        ScreenHeader(
+            title = "BIOS Manager",
+            navigationIcon = Icons.AutoMirrored.Filled.ArrowBack,
+            onNavigationClick = onBack,
+            actions = {
+                IconButton(onClick = { biosImporter.launch("*/*") }) {
+                    Icon(Icons.Default.Add, contentDescription = "Import BIOS", tint = MaterialTheme.colorScheme.primary)
+                }
+            }
+        )
+
+        LazyColumn(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            item {
+                Text("Place BIOS files in /Documents/Arc/system/ for better compatibility.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            }
+
+            biosRequirements.forEach { (platform, files) ->
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(platform, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            files.forEach { file ->
+                                val isFound = detectedFiles.contains(file)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(file, style = MaterialTheme.typography.bodySmall, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                                    Icon(
+                                        imageVector = if (isFound) Icons.Default.CheckCircle else Icons.Default.Cancel,
+                                        contentDescription = null,
+                                        tint = if (isFound) Color.Green else Color.Red,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
@@ -568,7 +710,8 @@ fun SettingsScreen(
     gameDao: GameDao,
     onReportBug: () -> Unit,
     onGoToAbout: () -> Unit,
-    onGoToHelp: () -> Unit
+    onGoToHelp: () -> Unit,
+    onGoToBios: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
     var refreshKey by remember { mutableIntStateOf(0) }
@@ -588,6 +731,9 @@ fun SettingsScreen(
     var controllerStyle by remember { mutableStateOf(InputStyle.entries[prefs.getInt(MainActivity.KEY_CONTROLLER_STYLE, 0)]) }
     var showCoreSelectorFor by remember { mutableStateOf<Platform?>(null) }
     var showDiagnostics by remember { mutableStateOf(value = false) }
+    
+    var showWipeConfirm by remember { mutableStateOf(false) }
+    var showResetConfirm by remember { mutableStateOf(false) }
     
     val context = LocalContext.current
     val installedCores = remember(refreshKey) { Utils.scanInstalledCores(context) }
@@ -612,263 +758,274 @@ fun SettingsScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
-        Text("Settings", style = MaterialTheme.typography.headlineMedium)
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        ScreenHeader(title = "Settings")
         
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Profile Section (Static for now)
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-        ) {
-            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(48.dp))
-                Spacer(modifier = Modifier.width(16.dp))
-                Column {
-                    Text("Guest Profile", style = MaterialTheme.typography.titleMedium)
-                    Text("Version 1.4.0", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // 1. General Settings
-        SettingsCategory("GENERAL", Icons.Default.Settings)
-        
-        var themeMode by remember { mutableIntStateOf(prefs.getInt(MainActivity.KEY_THEME_MODE, 0)) }
-        SettingsItem(
-            title = "Theme Mode",
-            subtitle = when (themeMode) { 0 -> "Follow system"; 1 -> "Light"; else -> "Dark" }
-        ) {
-            Row {
-                listOf(0, 1, 2).forEach { mode ->
-                    val icon = when(mode) { 0 -> Icons.Default.BrightnessAuto; 1 -> Icons.Default.LightMode; else -> Icons.Default.DarkMode }
-                    IconButton(
-                        onClick = {
-                            themeMode = mode
-                            prefs.edit { putInt(MainActivity.KEY_THEME_MODE, mode) }
-                        }
-                    ) {
-                        Icon(icon, null, tint = if (themeMode == mode) MaterialTheme.colorScheme.primary else Color.Gray)
+        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+            // Profile Section
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+            ) {
+                Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(48.dp))
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text("Guest Profile", style = MaterialTheme.typography.titleMedium)
+                        Text("Version 1.4.1 (Latest)", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                     }
                 }
             }
-        }
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), thickness = 0.5.dp, color = Color.Gray.copy(alpha = 0.3f))
+            Spacer(modifier = Modifier.height(24.dp))
 
-        // 2. Emulation Settings
-        SettingsCategory("EMULATION", Icons.Default.SportsEsports)
-        
-        SettingsItem(title = "Fast Forward Button", subtitle = "Toggle FF overlay visibility") {
-            Switch(checked = showFF, onCheckedChange = { 
-                showFF = it
-                prefs.edit { putBoolean(MainActivity.KEY_SHOW_FF, it) }
-            })
-        }
-        
-        SettingsItem(title = "Auto-Pause", subtitle = "Pause game when menu is open") {
-            Switch(checked = autoPauseMenu, onCheckedChange = { 
-                autoPauseMenu = it
-                prefs.edit { putBoolean(MainActivity.KEY_AUTO_PAUSE_MENU, it) }
-            })
-        }
-
-        SettingsItem(title = "Audio Latency", subtitle = "Increase if sound crackles") {
-            Slider(
-                value = audioLatency.toFloat(),
-                onValueChange = { audioLatency = it.roundToInt() },
-                onValueChangeFinished = { 
-                    prefs.edit { putInt(MainActivity.KEY_AUDIO_LATENCY, audioLatency) }
-                    (context as? MainActivity)?.resetAudio()
-                },
-                valueRange = 0f..2f,
-                steps = 1,
-                modifier = Modifier.width(120.dp)
-            )
-        }
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), thickness = 0.5.dp, color = Color.Gray.copy(alpha = 0.3f))
-
-        // 3. Controller Settings
-        SettingsCategory("TOUCH CONTROLS", Icons.Default.TouchApp)
-        
-        SettingsItem(title = "Style", subtitle = controllerStyle.name) {
-            IconButton(onClick = {
-                val next = (controllerStyle.ordinal + 1) % InputStyle.entries.size
-                controllerStyle = InputStyle.entries[next]
-                prefs.edit { putInt(MainActivity.KEY_CONTROLLER_STYLE, next) }
-            }) {
-                Icon(Icons.Default.Refresh, null)
-            }
-        }
-
-        var defaultOpacity by remember { mutableFloatStateOf(prefs.getFloat("control_opacity", 0.7f)) }
-        SettingsItem(title = "Opacity", subtitle = "${(defaultOpacity * 100).roundToInt()}%") {
-            Slider(
-                value = defaultOpacity,
-                onValueChange = { defaultOpacity = it },
-                onValueChangeFinished = { prefs.edit { putFloat("control_opacity", defaultOpacity) } },
-                valueRange = 0.1f..1.0f,
-                modifier = Modifier.width(120.dp)
-            )
-        }
-
-        var defaultButtonSize by remember { mutableFloatStateOf(prefs.getFloat("control_button_size", 1.0f)) }
-        SettingsItem(title = "Button Size", subtitle = "${(defaultButtonSize * 100).roundToInt()}%") {
-            Slider(
-                value = defaultButtonSize,
-                onValueChange = { defaultButtonSize = it },
-                onValueChangeFinished = { prefs.edit { putFloat("control_button_size", defaultButtonSize) } },
-                valueRange = 0.5f..1.5f,
-                modifier = Modifier.width(120.dp)
-            )
-        }
-
-        var hapticEnabled by remember { mutableStateOf(prefs.getBoolean("control_haptic", true)) }
-        SettingsItem(title = "Haptic Feedback") {
-            Switch(checked = hapticEnabled, onCheckedChange = { 
-                hapticEnabled = it
-                prefs.edit { putBoolean("control_haptic", it) }
-            })
-        }
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), thickness = 0.5.dp, color = Color.Gray.copy(alpha = 0.3f))
-
-        // 4. Library Settings
-        SettingsCategory("LIBRARY & STORAGE", Icons.Default.Storage)
-        
-        SettingsItem(title = "Scan Location", subtitle = if (scanMode == 0) "Downloads" else "Custom") {
-            Switch(checked = scanMode == 1, onCheckedChange = { 
-                scanMode = if (it) 1 else 0
-                prefs.edit { putInt(MainActivity.KEY_SCAN_MODE, scanMode) }
-            })
-        }
-
-        if (scanMode == 1) {
-            customPaths.forEach { path ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(path.split("/").last(), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                    IconButton(onClick = {
-                        val new = customPaths - path
-                        customPaths = new
-                        prefs.edit { putStringSet(MainActivity.KEY_CUSTOM_PATHS, new) }
-                    }) { Icon(Icons.Default.Close, null, modifier = Modifier.size(16.dp), tint = Color.Red) }
-                }
-            }
-            val pathLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-                uri?.let {
-                    val path = it.path ?: ""
-                    val split = path.split(":")
-                    if (split.size > 1) {
-                        val real = Environment.getExternalStorageDirectory().absolutePath + "/" + split[1]
-                        val new = customPaths + real
-                        customPaths = new
-                        prefs.edit { putStringSet(MainActivity.KEY_CUSTOM_PATHS, new) }
-                    }
-                }
-            }
-            Button(onClick = { pathLauncher.launch(null) }, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Default.FolderOpen, null)
-                Spacer(Modifier.width(8.dp))
-                Text("Add Folder")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-        Text("Core & BIOS", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
-        
-        val systemDir = File(rootStorageDir, "system")
-        if (!systemDir.exists()) systemDir.mkdirs()
-        var biosList by remember { mutableStateOf(systemDir.listFiles()?.map { it.name } ?: emptyList<String>()) }
-
-        val biosLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-            uri?.let {
-                val fileName = Utils.getFileName(context, it)
-                if (fileName != null) {
-                    context.contentResolver.openInputStream(it)?.use { input ->
-                        File(systemDir, fileName).outputStream().use { output ->
-                            input.copyTo(output)
+            // 1. General Settings
+            SettingsCategory("GENERAL", Icons.Default.Settings)
+            
+            var themeMode by remember { mutableIntStateOf(prefs.getInt(MainActivity.KEY_THEME_MODE, 0)) }
+            SettingsItem(
+                title = "Theme Mode",
+                subtitle = when (themeMode) { 0 -> "Follow system"; 1 -> "Light"; else -> "Dark" }
+            ) {
+                Row {
+                    listOf(0, 1, 2).forEach { mode ->
+                        val icon = when(mode) { 0 -> Icons.Default.BrightnessAuto; 1 -> Icons.Default.LightMode; else -> Icons.Default.DarkMode }
+                        IconButton(
+                            onClick = {
+                                themeMode = mode
+                                prefs.edit { putInt(MainActivity.KEY_THEME_MODE, mode) }
+                            }
+                        ) {
+                            Icon(icon, null, tint = if (themeMode == mode) MaterialTheme.colorScheme.primary else Color.Gray)
                         }
                     }
-                    biosList = systemDir.listFiles()?.map { f -> f.name } ?: emptyList()
                 }
             }
-        }
 
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { coreImporter.launch("*/*") }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)) {
-                Text("Import Core")
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), thickness = 0.5.dp, color = Color.Gray.copy(alpha = 0.3f))
+
+            // 2. Emulation Settings
+            SettingsCategory("EMULATION", Icons.Default.SportsEsports)
+            
+            SettingsItem(title = "Fast Forward Button", subtitle = "Toggle FF overlay visibility") {
+                Switch(checked = showFF, onCheckedChange = { 
+                    showFF = it
+                    prefs.edit { putBoolean(MainActivity.KEY_SHOW_FF, it) }
+                })
             }
-            Button(onClick = { biosLauncher.launch("*/*") }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)) {
-                Text("Import BIOS")
+            
+            SettingsItem(title = "Auto-Pause", subtitle = "Pause game when menu is open") {
+                Switch(checked = autoPauseMenu, onCheckedChange = { 
+                    autoPauseMenu = it
+                    prefs.edit { putBoolean(MainActivity.KEY_AUTO_PAUSE_MENU, it) }
+                })
             }
-        }
 
-        if (biosList.isNotEmpty()) {
-            Text("BIOS Files: ${biosList.joinToString(", ")}", style = MaterialTheme.typography.bodySmall, color = Color.Gray, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
+            SettingsItem(title = "Audio Latency", subtitle = "Increase if sound crackles") {
+                Slider(
+                    value = audioLatency.toFloat(),
+                    onValueChange = { audioLatency = it.roundToInt() },
+                    onValueChangeFinished = { 
+                        prefs.edit { putInt(MainActivity.KEY_AUDIO_LATENCY, audioLatency) }
+                        (context as? MainActivity)?.resetAudio()
+                    },
+                    valueRange = 0f..2f,
+                    steps = 1,
+                    modifier = Modifier.width(120.dp)
+                )
+            }
 
-        MainActivity.AVAILABLE_CORES.forEach { (platform, cores) ->
-            val key = "core_pref_${platform.name}"
-            val current = prefs.getString(key, cores.first()) ?: cores.first()
-            ListItem(
-                headlineContent = { Text(platform.name) },
-                supportingContent = { Text(current.replace("_libretro_android", "")) },
-                trailingContent = { Icon(Icons.Default.ChevronRight, null) },
-                modifier = Modifier.clickable { showCoreSelectorFor = platform }
-            )
-        }
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), thickness = 0.5.dp, color = Color.Gray.copy(alpha = 0.3f))
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), thickness = 0.5.dp, color = Color.Gray.copy(alpha = 0.3f))
+            // 3. Controller Settings
+            SettingsCategory("TOUCH CONTROLS", Icons.Default.TouchApp)
+            
+            var styleMenuExpanded by remember { mutableStateOf(false) }
+            SettingsItem(title = "Style", subtitle = "Visual look of touch controls") {
+                Box {
+                    OutlinedButton(onClick = { styleMenuExpanded = true }) {
+                        Text(controllerStyle.name)
+                        Icon(Icons.Default.ArrowDropDown, null)
+                    }
+                    DropdownMenu(expanded = styleMenuExpanded, onDismissRequest = { styleMenuExpanded = false }) {
+                        InputStyle.entries.forEach { style ->
+                            DropdownMenuItem(
+                                text = { Text(style.name) },
+                                onClick = {
+                                    controllerStyle = style
+                                    prefs.edit { putInt(MainActivity.KEY_CONTROLLER_STYLE, style.ordinal) }
+                                    styleMenuExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
 
-        // 5. Support & About
-        SettingsCategory("SUPPORT", Icons.Default.Info)
-        
-        SettingsItem(title = "Diagnostics", subtitle = "View system & library info") {
-            Button(onClick = { showDiagnostics = true }) { Text("Run") }
-        }
+            var defaultOpacity by remember { mutableFloatStateOf(prefs.getFloat("control_opacity", 0.7f)) }
+            SettingsItem(title = "Opacity", subtitle = "${(defaultOpacity * 100).roundToInt()}%") {
+                Slider(
+                    value = defaultOpacity,
+                    onValueChange = { defaultOpacity = it },
+                    onValueChangeFinished = { prefs.edit { putFloat("control_opacity", defaultOpacity) } },
+                    valueRange = 0.1f..1.0f,
+                    modifier = Modifier.width(120.dp)
+                )
+            }
 
-        SettingsItem(title = "Logs", subtitle = "Report a bug or view logs") {
-            Button(onClick = onReportBug) { Text("View") }
-        }
-        
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onGoToAbout, modifier = Modifier.weight(1f)) { Text("About") }
-            OutlinedButton(onClick = onGoToHelp, modifier = Modifier.weight(1f)) { Text("Help") }
-        }
+            var defaultButtonSize by remember { mutableFloatStateOf(prefs.getFloat("control_button_size", 1.0f)) }
+            SettingsItem(title = "Button Size", subtitle = "${(defaultButtonSize * 100).roundToInt()}%") {
+                Slider(
+                    value = defaultButtonSize,
+                    onValueChange = { defaultButtonSize = it },
+                    onValueChangeFinished = { prefs.edit { putFloat("control_button_size", defaultButtonSize) } },
+                    valueRange = 0.5f..1.5f,
+                    modifier = Modifier.width(120.dp)
+                )
+            }
 
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        // 6. Danger Zone
-        Text("DANGER ZONE", style = MaterialTheme.typography.labelSmall, color = Color.Red)
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        Button(
-            onClick = {
+            var hapticEnabled by remember { mutableStateOf(prefs.getBoolean("control_haptic", true)) }
+            SettingsItem(title = "Haptic Feedback") {
+                Switch(checked = hapticEnabled, onCheckedChange = { 
+                    hapticEnabled = it
+                    prefs.edit { putBoolean("control_haptic", it) }
+                })
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), thickness = 0.5.dp, color = Color.Gray.copy(alpha = 0.3f))
+
+            // 4. Library Settings
+            SettingsCategory("LIBRARY & STORAGE", Icons.Default.Storage)
+            
+            SettingsItem(title = "Scan Location", subtitle = if (scanMode == 0) "Downloads" else "Custom") {
+                Switch(checked = scanMode == 1, onCheckedChange = { 
+                    scanMode = if (it) 1 else 0
+                    prefs.edit { putInt(MainActivity.KEY_SCAN_MODE, scanMode) }
+                })
+            }
+
+            if (scanMode == 1) {
+                customPaths.forEach { path ->
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+                        Icon(Icons.Default.Folder, null, modifier = Modifier.size(16.dp), tint = Color.Gray)
+                        Spacer(Modifier.width(8.dp))
+                        Text(path.split("/").last(), style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                        IconButton(onClick = {
+                            val new = customPaths - path
+                            customPaths = new
+                            prefs.edit { putStringSet(MainActivity.KEY_CUSTOM_PATHS, new) }
+                        }) { Icon(Icons.Default.Close, null, modifier = Modifier.size(16.dp), tint = Color.Red) }
+                    }
+                }
+                val pathLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+                    uri?.let {
+                        val path = it.path ?: ""
+                        val split = path.split(":")
+                        if (split.size > 1) {
+                            val real = Environment.getExternalStorageDirectory().absolutePath + "/" + split[1]
+                            val new = customPaths + real
+                            customPaths = new
+                            prefs.edit { putStringSet(MainActivity.KEY_CUSTOM_PATHS, new) }
+                        }
+                    }
+                }
+                Button(onClick = { pathLauncher.launch(null) }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Default.FolderOpen, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Add ROM Folder")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Text("Core & BIOS", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            
+            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { coreImporter.launch("*/*") }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)) {
+                    Text("Import Core")
+                }
+                Button(onClick = onGoToBios, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)) {
+                    Text("BIOS Manager")
+                }
+            }
+
+            MainActivity.AVAILABLE_CORES.forEach { (platform, cores) ->
+                val key = "core_pref_${platform.name}"
+                val current = prefs.getString(key, cores.first()) ?: cores.first()
+                ListItem(
+                    headlineContent = { Text(platform.name) },
+                    supportingContent = { Text(current.replace("_libretro_android", "")) },
+                    trailingContent = { Icon(Icons.Default.ChevronRight, null) },
+                    modifier = Modifier.clickable { showCoreSelectorFor = platform }
+                )
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), thickness = 0.5.dp, color = Color.Gray.copy(alpha = 0.3f))
+
+            // 5. Support & About
+            SettingsCategory("SUPPORT", Icons.Default.Info)
+            
+            SettingsItem(title = "Diagnostics", subtitle = "View system & library info") {
+                Button(onClick = { showDiagnostics = true }) { Text("Run") }
+            }
+
+            SettingsItem(title = "Logs", subtitle = "Report a bug or view logs") {
+                Button(onClick = onReportBug) { Text("View") }
+            }
+            
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onGoToAbout, modifier = Modifier.weight(1f)) { Text("About") }
+                OutlinedButton(onClick = onGoToHelp, modifier = Modifier.weight(1f)) { Text("Help") }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            // 6. Danger Zone
+            Text("DANGER ZONE", style = MaterialTheme.typography.labelSmall, color = Color.Red, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Button(
+                onClick = { showWipeConfirm = true },
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.1f), contentColor = Color.Red),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Wipe Library")
+            }
+
+            TextButton(
+                onClick = { showResetConfirm = true },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Reset All Settings", color = Color.Gray)
+            }
+            
+            Spacer(modifier = Modifier.height(48.dp))
+        }
+    }
+
+    // Dialogs
+    if (showWipeConfirm) {
+        DestructiveActionDialog(
+            title = "Wipe Library?",
+            message = "This will remove all games from your database. Your physical ROM files will not be deleted, but you will lose favorites and play time statistics.",
+            onConfirm = {
                 scope.launch(Dispatchers.IO) { gameDao.deleteAll() }
                 android.widget.Toast.makeText(context, "Library Cleared", android.widget.Toast.LENGTH_SHORT).show()
             },
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error.copy(alpha = 0.1f), contentColor = Color.Red),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Wipe Library")
-        }
+            onDismiss = { showWipeConfirm = false }
+        )
+    }
 
-        TextButton(
-            onClick = {
+    if (showResetConfirm) {
+        DestructiveActionDialog(
+            title = "Reset All Settings?",
+            message = "This will clear all your preferences, custom ROM paths, and controller layouts. The app will return to its default state.",
+            onConfirm = {
                 prefs.edit { clear() }
                 android.widget.Toast.makeText(context, "Settings Reset", android.widget.Toast.LENGTH_SHORT).show()
                 refreshKey++
             },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Reset All Settings", color = Color.Gray)
-        }
-        
-        Spacer(modifier = Modifier.height(48.dp))
+            onDismiss = { showResetConfirm = false }
+        )
     }
 
     if (showCoreSelectorFor != null) {
@@ -983,7 +1140,7 @@ fun AboutScreen(
         Spacer(modifier = Modifier.height(32.dp))
         Text("Arc Emulator", style = MaterialTheme.typography.headlineLarge)
         Spacer(modifier = Modifier.height(8.dp))
-        Text("Version 1.4.0", style = MaterialTheme.typography.titleMedium)
+        Text("Version 1.4.1", style = MaterialTheme.typography.titleMedium)
         
         Spacer(modifier = Modifier.height(24.dp))
         HorizontalDivider()

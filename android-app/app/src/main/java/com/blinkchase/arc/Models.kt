@@ -67,7 +67,7 @@ data class GameCheat(var name: String, var code: String, var enabled: Boolean)
 
 enum class SortMode { NAME, DATE_ADDED, LAST_PLAYED }
 
-enum class Screen { HOME, LIBRARY, IMPORT, SEARCH, SETTINGS, GAME, ABOUT, HELP }
+enum class Screen { HOME, LIBRARY, IMPORT, SEARCH, SETTINGS, GAME, ABOUT, HELP, BIOS }
 
 // Data class to hold control layout configuration
 data class ControlLayoutConfig(

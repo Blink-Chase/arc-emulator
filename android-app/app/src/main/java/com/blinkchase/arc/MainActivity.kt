@@ -804,7 +804,14 @@ class MainActivity : ComponentActivity() {
                             gameDao = gameDao,
                             onReportBug = { android.widget.Toast.makeText(context, "Check logs in console", android.widget.Toast.LENGTH_SHORT).show() },
                             onGoToAbout = { navController.navigate(Screen.ABOUT.name) },
-                            onGoToHelp = { navController.navigate(Screen.HELP.name) }
+                            onGoToHelp = { navController.navigate(Screen.HELP.name) },
+                            onGoToBios = { navController.navigate(Screen.BIOS.name) }
+                        )
+                    }
+                    composable(Screen.BIOS.name) {
+                        BiosScreen(
+                            storageDir = storageDir,
+                            onBack = { navController.popBackStack() }
                         )
                     }
                     composable(Screen.ABOUT.name) {
