@@ -116,6 +116,7 @@ fun ArcHomeScreen(
     recentGames: List<GameFile>,
     storageDir: File,
     gameDao: GameDao,
+    showExtensions: Boolean,
     prefs: android.content.SharedPreferences,
     onGameClick: (GameFile) -> Unit,
     onToggleFavorite: (GameFile) -> Unit,
@@ -176,7 +177,7 @@ fun ArcHomeScreen(
                 Text("Recent Games", style = MaterialTheme.typography.titleMedium, modifier = Modifier.fillMaxWidth())
             }
             items(items = recentGames) { game ->
-                GameListItem(game = game, onToggleFavorite = onToggleFavorite, onClick = onGameClick)
+                GameListItem(game = game, onToggleFavorite = onToggleFavorite, onClick = onGameClick, showExtensions = showExtensions)
             }
         }
     }
@@ -184,6 +185,7 @@ fun ArcHomeScreen(
 
 @Composable
 fun ImportScreen(
+    isScanning: Boolean = false,
     onScanGames: () -> Unit,
     onScanCores: () -> Unit,
     onScanLayouts: () -> Unit,
@@ -196,7 +198,15 @@ fun ImportScreen(
         ScreenHeader(
             title = "Import & Scan",
             navigationIcon = Icons.AutoMirrored.Filled.ArrowBack,
-            onNavigationClick = onBack
+            onNavigationClick = onBack,
+            actions = {
+                if (isScanning) {
+                    Text("Scanning...", style = MaterialTheme.typography.labelSmall)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Spacer(modifier = Modifier.width(16.dp))
+                }
+            }
         )
         
         Column(modifier = Modifier.padding(16.dp)) {
@@ -246,6 +256,7 @@ fun ImportScreen(
 @Composable
 fun SearchScreen(
     games: List<GameFile>, 
+    showExtensions: Boolean,
     onToggleFavorite: (GameFile) -> Unit,
     onGameSelected: (GameFile) -> Unit
 ) {
@@ -315,7 +326,7 @@ fun SearchScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(items = filteredGames) { game ->
-                        GameListItem(game = game, onToggleFavorite = onToggleFavorite, onClick = onGameSelected)
+                        GameListItem(game = game, onToggleFavorite = onToggleFavorite, onClick = onGameSelected, showExtensions = showExtensions)
                     }
                     
                     if (filteredGames.isEmpty()) {
@@ -332,6 +343,8 @@ fun SearchScreen(
 @Composable
 fun LibraryScreen(
     games: List<GameFile>, 
+    showExtensions: Boolean,
+    isScanning: Boolean = false,
     onToggleFavorite: (GameFile) -> Unit, 
     onGameSelected: (GameFile) -> Unit,
     onNavigateToImport: () -> Unit
@@ -356,6 +369,12 @@ fun LibraryScreen(
         ScreenHeader(
             title = "Library",
             actions = {
+                if (isScanning) {
+                    Text("Scanning...", style = MaterialTheme.typography.labelSmall)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Spacer(modifier = Modifier.width(16.dp))
+                }
                 IconButton(onClick = { isGridView = isGridView.not() }) {
                     Icon(
                         if (isGridView) Icons.AutoMirrored.Filled.List else Icons.Default.GridView,
@@ -415,7 +434,7 @@ fun LibraryScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         items(items = sortedGames) { game ->
-                            GameGridItem(game, onToggleFavorite, onGameSelected)
+                            GameGridItem(game, onToggleFavorite, onGameSelected, showExtensions = showExtensions)
                         }
                     }
                 } else {
@@ -440,7 +459,7 @@ fun LibraryScreen(
                                 )
                             }
                             items(items = favorites) { game ->
-                                GameListItem(game, onToggleFavorite, onGameSelected)
+                                GameListItem(game, onToggleFavorite, onGameSelected, showExtensions = showExtensions)
                             }
                         }
 
@@ -454,7 +473,7 @@ fun LibraryScreen(
                                 )
                             }
                             items(items = others) { game ->
-                                GameListItem(game, onToggleFavorite, onGameSelected)
+                                GameListItem(game, onToggleFavorite, onGameSelected, showExtensions = showExtensions)
                             }
                         }
                     }
@@ -495,14 +514,16 @@ fun LibraryScreen(
 fun GameGridItem(
     game: GameFile,
     onToggleFavorite: (GameFile) -> Unit,
-    onClick: (GameFile) -> Unit
+    onClick: (GameFile) -> Unit,
+    showExtensions: Boolean = false
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick(game) },
         shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.1f))
     ) {
         Column {
             Box(modifier = Modifier.aspectRatio(0.75f).fillMaxWidth()) {
@@ -551,7 +572,7 @@ fun GameGridItem(
                 }
             }
             Text(
-                text = game.name.substringBeforeLast("."),
+                text = if (showExtensions) game.name else game.name.substringBeforeLast("."),
                 style = MaterialTheme.typography.labelMedium,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -727,6 +748,7 @@ fun SettingsScreen(
     }
     var audioLatency by remember { mutableIntStateOf(prefs.getInt(MainActivity.KEY_AUDIO_LATENCY, 1)) }
     var showFF by remember { mutableStateOf(prefs.getBoolean(MainActivity.KEY_SHOW_FF, true)) }
+    var showExtensions by remember { mutableStateOf(prefs.getBoolean(MainActivity.KEY_SHOW_EXTENSIONS, false)) }
     var autoPauseMenu by remember { mutableStateOf(prefs.getBoolean(MainActivity.KEY_AUTO_PAUSE_MENU, true)) }
     var controllerStyle by remember { mutableStateOf(InputStyle.entries[prefs.getInt(MainActivity.KEY_CONTROLLER_STYLE, 0)]) }
     var showCoreSelectorFor by remember { mutableStateOf<Platform?>(null) }
@@ -772,7 +794,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
                         Text("Guest Profile", style = MaterialTheme.typography.titleMedium)
-                        Text("Version 1.4.1 (Latest)", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        Text("Version 1.4.2 (Latest)", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                     }
                 }
             }
@@ -811,6 +833,13 @@ fun SettingsScreen(
                 Switch(checked = showFF, onCheckedChange = { 
                     showFF = it
                     prefs.edit { putBoolean(MainActivity.KEY_SHOW_FF, it) }
+                })
+            }
+            
+            SettingsItem(title = "Show File Extensions", subtitle = "Display .sfc, .gba, etc. in library") {
+                Switch(checked = showExtensions, onCheckedChange = { 
+                    showExtensions = it
+                    prefs.edit { putBoolean(MainActivity.KEY_SHOW_EXTENSIONS, it) }
                 })
             }
             
@@ -1140,7 +1169,7 @@ fun AboutScreen(
         Spacer(modifier = Modifier.height(32.dp))
         Text("Arc Emulator", style = MaterialTheme.typography.headlineLarge)
         Spacer(modifier = Modifier.height(8.dp))
-        Text("Version 1.4.1", style = MaterialTheme.typography.titleMedium)
+        Text("Version 1.4.2", style = MaterialTheme.typography.titleMedium)
         
         Spacer(modifier = Modifier.height(24.dp))
         HorizontalDivider()

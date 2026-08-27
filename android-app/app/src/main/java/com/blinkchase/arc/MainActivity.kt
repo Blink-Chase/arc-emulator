@@ -33,6 +33,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import com.blinkchase.arc.db.GameDatabase
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -64,6 +65,7 @@ class MainActivity : ComponentActivity() {
         const val KEY_CONTROLLER_STYLE = "controller_style"
         const val KEY_THEME_MODE = "theme_mode"
         const val KEY_SCREEN_SCALE = "screen_scale"
+        const val KEY_SHOW_EXTENSIONS = "show_extensions"
         const val BTN_B = 0; const val BTN_Y = 1; const val BTN_SELECT = 2; const val BTN_START = 3
         const val BTN_UP = 4; const val BTN_DOWN = 5; const val BTN_LEFT = 6; const val BTN_RIGHT = 7
         const val BTN_A = 8; const val BTN_X = 9; const val BTN_L = 10; const val BTN_R = 11
@@ -86,7 +88,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private var audioTrack: android.media.AudioTrack? = null
-    private val audioLock = java.lang.Object()
+    private val audioLock = Any()
     var targetSampleRate = 44100
     val samplesWritten = AtomicLong(0)
 
@@ -193,7 +195,7 @@ class MainActivity : ComponentActivity() {
                     else if (occupancy > 10000) targetSpeed = 1.05f // Buffer high, speed up slightly
 
                     // Only apply if changed significantly to avoid overhead
-                    if (Math.abs(targetSpeed - currentSpeed) > 0.02f) {
+                    if (kotlin.math.abs(targetSpeed - currentSpeed) > 0.02f) {
                         try {
                             val params = audioTrack?.playbackParams ?: android.media.PlaybackParams()
                             audioTrack?.playbackParams = params.setSpeed(targetSpeed)
@@ -321,14 +323,17 @@ class MainActivity : ComponentActivity() {
         updateNativeActivity()
         setContent {
             var themeMode by remember { mutableStateOf(0) }
+            var showExtensions by remember { mutableStateOf(false) }
             val prefs = remember { getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
             LaunchedEffect(Unit) {
                 themeMode = prefs.getInt(KEY_THEME_MODE, 0)
+                showExtensions = prefs.getBoolean(KEY_SHOW_EXTENSIONS, false)
             }
             DisposableEffect(prefs) {
                 val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-                    if (key == KEY_THEME_MODE) {
-                        themeMode = prefs.getInt(KEY_THEME_MODE, 0)
+                    when (key) {
+                        KEY_THEME_MODE -> themeMode = prefs.getInt(KEY_THEME_MODE, 0)
+                        KEY_SHOW_EXTENSIONS -> showExtensions = prefs.getBoolean(KEY_SHOW_EXTENSIONS, false)
                     }
                 }
                 prefs.registerOnSharedPreferenceChangeListener(listener)
@@ -340,7 +345,7 @@ class MainActivity : ComponentActivity() {
                 else -> null
             }
             ArcEmuTheme(darkTheme = isDarkTheme) {
-                Surface(modifier = Modifier.fillMaxSize()) { ArcApp(storageDir, savesDir) }
+                Surface(modifier = Modifier.fillMaxSize()) { ArcApp(storageDir, savesDir, showExtensions) }
             }
         }
     }
@@ -427,7 +432,7 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    fun ArcApp(storageDir: File, savesDir: File) {
+    fun ArcApp(storageDir: File, savesDir: File, isExtensionsShown: Boolean) {
         val context = LocalContext.current
         val navController = rememberNavController()
         val prefs = remember { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
@@ -437,35 +442,46 @@ class MainActivity : ComponentActivity() {
         val navBackStackEntry by navController.currentBackStackEntryAsState()
         val currentRoute = navBackStackEntry?.destination?.route
 
-        val romImporter = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        val romImporter = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
             if (uris.isNotEmpty()) {
                 scope.launch(Dispatchers.IO) {
                     val importedGames = mutableListOf<GameFile>()
                     uris.forEach { uri ->
-                        val fileName = Utils.getFileName(context, uri) ?: return@forEach
-                        // We try to get a path, but SAF uris don't always have one.
-                        // For now, we'll log them. A better approach would be to copy them to Arc/Roms/
-                        Log.d("Arc", "Importing file: $fileName via $uri")
-                        
-                        // Simple guess platform logic for imported files
+                        // Grant permanent access to this specific file
+                        try {
+                            context.contentResolver.takePersistableUriPermission(
+                                uri,
+                                Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            )
+                        } catch (e: Exception) {
+                            Log.e("Arc", "Failed to get persistent permission for $uri")
+                        }
+
+                        val fileName = Utils.getFileName(context, uri) ?: "Unknown Game"
+                        val path = uri.toString()
+
+                        // Platform detection logic based on filename
                         val platform = when {
-                            fileName.endsWith(".sfc", true) -> Platform.SNES
+                            fileName.endsWith(".sfc", true) || fileName.endsWith(".smc", true) -> Platform.SNES
                             fileName.endsWith(".gba", true) -> Platform.GBA
                             fileName.endsWith(".gb", true) -> Platform.GB
                             fileName.endsWith(".gbc", true) -> Platform.GBC
-                            fileName.endsWith(".n64", true) -> Platform.N64
-                            fileName.endsWith(".chd", true) || fileName.endsWith(".cue", true) -> Platform.PS1
+                            fileName.endsWith(".md", true) || fileName.endsWith(".gen", true) || fileName.endsWith(".smd", true) -> Platform.GENESIS
+                            fileName.endsWith(".n64", true) || fileName.endsWith(".z64", true) || fileName.endsWith(".v64", true) -> Platform.N64
+                            fileName.endsWith(".chd", true) || fileName.endsWith(".cue", true) || fileName.endsWith(".m3u", true) || fileName.endsWith(".pbp", true) -> Platform.PS1
+                            fileName.endsWith(".gcm", true) || fileName.endsWith(".rvz", true) || fileName.endsWith(".gc", true) -> Platform.GAMECUBE
+                            fileName.endsWith(".wbfs", true) || fileName.endsWith(".wii", true) -> Platform.WII
                             else -> Platform.UNKNOWN
                         }
                         
                         if (platform != Platform.UNKNOWN) {
-                            importedGames.add(GameFile(name = fileName, path = uri.toString(), platform = platform))
+                            importedGames.add(GameFile(name = fileName, path = path, platform = platform))
                         }
                     }
                     if (importedGames.isNotEmpty()) {
                         gameDao.insertGames(importedGames)
                         withContext(Dispatchers.Main) {
-                            android.widget.Toast.makeText(context, "Imported ${importedGames.size} games", android.widget.Toast.LENGTH_SHORT).show()
+                            android.widget.Toast.makeText(context, "Added ${importedGames.size} games to Library", android.widget.Toast.LENGTH_SHORT).show()
                         }
                     }
                 }
@@ -486,7 +502,10 @@ class MainActivity : ComponentActivity() {
         fun scanCores(): List<String> = internalCoresDir.listFiles()?.filter { it.name.endsWith(".so") }?.map { it.name.removePrefix("lib").removeSuffix(".so") } ?: emptyList()
         fun scanLayouts(): List<String> = layoutsDir.listFiles()?.filter { it.extension == "layout" }?.map { it.nameWithoutExtension } ?: emptyList()
 
+        var isScanning by remember { mutableStateOf(false) }
+
         fun performScan() {
+            isScanning = true
             scope.launch(Dispatchers.IO) {
                 Log.d("Arc", "SCAN: Starting ROM scan...")
                 val mode = prefs.getInt(KEY_SCAN_MODE, 0)
@@ -522,6 +541,15 @@ class MainActivity : ComponentActivity() {
                 }
                 Log.d("Arc", "SCAN: Total games found: ${allGames.size}")
                 gameDao.insertGames(allGames)
+                
+                // Add a small delay to ensure the UI has time to show the scanning state
+                // especially for small libraries where it might be too fast to see.
+                delay(800)
+                
+                withContext(Dispatchers.Main) {
+                    isScanning = false
+                    android.widget.Toast.makeText(context, "Library Scan Complete: ${allGames.size} games found", android.widget.Toast.LENGTH_SHORT).show()
+                }
             }
         }
 
@@ -736,6 +764,7 @@ class MainActivity : ComponentActivity() {
                             recentGames = gameList.filter { it.lastPlayed > 0 }.sortedByDescending { it.lastPlayed }.take(5),
                             storageDir = storageDir,
                             gameDao = gameDao,
+                            showExtensions = isExtensionsShown,
                             prefs = prefs,
                             onGameClick = { game ->
                                 launchGame(game)
@@ -752,6 +781,8 @@ class MainActivity : ComponentActivity() {
                     composable(Screen.LIBRARY.name) {
                         LibraryScreen(
                             games = gameList,
+                            showExtensions = isExtensionsShown,
+                            isScanning = isScanning,
                             onToggleFavorite = { game ->
                                 scope.launch(Dispatchers.IO) {
                                     gameDao.updateGame(game.copy(isFavorite = !game.isFavorite))
@@ -768,6 +799,7 @@ class MainActivity : ComponentActivity() {
                     }
                     composable(Screen.IMPORT.name) {
                         ImportScreen(
+                            isScanning = isScanning,
                             onScanGames = { performScan() },
                             onScanCores = {
                                 val cores = scanCores()
@@ -777,7 +809,7 @@ class MainActivity : ComponentActivity() {
                                 val layouts = scanLayouts()
                                 android.widget.Toast.makeText(context, "Found ${layouts.size} layouts", android.widget.Toast.LENGTH_SHORT).show()
                             },
-                            onImportFiles = { romImporter.launch("*/*") },
+                            onImportFiles = { romImporter.launch(arrayOf("*/*")) },
                             coresCount = scanCores().size,
                             layoutsCount = scanLayouts().size,
                             onBack = { navController.popBackStack() }
@@ -786,6 +818,7 @@ class MainActivity : ComponentActivity() {
                     composable(Screen.SEARCH.name) {
                         SearchScreen(
                             games = gameList,
+                            showExtensions = isExtensionsShown,
                             onToggleFavorite = { game ->
                                 scope.launch(Dispatchers.IO) {
                                     gameDao.updateGame(game.copy(isFavorite = !game.isFavorite))

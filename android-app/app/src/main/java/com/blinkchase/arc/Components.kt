@@ -59,12 +59,14 @@ fun PlatformBadge(platform: Platform) {
 fun GameListItem(
     game: GameFile,
     onToggleFavorite: (GameFile) -> Unit,
-    onClick: (GameFile) -> Unit
+    onClick: (GameFile) -> Unit,
+    showExtensions: Boolean = false
 ) {
     val context = LocalContext.current
     Card(
         modifier = Modifier.fillMaxWidth().clickable { onClick(game) },
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.1f))
     ) {
         Row(
             modifier = Modifier.padding(8.dp),
@@ -104,7 +106,12 @@ fun GameListItem(
             Spacer(modifier = Modifier.width(12.dp))
             
             Column(modifier = Modifier.weight(1f)) {
-                Text(game.name.substringBeforeLast("."), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Text(
+                    if (showExtensions) game.name else game.name.substringBeforeLast("."), 
+                    style = MaterialTheme.typography.bodyMedium, 
+                    maxLines = 1, 
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
                 Text(game.platform.name, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
             }
             

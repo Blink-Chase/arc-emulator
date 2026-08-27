@@ -47,7 +47,7 @@ object GameLoader {
             return@withContext LoadResult(false, "Game file not found: $gamePath")
         }
         Log.d(TAG, "Game file exists: ${gameFile.length()} bytes")
-        
+
         // Step 3: Clean up previous state
         Log.d(TAG, "Cleaning up previous state...")
         try {
@@ -186,6 +186,13 @@ object GameLoader {
                         break
                     } else {
                         lastError = "Core loaded but game failed to start"
+                        
+                        // Check for missing BIOS files
+                        val missingBios = checkForMissingBios(platform, storageDir)
+                        if (missingBios.isNotEmpty()) {
+                            lastError = "Missing BIOS files: ${missingBios.joinToString(", ")}. Please visit BIOS Manager in Settings."
+                        }
+                        
                         Log.e(TAG, lastError)
                         // Don't break, try next core
                     }
@@ -305,5 +312,29 @@ object GameLoader {
         }
         
         return coresList
+    }
+
+    private fun checkForMissingBios(platform: Platform, storageDir: File): List<String> {
+        val systemDir = File(storageDir, "system")
+        if (!systemDir.exists()) return emptyList()
+
+        val detectedFiles = systemDir.listFiles()?.map { it.name.lowercase() } ?: emptyList()
+        val missing = mutableListOf<String>()
+
+        when (platform) {
+            Platform.PS1 -> {
+                val ps1Bios = listOf("scph5501.bin", "scph5500.bin", "scph5502.bin", "scph1001.bin")
+                if (ps1Bios.none { detectedFiles.contains(it.lowercase()) }) {
+                    missing.add("scph5501.bin (PS1 BIOS)")
+                }
+            }
+            Platform.GBA -> {
+                if (!detectedFiles.contains("gba_bios.bin")) {
+                    missing.add("gba_bios.bin (GBA BIOS)")
+                }
+            }
+            else -> {}
+        }
+        return missing
     }
 }

@@ -16,7 +16,17 @@ object RomScanner {
             }
 
             directory.walkTopDown()
-                .onEnter { !it.name.startsWith(".") && !it.name.equals("node_modules", true) && !it.name.equals("Android", true) }
+                .onEnter { 
+                    val name = it.name
+                    if (name.startsWith(".")) return@onEnter false
+                    if (name.equals("node_modules", true)) return@onEnter false
+                    if (name.equals("Android", true)) return@onEnter false
+                    
+                    // Ignore our own internal Roms folder to avoid duplicates during generic scan
+                    if (name.equals("Roms", true) && it.parentFile?.name?.equals("Arc", true) == true) return@onEnter false
+                    
+                    true
+                }
                 .forEach { file ->
                 if (file.isFile) {
                     val platform = when {
