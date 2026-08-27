@@ -58,6 +58,7 @@ bool LoadCore(const char *libPath) {
 
 void UnloadCore() {
   if (g_coreHandle) {
+    if (core_unload_game) core_unload_game();
     if (core_deinit) core_deinit();
     dlclose(g_coreHandle);
     g_coreHandle = nullptr;

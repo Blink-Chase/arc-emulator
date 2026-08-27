@@ -222,9 +222,6 @@ void VideoRefreshCallback(const void *data, unsigned width, unsigned height,
       }
 
       eglSwapBuffers(g_eglDisplay, g_eglSurface);
-
-      // If a save state is requested, we MUST wait for the swap to complete
-      // on the GPU to ensure PixelCopy gets a valid front buffer.
       if (g_saveStateRequested.load()) {
           glFinish();
       }

@@ -214,8 +214,14 @@ fun ImportScreen(
             Text("Scan configured locations or import specific files.")
             Spacer(modifier = Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onScanGames, modifier = Modifier.weight(1f)) {
-                    Text("Scan Library")
+                Button(onClick = onScanGames, modifier = Modifier.weight(1f), enabled = !isScanning) {
+                    if (isScanning) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Scanning")
+                    } else {
+                        Text("Scan Library")
+                    }
                 }
                 Button(onClick = onImportFiles, modifier = Modifier.weight(1f)) {
                     Text("Import Files")
@@ -666,6 +672,7 @@ fun BiosScreen(
                         }
                     }
                     refreshKey++
+                    android.widget.Toast.makeText(context, "Imported $fileName successfully", android.widget.Toast.LENGTH_SHORT).show()
                 } catch (e: Exception) {
                     android.widget.Toast.makeText(context, "Failed to import: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
                 }
@@ -794,7 +801,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
                         Text("Guest Profile", style = MaterialTheme.typography.titleMedium)
-                        Text("Version 1.4.2 (Latest)", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        Text("Version 1.4.3 (Latest)", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                     }
                 }
             }
@@ -1169,7 +1176,7 @@ fun AboutScreen(
         Spacer(modifier = Modifier.height(32.dp))
         Text("Arc Emulator", style = MaterialTheme.typography.headlineLarge)
         Spacer(modifier = Modifier.height(8.dp))
-        Text("Version 1.4.2", style = MaterialTheme.typography.titleMedium)
+        Text("Version 1.4.3", style = MaterialTheme.typography.titleMedium)
         
         Spacer(modifier = Modifier.height(24.dp))
         HorizontalDivider()

@@ -77,6 +77,7 @@ fun GameScreen(
     var controlsVisible by rememberSaveable { mutableStateOf(true) }
     var gameSurfaceView by remember { mutableStateOf<SurfaceView?>(null) }
     var loadError by remember { mutableStateOf<String?>(null) }
+    var isLeaving by remember { mutableStateOf(false) }
     
     var screenScale by remember {
         mutableStateOf(ScreenScale.entries[prefs.getInt(MainActivity.KEY_SCREEN_SCALE, 0)])
@@ -214,183 +215,185 @@ fun GameScreen(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // Game view - takes full screen in landscape with overlay controls
-        Box(
-            modifier = if (isLandscape && controlConfig.style != InputStyle.HIDDEN) {
-                Modifier
-                    .fillMaxHeight()
-                    .then(
-                        when (screenScale) {
-                            ScreenScale.RATIO_4_3 -> Modifier.aspectRatio(4f / 3f)
-                            ScreenScale.RATIO_16_9 -> Modifier.aspectRatio(16f / 9f)
-                            ScreenScale.STRETCH -> Modifier.fillMaxWidth()
-                        }
-                    )
-                    .align(Alignment.Center)
-            } else {
-                Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(4f/3f)
-                    .align(Alignment.TopCenter)
-            },
-            contentAlignment = Alignment.Center
-        ) {
-            // Wrap in key() to force AndroidView recreation when game changes
-            key(gamePath) {
-                AndroidView(
-                    factory = { ctx ->
-                        android.util.Log.d("GameScreen", "Creating new SurfaceView for: $gamePath")
-                        SurfaceView(ctx).apply {
-                            gameSurfaceView = this
-                            keepScreenOn = true
-                            // Use RGBX_8888 to ensure the surface is opaque (fixes broken screenshots)
-                            holder.setFormat(PixelFormat.RGBX_8888)
-                            holder.addCallback(object : SurfaceHolder.Callback {
-                                override fun surfaceCreated(holder: SurfaceHolder) {
-                                    android.util.Log.e("GameScreen", "Surface created, starting game load!")
-                                    mainActivity?.setSurface(holder.surface)
-                                    // Start loading immediately from the callback
-                                    startGameLoading()
-                                }
-                                override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-                                    android.util.Log.d("GameScreen", "Surface changed: ${width}x${height}")
-                                }
-                                override fun surfaceDestroyed(holder: SurfaceHolder) {
-                                    android.util.Log.d("GameScreen", "Surface destroyed")
-                                    mainActivity?.setSurface(null)
-                                }
-                            })
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxSize()
+        if (!isLeaving) {
+            // Game view - takes full screen in landscape with overlay controls
+            Box(
+                modifier = if (isLandscape && controlConfig.style != InputStyle.HIDDEN) {
+                    Modifier
+                        .fillMaxHeight()
                         .then(
                             when (screenScale) {
                                 ScreenScale.RATIO_4_3 -> Modifier.aspectRatio(4f / 3f)
                                 ScreenScale.RATIO_16_9 -> Modifier.aspectRatio(16f / 9f)
-                                ScreenScale.STRETCH -> Modifier
+                                ScreenScale.STRETCH -> Modifier.fillMaxWidth()
                             }
                         )
-                )
-            }
-
-            // Loading overlay
-            if (!isGameLoaded) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.9f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        if (loadError != null) {
-                            Icon(
-                                imageVector = Icons.Default.Warning,
-                                contentDescription = "Error",
-                                tint = Color.Red,
-                                modifier = Modifier.size(48.dp)
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text("Error: $loadError", color = Color.Red)
-                        } else {
-                            CircularProgressIndicator(
-                                color = Color.White,
-                                modifier = Modifier.size(64.dp),
-                                strokeWidth = 4.dp
-                            )
-                            Spacer(modifier = Modifier.height(24.dp))
-                            Text("Loading game...", color = Color.White, style = MaterialTheme.typography.titleMedium)
-                        }
-                    }
-                }
-            }
-
-            // FPS counter
-            if (isGameLoaded) {
-                var fps by remember { mutableIntStateOf(0) }
-                var speed by remember { mutableIntStateOf(0) }
-
-                LaunchedEffect(Unit) {
-                    var lastSamples = mainActivity?.samplesWritten?.get() ?: 0L
-                    var frameCount = 0
-                    var lastTime = System.nanoTime()
-
-                    while (true) {
-                        withFrameNanos { now ->
-                            frameCount++
-                            val elapsed = now - lastTime
-
-                            if (elapsed >= 1_000_000_000) {
-                                fps = frameCount
-                                frameCount = 0
-
-                                val currentSamples = mainActivity?.samplesWritten?.get() ?: 0L
-                                val diff = currentSamples - lastSamples
-                                val rate = mainActivity?.targetSampleRate ?: 44100
-                                speed = ((diff / 2f) / rate * 100).toInt()
-                                lastSamples = currentSamples
-                                lastTime = now
-                            }
-                        }
-                    }
-                }
-
-                Surface(
-                    color = Color.Black.copy(alpha = 0.6f),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(12.dp)
-                ) {
-                    Text(
-                        text = "FPS: $fps | Speed: $speed%",
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                    )
-                }
-            }
-
-            // Quick menu button (visible when controls hidden in both orientations)
-            if (!controlsVisible && isGameLoaded) {
-                AnimatedVisibility(
-                    visible = true,
-                    enter = fadeIn(),
-                    exit = fadeOut(),
-                    modifier = Modifier.align(Alignment.TopEnd)
-                ) {
-                    IconButton(
-                        onClick = {
-                            showMenu = true
-                            if (autoPause && !isPaused) {
-                                isPaused = true
-                                onTogglePause(true)
-                                wasPausedByMenu = true
+                        .align(Alignment.Center)
+                } else {
+                    Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(4f/3f)
+                        .align(Alignment.TopCenter)
+                },
+                contentAlignment = Alignment.Center
+            ) {
+                // Wrap in key() to force AndroidView recreation when game changes
+                key(gamePath) {
+                    AndroidView(
+                        factory = { ctx ->
+                            android.util.Log.d("GameScreen", "Creating new SurfaceView for: $gamePath")
+                            SurfaceView(ctx).apply {
+                                gameSurfaceView = this
+                                keepScreenOn = true
+                                // Use RGBX_8888 to ensure the surface is opaque (fixes broken screenshots)
+                                holder.setFormat(PixelFormat.RGBX_8888)
+                                holder.addCallback(object : SurfaceHolder.Callback {
+                                    override fun surfaceCreated(holder: SurfaceHolder) {
+                                        android.util.Log.e("GameScreen", "Surface created, starting game load!")
+                                        mainActivity?.setSurface(holder.surface)
+                                        // Start loading immediately from the callback
+                                        startGameLoading()
+                                    }
+                                    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+                                        android.util.Log.d("GameScreen", "Surface changed: ${width}x${height}")
+                                    }
+                                    override fun surfaceDestroyed(holder: SurfaceHolder) {
+                                        android.util.Log.d("GameScreen", "Surface destroyed")
+                                        mainActivity?.setSurface(null)
+                                    }
+                                })
                             }
                         },
                         modifier = Modifier
-                            .padding(12.dp)
-                            .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                            .fillMaxSize()
+                            .then(
+                                when (screenScale) {
+                                    ScreenScale.RATIO_4_3 -> Modifier.aspectRatio(4f / 3f)
+                                    ScreenScale.RATIO_16_9 -> Modifier.aspectRatio(16f / 9f)
+                                    ScreenScale.STRETCH -> Modifier
+                                }
+                            )
+                    )
+                }
+
+                // Loading overlay
+                if (!isGameLoaded) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.9f)),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Menu,
-                            contentDescription = "Menu",
-                            tint = Color.White
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            if (loadError != null) {
+                                Icon(
+                                    imageVector = Icons.Default.Warning,
+                                    contentDescription = "Error",
+                                    tint = Color.Red,
+                                    modifier = Modifier.size(48.dp)
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text("Error: $loadError", color = Color.Red)
+                            } else {
+                                CircularProgressIndicator(
+                                    color = Color.White,
+                                    modifier = Modifier.size(64.dp),
+                                    strokeWidth = 4.dp
+                                )
+                                Spacer(modifier = Modifier.height(24.dp))
+                                Text("Loading game...", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                            }
+                        }
+                    }
+                }
+
+                // FPS counter
+                if (isGameLoaded) {
+                    var fps by remember { mutableIntStateOf(0) }
+                    var speed by remember { mutableIntStateOf(0) }
+
+                    LaunchedEffect(Unit) {
+                        var lastSamples = mainActivity?.samplesWritten?.get() ?: 0L
+                        var frameCount = 0
+                        var lastTime = System.nanoTime()
+
+                        while (true) {
+                            withFrameNanos { now ->
+                                frameCount++
+                                val elapsed = now - lastTime
+
+                                if (elapsed >= 1_000_000_000) {
+                                    fps = frameCount
+                                    frameCount = 0
+
+                                    val currentSamples = mainActivity?.samplesWritten?.get() ?: 0L
+                                    val diff = currentSamples - lastSamples
+                                    val rate = mainActivity?.targetSampleRate ?: 44100
+                                    speed = ((diff / 2f) / rate * 100).toInt()
+                                    lastSamples = currentSamples
+                                    lastTime = now
+                                }
+                            }
+                        }
+                    }
+
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.6f),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(12.dp)
+                    ) {
+                        Text(
+                            text = "FPS: $fps | Speed: $speed%",
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                         )
                     }
                 }
-            }
-            
-            // Tap to show controls in landscape
-            if (isLandscape && !controlsVisible && isGameLoaded) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Transparent)
-                        .pointerInput(Unit) {
-                            // This will capture taps to show controls
+
+                // Quick menu button (visible when controls hidden in both orientations)
+                if (!controlsVisible && isGameLoaded) {
+                    AnimatedVisibility(
+                        visible = true,
+                        enter = fadeIn(),
+                        exit = fadeOut(),
+                        modifier = Modifier.align(Alignment.TopEnd)
+                    ) {
+                        IconButton(
+                            onClick = {
+                                showMenu = true
+                                if (autoPause && !isPaused) {
+                                    isPaused = true
+                                    onTogglePause(true)
+                                    wasPausedByMenu = true
+                                }
+                            },
+                            modifier = Modifier
+                                .padding(12.dp)
+                                .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Menu,
+                                contentDescription = "Menu",
+                                tint = Color.White
+                            )
                         }
-                )
+                    }
+                }
+                
+                // Tap to show controls in landscape
+                if (isLandscape && !controlsVisible && isGameLoaded) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Transparent)
+                            .pointerInput(Unit) {
+                                // This will capture taps to show controls
+                            }
+                    )
+                }
             }
         }
 
@@ -496,16 +499,20 @@ fun GameScreen(
                 showMenu = false
             },
             onQuit = {
+                isLeaving = true
+                showMenu = false
+                
+                // Save layout immediately
                 val layoutFile = File(layoutsDir, "${gameName}.layout")
                 val content = buttonOffsets.map { "${it.key},${it.value.x},${it.value.y}" }.joinToString("\n")
                 try { layoutFile.writeText(content) } catch (e: Exception) {}
 
+                // Trigger UI transition back to Library IMMEDIATELY
+                onBack()
+
+                // Run native cleanup in the background so it doesn't block the UI
                 scope.launch(Dispatchers.IO) {
                     mainActivity?.quitGame()
-                    withContext(Dispatchers.Main) {
-                        showMenu = false
-                        onBack()
-                    }
                 }
             }
         )

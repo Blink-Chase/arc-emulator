@@ -38,6 +38,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.atomic.AtomicLong
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.core.net.toUri
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -508,6 +511,21 @@ class MainActivity : ComponentActivity() {
             isScanning = true
             scope.launch(Dispatchers.IO) {
                 Log.d("Arc", "SCAN: Starting ROM scan...")
+                
+                // 1. Passive Cleanup: Prune missing files from database
+                Log.d("Arc", "SCAN: Validating existing library entries...")
+                gameList.forEach { game ->
+                    // Skip SAF URIs (content://) as File(path).exists() won't work correctly for them
+                    // and we already copy them to Arc/Roms/ now.
+                    if (!game.path.startsWith("content://")) {
+                        val file = File(game.path)
+                        if (!file.exists()) {
+                            Log.d("Arc", "SCAN: Pruning missing game: ${game.name}")
+                            gameDao.deleteGame(game)
+                        }
+                    }
+                }
+
                 val mode = prefs.getInt(KEY_SCAN_MODE, 0)
                 val pathsToScan = if (mode == 1) {
                     try {
@@ -541,10 +559,6 @@ class MainActivity : ComponentActivity() {
                 }
                 Log.d("Arc", "SCAN: Total games found: ${allGames.size}")
                 gameDao.insertGames(allGames)
-                
-                // Add a small delay to ensure the UI has time to show the scanning state
-                // especially for small libraries where it might be too fast to see.
-                delay(800)
                 
                 withContext(Dispatchers.Main) {
                     isScanning = false
@@ -858,7 +872,13 @@ class MainActivity : ComponentActivity() {
                     composable(Screen.HELP.name) {
                         HelpScreen(onBack = { navController.popBackStack() })
                     }
-                    composable(Screen.GAME.name) {
+                    composable(
+                        route = Screen.GAME.name,
+                        enterTransition = { fadeIn(animationSpec = tween(150)) },
+                        exitTransition = { fadeOut(animationSpec = tween(150)) },
+                        popEnterTransition = { fadeIn(animationSpec = tween(150)) },
+                        popExitTransition = { fadeOut(animationSpec = tween(150)) }
+                    ) {
                         val gameSafeName = remember(activeGameName) {
                             activeGameName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
                         }
