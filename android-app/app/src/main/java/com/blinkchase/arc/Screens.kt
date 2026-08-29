@@ -739,7 +739,8 @@ fun SettingsScreen(
     onReportBug: () -> Unit,
     onGoToAbout: () -> Unit,
     onGoToHelp: () -> Unit,
-    onGoToBios: () -> Unit
+    onGoToBios: () -> Unit,
+    onGoToControllerMapping: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
     var refreshKey by remember { mutableIntStateOf(0) }
@@ -758,7 +759,11 @@ fun SettingsScreen(
     var showExtensions by remember { mutableStateOf(prefs.getBoolean(MainActivity.KEY_SHOW_EXTENSIONS, false)) }
     var autoPauseMenu by remember { mutableStateOf(prefs.getBoolean(MainActivity.KEY_AUTO_PAUSE_MENU, true)) }
     var controllerStyle by remember { mutableStateOf(InputStyle.entries[prefs.getInt(MainActivity.KEY_CONTROLLER_STYLE, 0)]) }
+    var hideTouchOnController by remember { mutableStateOf(prefs.getBoolean(MainActivity.KEY_HIDE_TOUCH_ON_CONTROLLER, true)) }
+    var controllerDeadzone by remember { mutableFloatStateOf(prefs.getFloat(MainActivity.KEY_CONTROLLER_DEADZONE, 0.15f)) }
+    
     var showCoreSelectorFor by remember { mutableStateOf<Platform?>(null) }
+    var showDeviceSelectorFor by remember { mutableStateOf<Platform?>(null) }
     var showDiagnostics by remember { mutableStateOf(value = false) }
     
     var showWipeConfirm by remember { mutableStateOf(false) }
@@ -801,7 +806,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
                         Text("Guest Profile", style = MaterialTheme.typography.titleMedium)
-                        Text("Version 1.4.3 (Latest)", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        Text("Version 1.5.0 (Latest)", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                     }
                 }
             }
@@ -873,7 +878,39 @@ fun SettingsScreen(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), thickness = 0.5.dp, color = Color.Gray.copy(alpha = 0.3f))
 
-            // 3. Controller Settings
+            // 3. Physical Controller Settings
+            SettingsCategory("INPUT DEVICE", Icons.Default.Gamepad)
+            
+            Button(
+                onClick = onGoToControllerMapping,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)
+            ) {
+                Icon(Icons.Default.SettingsInputComponent, null)
+                Spacer(Modifier.width(8.dp))
+                Text("Setup Physical Controller")
+            }
+
+            SettingsItem(title = "Auto-Hide Touch Controls", subtitle = "Hide overlay when a controller is active") {
+                Switch(checked = hideTouchOnController, onCheckedChange = {
+                    hideTouchOnController = it
+                    prefs.edit { putBoolean(MainActivity.KEY_HIDE_TOUCH_ON_CONTROLLER, it) }
+                })
+            }
+
+            SettingsItem(title = "Analog Deadzone", subtitle = "${(controllerDeadzone * 100).roundToInt()}%") {
+                Slider(
+                    value = controllerDeadzone,
+                    onValueChange = { controllerDeadzone = it },
+                    onValueChangeFinished = { prefs.edit { putFloat(MainActivity.KEY_CONTROLLER_DEADZONE, controllerDeadzone) } },
+                    valueRange = 0.05f..0.5f,
+                    modifier = Modifier.width(120.dp)
+                )
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), thickness = 0.5.dp, color = Color.Gray.copy(alpha = 0.3f))
+
+            // 4. Controller Settings
             SettingsCategory("TOUCH CONTROLS", Icons.Default.TouchApp)
             
             var styleMenuExpanded by remember { mutableStateOf(false) }
@@ -985,13 +1022,30 @@ fun SettingsScreen(
             }
 
             MainActivity.AVAILABLE_CORES.forEach { (platform, cores) ->
-                val key = "core_pref_${platform.name}"
-                val current = prefs.getString(key, cores.first()) ?: cores.first()
+                val coreKey = "core_pref_${platform.name}"
+                val currentCore = prefs.getString(coreKey, cores.first()) ?: cores.first()
+                
+                val deviceKey = "device_pref_${platform.name}"
+                val currentDevice = EmulatedDevice.valueOf(prefs.getString(deviceKey, if (platform == Platform.N64 || platform == Platform.PS1) EmulatedDevice.ANALOG.name else EmulatedDevice.JOYPAD.name)!!)
+
                 ListItem(
                     headlineContent = { Text(platform.name) },
-                    supportingContent = { Text(current.replace("_libretro_android", "")) },
-                    trailingContent = { Icon(Icons.Default.ChevronRight, null) },
-                    modifier = Modifier.clickable { showCoreSelectorFor = platform }
+                    supportingContent = { 
+                        Column {
+                            Text("Core: ${currentCore.replace("_libretro_android", "")}", style = MaterialTheme.typography.bodySmall)
+                            Text("Device: ${currentDevice.name}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                        }
+                    },
+                    trailingContent = {
+                        Row {
+                            IconButton(onClick = { showCoreSelectorFor = platform }) {
+                                Icon(Icons.Default.Settings, "Core Settings", tint = MaterialTheme.colorScheme.secondary)
+                            }
+                            IconButton(onClick = { showDeviceSelectorFor = platform }) {
+                                Icon(Icons.Default.Gamepad, "Device Type", tint = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    }
                 )
             }
 
@@ -1106,6 +1160,40 @@ fun SettingsScreen(
             confirmButton = { TextButton(onClick = { showCoreSelectorFor = null }) { Text("Cancel") } }
         )
     }
+
+    if (showDeviceSelectorFor != null) {
+        val platform = showDeviceSelectorFor!!
+        val key = "device_pref_${platform.name}"
+        val currentDevice = prefs.getString(key, if (platform == Platform.N64 || platform == Platform.PS1) EmulatedDevice.ANALOG.name else EmulatedDevice.JOYPAD.name)
+
+        AlertDialog(
+            onDismissRequest = { showDeviceSelectorFor = null },
+            title = { Text("Emulated Device: ${platform.name}") },
+            text = {
+                LazyColumn {
+                    items(items = EmulatedDevice.entries) { device ->
+                        val isSelected = currentDevice == device.name
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    prefs.edit { putString(key, device.name) }
+                                    showDeviceSelectorFor = null
+                                    refreshKey++
+                                }
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(selected = isSelected, onClick = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(device.name)
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showDeviceSelectorFor = null }) { Text("Cancel") } }
+        )
+    }
     
     if (showDiagnostics) {
         DiagnosticsDialog(context = context) { showDiagnostics = false }
@@ -1176,7 +1264,7 @@ fun AboutScreen(
         Spacer(modifier = Modifier.height(32.dp))
         Text("Arc Emulator", style = MaterialTheme.typography.headlineLarge)
         Spacer(modifier = Modifier.height(8.dp))
-        Text("Version 1.4.3", style = MaterialTheme.typography.titleMedium)
+        Text("Version 1.5.0", style = MaterialTheme.typography.titleMedium)
         
         Spacer(modifier = Modifier.height(24.dp))
         HorizontalDivider()

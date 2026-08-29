@@ -109,6 +109,13 @@ JNIEXPORT void JNICALL Java_com_blinkchase_arc_MainActivity_sendInput(
   g_joypadBits.store(bits);
 }
 
+JNIEXPORT void JNICALL Java_com_blinkchase_arc_MainActivity_setControllerType(
+    JNIEnv *env, jobject thiz, jint port, jint type) {
+  if (core_set_controller_port_device) {
+    core_set_controller_port_device((unsigned)port, (unsigned)type);
+  }
+}
+
 JNIEXPORT void JNICALL Java_com_blinkchase_arc_MainActivity_setAnalogInput(
     JNIEnv *env, jobject thiz, jint x, jint y) {
   g_analogX.store((int16_t)x);

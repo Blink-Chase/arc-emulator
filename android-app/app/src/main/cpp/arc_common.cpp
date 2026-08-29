@@ -55,6 +55,7 @@ retro_set_input_poll_t core_set_input_poll = nullptr;
 retro_set_input_state_t core_set_input_state = nullptr;
 retro_get_system_av_info_t core_get_system_av_info = nullptr;
 retro_get_system_info_t core_get_system_info = nullptr;
+retro_set_controller_port_device_t core_set_controller_port_device = nullptr;
 
 struct retro_system_av_info g_avInfo;
 std::string g_systemDir;

@@ -42,6 +42,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.core.net.toUri
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -69,6 +70,8 @@ class MainActivity : ComponentActivity() {
         const val KEY_THEME_MODE = "theme_mode"
         const val KEY_SCREEN_SCALE = "screen_scale"
         const val KEY_SHOW_EXTENSIONS = "show_extensions"
+        const val KEY_HIDE_TOUCH_ON_CONTROLLER = "hide_touch_on_controller"
+        const val KEY_CONTROLLER_DEADZONE = "controller_deadzone"
         const val BTN_B = 0; const val BTN_Y = 1; const val BTN_SELECT = 2; const val BTN_START = 3
         const val BTN_UP = 4; const val BTN_DOWN = 5; const val BTN_LEFT = 6; const val BTN_RIGHT = 7
         const val BTN_A = 8; const val BTN_X = 9; const val BTN_L = 10; const val BTN_R = 11
@@ -107,7 +110,19 @@ class MainActivity : ComponentActivity() {
     private var wasPlaying = false
 
     private val database by lazy { GameDatabase.getDatabase(this) }
-    private val gameDao by lazy { database.gameDao() }
+    internal val gameDao by lazy { database.gameDao() }
+    internal val inputDao by lazy { database.inputDao() }
+    val inputManager by lazy { InputManager(this) }
+    var lastDeviceName: String? = null
+    private var currentRetroType: Int = 1 // Default to Joypad
+    private var isEngineReady: Boolean = false
+
+    // PERSISTENT NATIVE STATE - survives transitions
+    var activeGamePath by mutableStateOf("")
+    var activeGameName by mutableStateOf("")
+    var activeGamePlatform by mutableStateOf(Platform.UNKNOWN)
+    var activeGameCorePath by mutableStateOf("")
+    var buttonProps by mutableStateOf(mapOf<Int, ButtonProps>())
 
     // Audio Threading
     @Volatile private var isAudioRunning = false
@@ -131,15 +146,20 @@ class MainActivity : ComponentActivity() {
     external fun loadState(path: String): Boolean
     external fun setFastForward(enabled: Boolean)
     external fun setCheat(index: Int, enabled: Boolean, code: String)
+    external fun setControllerType(port: Int, type: Int)
     external fun getAudioSamples(buffer: ShortArray, maxSamples: Int): Int
     external fun getGameSampleRate(): Double
     external fun getAudioBufferOccupancy(): Int
 
-    // Bridge for legacy calls from GameScreen to prevent crash
     fun setSurface(surface: Surface?) {
         if (surface != null) {
+            Log.i("ArcNative", "Binding surface: $surface")
             nativeOnSurfaceCreated(surface)
+            if (isEngineReady) {
+                updateNativeActivity()
+            }
         } else {
+            Log.i("ArcNative", "Unbinding surface (null)")
             nativeOnSurfaceDestroyed()
         }
     }
@@ -148,6 +168,9 @@ class MainActivity : ComponentActivity() {
         resetAudio()
         val success = nativeLoadGame(romPath)
         if (success) {
+            isEngineReady = true
+            // Apply controller type safely after core is loaded and game is initialized
+            setControllerType(0, currentRetroType)
             // CRITICAL FIX: Start the audio thread immediately after loading!
             resumeGame()
         }
@@ -239,19 +262,21 @@ class MainActivity : ComponentActivity() {
     }
 
     fun pauseGame() {
-        // Stop audio thread
+        Log.d("Arc", "Requesting Game Pause...")
         isAudioRunning = false
-        try { audioThread?.join(100) } catch (e: Exception) {}
         audioThread = null
 
         synchronized(audioLock) {
             try { audioTrack?.pause() } catch (e: Exception) {}
         }
         wasPlaying = false
+        inputManager.clearAll()
+        
         nativePauseGame()
     }
 
     fun resumeGame() {
+        inputManager.clearAll() // Sanitize inputs on resume
         nativeResumeGame()
 
         // Initialize audio track if needed
@@ -288,6 +313,7 @@ class MainActivity : ComponentActivity() {
     }
 
     fun quitGame() {
+        isEngineReady = false
         synchronized(audioLock) {
             try { audioTrack?.pause() } catch (e: Exception) {}
         }
@@ -353,84 +379,53 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onPause() {
+        super.onPause()
+        if (isEngineReady) {
+            // CRITICAL: Stop engine rendering BEFORE the surface is gone
+            pauseGame()
+            setSurface(null)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Wait for GameScreen to re-bind
+    }
+
     override fun onStop() { super.onStop(); resetAudio() }
     override fun onDestroy() { super.onDestroy(); resetAudio() }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
-        if (event.source and android.view.InputDevice.SOURCE_GAMEPAD == android.view.InputDevice.SOURCE_GAMEPAD || 
-            event.source and android.view.InputDevice.SOURCE_JOYSTICK == android.view.InputDevice.SOURCE_JOYSTICK ||
-            keyCode in listOf(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT)) {
-            val mappedButton = mapKeyCodeToButton(keyCode)
-            if (mappedButton != -1) {
-                sendInput(mappedButton, 1)
-                return true
-            }
-        }
+        checkControllerProfile(event.device?.name)
+        if (inputManager.onKeyDown(keyCode, event)) return true
         return super.onKeyDown(keyCode, event)
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
-        if (event.source and android.view.InputDevice.SOURCE_GAMEPAD == android.view.InputDevice.SOURCE_GAMEPAD || 
-            event.source and android.view.InputDevice.SOURCE_JOYSTICK == android.view.InputDevice.SOURCE_JOYSTICK ||
-            keyCode in listOf(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT)) {
-            val mappedButton = mapKeyCodeToButton(keyCode)
-            if (mappedButton != -1) {
-                sendInput(mappedButton, 0)
-                return true
-            }
-        }
+        if (inputManager.onKeyUp(keyCode, event)) return true
         return super.onKeyUp(keyCode, event)
     }
 
     override fun onGenericMotionEvent(event: MotionEvent): Boolean {
-        if (event.source and android.view.InputDevice.SOURCE_JOYSTICK == android.view.InputDevice.SOURCE_JOYSTICK &&
-            event.action == MotionEvent.ACTION_MOVE) {
-            
-            // Left Stick
-            val lsX = event.getAxisValue(MotionEvent.AXIS_X)
-            val lsY = event.getAxisValue(MotionEvent.AXIS_Y)
-            setAnalogInput((lsX * 32767).toInt(), (lsY * 32767).toInt())
-
-            // Right Stick
-            val rsX = event.getAxisValue(MotionEvent.AXIS_Z)
-            val rsY = event.getAxisValue(MotionEvent.AXIS_RZ)
-            setRightAnalogInput((rsX * 32767).toInt(), (rsY * 32767).toInt())
-
-            // DPAD as Axes (Some controllers use HAT axes)
-            val hatX = event.getAxisValue(MotionEvent.AXIS_HAT_X)
-            val hatY = event.getAxisValue(MotionEvent.AXIS_HAT_Y)
-            
-            if (hatX != 0f || hatY != 0f) {
-                sendInput(BTN_LEFT, if (hatX < -0.5f) 1 else 0)
-                sendInput(BTN_RIGHT, if (hatX > 0.5f) 1 else 0)
-                sendInput(BTN_UP, if (hatY < -0.5f) 1 else 0)
-                sendInput(BTN_DOWN, if (hatY > 0.5f) 1 else 0)
-            }
-
-            return true
-        }
+        checkControllerProfile(event.device?.name)
+        if (inputManager.onGenericMotionEvent(event)) return true
         return super.onGenericMotionEvent(event)
     }
 
-    private fun mapKeyCodeToButton(keyCode: Int): Int {
-        return when (keyCode) {
-            KeyEvent.KEYCODE_BUTTON_A -> BTN_A
-            KeyEvent.KEYCODE_BUTTON_B -> BTN_B
-            KeyEvent.KEYCODE_BUTTON_X -> BTN_X
-            KeyEvent.KEYCODE_BUTTON_Y -> BTN_Y
-            KeyEvent.KEYCODE_BUTTON_L1 -> BTN_L
-            KeyEvent.KEYCODE_BUTTON_R1 -> BTN_R
-            KeyEvent.KEYCODE_BUTTON_L2 -> BTN_L2
-            KeyEvent.KEYCODE_BUTTON_R2 -> BTN_R2
-            KeyEvent.KEYCODE_BUTTON_THUMBL -> BTN_L3
-            KeyEvent.KEYCODE_BUTTON_THUMBR -> BTN_R3
-            KeyEvent.KEYCODE_BUTTON_START -> BTN_START
-            KeyEvent.KEYCODE_BUTTON_SELECT -> BTN_SELECT
-            KeyEvent.KEYCODE_DPAD_UP -> BTN_UP
-            KeyEvent.KEYCODE_DPAD_DOWN -> BTN_DOWN
-            KeyEvent.KEYCODE_DPAD_LEFT -> BTN_LEFT
-            KeyEvent.KEYCODE_DPAD_RIGHT -> BTN_RIGHT
-            else -> -1
+    private fun checkControllerProfile(name: String?) {
+        if (name != lastDeviceName) {
+            lastDeviceName = name
+            if (name != null) {
+                lifecycleScope.launch(Dispatchers.IO) {
+                    inputManager.resolveProfile(name)
+                    if (inputManager.hasActiveController()) {
+                        Log.d("ArcInput", "Loaded hierarchical profile for: $name")
+                    }
+                }
+            } else {
+                inputManager.setActiveProfile(null)
+            }
         }
     }
 
@@ -440,6 +435,22 @@ class MainActivity : ComponentActivity() {
         val navController = rememberNavController()
         val prefs = remember { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
         val scope = rememberCoroutineScope()
+
+        // PERSISTENT GAME STATE - Link UI state to Activity properties
+        var uiActivePath by rememberSaveable { mutableStateOf(activeGamePath) }
+        var uiActiveName by rememberSaveable { mutableStateOf(activeGameName) }
+        var uiActivePlatform by rememberSaveable { mutableStateOf(activeGamePlatform) }
+        var uiActiveCore by rememberSaveable { mutableStateOf(activeGameCorePath) }
+        
+        // Handle button props carefully - large maps can be heavy for rememberSaveable
+        var uiButtonProps by remember { mutableStateOf(buttonProps) }
+
+        LaunchedEffect(uiActivePath, uiActiveName, uiActivePlatform, uiActiveCore) {
+            activeGamePath = uiActivePath
+            activeGameName = uiActiveName
+            activeGamePlatform = uiActivePlatform
+            activeGameCorePath = uiActiveCore
+        }
 
         val gameList by gameDao.getAllGames().collectAsState(initial = emptyList())
         val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -490,12 +501,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-
-        var activeGamePath by rememberSaveable { mutableStateOf("") }
-        var activeGameName by rememberSaveable { mutableStateOf("") }
-        var activeGamePlatform by rememberSaveable { mutableStateOf(Platform.UNKNOWN) }
-        var activeGameCorePath by rememberSaveable { mutableStateOf("") }
-        var buttonOffsets by remember { mutableStateOf(mapOf<Int, Offset>()) }
 
         // Re-use the dirs we created in onCreate, but remember them for Compose
         val layoutsDir = remember { File(storageDir, "layouts").also { it.mkdirs() } }
@@ -600,35 +605,83 @@ class MainActivity : ComponentActivity() {
 
         fun saveLayout(gameName: String) {
             val layoutFile = File(layoutsDir, "$gameName.layout")
-            val content = buttonOffsets.map { "${it.key},${it.value.x},${it.value.y}" }.joinToString("\n")
-            try { layoutFile.writeText(content) } catch (e: Exception) {}
+            val json = org.json.JSONObject()
+            buttonProps.forEach { (id, p) ->
+                val btnJson = org.json.JSONObject()
+                btnJson.put("x", p.x)
+                btnJson.put("y", p.y)
+                btnJson.put("scale", p.scale)
+                btnJson.put("alpha", p.alpha)
+                json.put(id.toString(), btnJson)
+            }
+            try { layoutFile.writeText(json.toString()) } catch (e: Exception) {}
         }
 
-        fun loadLayout(gameName: String): Map<Int, Offset> {
+        fun loadLayout(gameName: String): Map<Int, ButtonProps> {
             val layoutFile = File(layoutsDir, "$gameName.layout")
             if (!layoutFile.exists()) return emptyMap()
-            return try {
-                layoutFile.readLines().mapNotNull { line ->
-                    val parts = line.split(",")
-                    if (parts.size == 3) {
-                        val btnId = parts[0].toIntOrNull() ?: return@mapNotNull null
-                        val x = parts[1].toFloatOrNull() ?: return@mapNotNull null
-                        val y = parts[2].toFloatOrNull() ?: return@mapNotNull null
-                        btnId to Offset(x, y)
-                    } else null
-                }.toMap()
-            } catch (e: Exception) {
-                emptyMap()
-            }
+            val text = try { layoutFile.readText() } catch (e: Exception) { return emptyMap() }
+            
+            val result = mutableMapOf<Int, ButtonProps>()
+            try {
+                if (text.startsWith("{")) {
+                    val json = org.json.JSONObject(text)
+                    val keys = json.keys()
+                    while (keys.hasNext()) {
+                        val key = keys.next()
+                        val id = key.toInt()
+                        val btnJson = json.getJSONObject(key)
+                        result[id] = ButtonProps(
+                            x = btnJson.optDouble("x", 0.0).toFloat(),
+                            y = btnJson.optDouble("y", 0.0).toFloat(),
+                            scale = btnJson.optDouble("scale", 1.0).toFloat(),
+                            alpha = btnJson.optDouble("alpha", 1.0).toFloat()
+                        )
+                    }
+                } else {
+                    // Legacy CSV format
+                    text.lines().forEach { line ->
+                        val parts = line.split(",")
+                        if (parts.size == 3) {
+                            val id = parts[0].toIntOrNull() ?: return@forEach
+                            val x = parts[1].toFloatOrNull() ?: return@forEach
+                            val y = parts[2].toFloatOrNull() ?: return@forEach
+                            result[id] = ButtonProps(x = x, y = y)
+                        }
+                    }
+                }
+            } catch (e: Exception) {}
+            return result
         }
 
         fun launchGame(game: GameFile) {
+            if (isEngineReady && activeGamePath == game.path) {
+                // Game already running, just return to it (should be handled by navigation usually)
+                Log.d("MainActivity", "Game already running: ${game.name}")
+                navController.navigate(Screen.GAME.name)
+                return
+            }
+
+            val deviceKey = "device_pref_${game.platform.name}"
+            val deviceTypeString = prefs.getString(deviceKey, if (game.platform == Platform.N64 || game.platform == Platform.PS1) EmulatedDevice.ANALOG.name else EmulatedDevice.JOYPAD.name)
+            val retroType = when(deviceTypeString) {
+                EmulatedDevice.ANALOG.name -> 5
+                EmulatedDevice.MOUSE.name -> 2
+                EmulatedDevice.LIGHTGUN.name -> 4
+                else -> 1
+            }
+            currentRetroType = retroType // Store for safe application in loadGame
+            // CRITICAL: setControllerType moved inside loadGame or called after loadCore to avoid SIGSEGV
+            // setControllerType(0, retroType) 
+
             scope.launch(Dispatchers.IO) {
                 gameDao.updateGame(game.copy(lastPlayed = System.currentTimeMillis()))
             }
             activeGamePath = game.path
             activeGameName = game.name
             activeGamePlatform = game.platform
+            inputManager.setContext(game.platform, game.path)
+            checkControllerProfile(lastDeviceName) // Re-resolve profile for new game context
 
             val platformCores = AVAILABLE_CORES[game.platform] ?: emptyList()
             val savedCore = prefs.getString("core_pref_${game.platform.name}", null)
@@ -716,7 +769,7 @@ class MainActivity : ComponentActivity() {
 
             val firstCore = platformCores.firstOrNull() ?: "snes9x_libretro_android"
             activeGameCorePath = finalCorePath ?: getCoreFile(savedCore ?: firstCore).absolutePath
-            buttonOffsets = loadLayout(game.name)
+            buttonProps = loadLayout(game.name)
         }
 
         Scaffold(
@@ -782,6 +835,11 @@ class MainActivity : ComponentActivity() {
                             prefs = prefs,
                             onGameClick = { game ->
                                 launchGame(game)
+                                uiActivePath = activeGamePath
+                                uiActiveName = activeGameName
+                                uiActivePlatform = activeGamePlatform
+                                uiActiveCore = activeGameCorePath
+                                uiButtonProps = buttonProps
                                 navController.navigate(Screen.GAME.name)
                             },
                             onToggleFavorite = { game ->
@@ -804,6 +862,11 @@ class MainActivity : ComponentActivity() {
                             },
                             onGameSelected = { game ->
                                 launchGame(game)
+                                uiActivePath = activeGamePath
+                                uiActiveName = activeGameName
+                                uiActivePlatform = activeGamePlatform
+                                uiActiveCore = activeGameCorePath
+                                uiButtonProps = buttonProps
                                 navController.navigate(Screen.GAME.name)
                             },
                             onNavigateToImport = {
@@ -840,6 +903,11 @@ class MainActivity : ComponentActivity() {
                             },
                             onGameSelected = { game ->
                                 launchGame(game)
+                                uiActivePath = activeGamePath
+                                uiActiveName = activeGameName
+                                uiActivePlatform = activeGamePlatform
+                                uiActiveCore = activeGameCorePath
+                                uiButtonProps = buttonProps
                                 navController.navigate(Screen.GAME.name)
                             }
                         )
@@ -852,7 +920,8 @@ class MainActivity : ComponentActivity() {
                             onReportBug = { android.widget.Toast.makeText(context, "Check logs in console", android.widget.Toast.LENGTH_SHORT).show() },
                             onGoToAbout = { navController.navigate(Screen.ABOUT.name) },
                             onGoToHelp = { navController.navigate(Screen.HELP.name) },
-                            onGoToBios = { navController.navigate(Screen.BIOS.name) }
+                            onGoToBios = { navController.navigate(Screen.BIOS.name) },
+                            onGoToControllerMapping = { navController.navigate(Screen.CONTROLLER_MAPPING.name) }
                         )
                     }
                     composable(Screen.BIOS.name) {
@@ -871,6 +940,22 @@ class MainActivity : ComponentActivity() {
                     }
                     composable(Screen.HELP.name) {
                         HelpScreen(onBack = { navController.popBackStack() })
+                    }
+                    composable(Screen.CONTROLLER_MAPPING.name) {
+                        ControllerMappingScreen(
+                            inputDao = inputDao,
+                            inputManager = inputManager,
+                            currentPlatform = activeGamePlatform,
+                            currentGamePath = activeGamePath,
+                            onBack = { navController.popBackStack() },
+                            onTestControls = { navController.navigate(Screen.CONTROLLER_TEST.name) }
+                        )
+                    }
+                    composable(Screen.CONTROLLER_TEST.name) {
+                        ControllerTestScreen(
+                            inputManager = inputManager,
+                            onBack = { navController.popBackStack() }
+                        )
                     }
                     composable(
                         route = Screen.GAME.name,
@@ -893,9 +978,9 @@ class MainActivity : ComponentActivity() {
                             storageDir = storageDir,
                             savesDir = gameSaveDir,
                             layoutsDir = layoutsDir,
-                            buttonOffsets = buttonOffsets,
-                            onUpdateOffset = { id, offset -> buttonOffsets = buttonOffsets + (id to offset) },
-                            onResetControls = { buttonOffsets = emptyMap() },
+                            buttonProps = buttonProps,
+                            onUpdateProps = { id, props -> buttonProps = buttonProps + (id to props) },
+                            onResetControls = { buttonProps = emptyMap() },
                             onBack = {
                                 saveLayout(activeGameName)
                                 navController.popBackStack()
@@ -910,7 +995,18 @@ class MainActivity : ComponentActivity() {
                                 loadState(filePath)
                             },
                             onReset = { resetGame() },
-                            onFastForward = { setFastForward(it) }
+                            onFastForward = { setFastForward(it) },
+                            onControllerMapping = { navController.navigate(Screen.CONTROLLER_MAPPING.name) },
+                            onQuit = {
+                                quitGame()
+                                uiActivePath = ""
+                                uiActiveName = ""
+                                uiActivePlatform = Platform.UNKNOWN
+                                uiActiveCore = ""
+                                uiButtonProps = emptyMap()
+                                inputManager.setContext(Platform.UNKNOWN, "")
+                            },
+                            inputManager = inputManager
                         )
                     }
                 }

@@ -44,6 +44,7 @@ bool LoadCore(const char *libPath) {
   core_set_input_state = (retro_set_input_state_t)dlsym(g_coreHandle, "retro_set_input_state");
   core_get_system_av_info = (retro_get_system_av_info_t)dlsym(g_coreHandle, "retro_get_system_av_info");
   core_get_system_info = (retro_get_system_info_t)dlsym(g_coreHandle, "retro_get_system_info");
+  core_set_controller_port_device = (retro_set_controller_port_device_t)dlsym(g_coreHandle, "retro_set_controller_port_device");
 
   if (core_set_environment) core_set_environment(EnvironmentCallback);
   if (core_set_video_refresh) core_set_video_refresh(VideoRefreshCallback);

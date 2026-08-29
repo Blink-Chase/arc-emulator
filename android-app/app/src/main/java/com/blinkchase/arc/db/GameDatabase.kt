@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.*
 import com.blinkchase.arc.GameFile
 import com.blinkchase.arc.Platform
+import com.blinkchase.arc.ControllerProfile
+import com.blinkchase.arc.ControllerModel
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -30,6 +32,18 @@ interface GameDao {
     suspend fun deleteAll()
 }
 
+@Dao
+interface InputDao {
+    @Query("SELECT * FROM controller_profiles WHERE deviceName = :name AND platform = :platform AND gamePath = :gamePath LIMIT 1")
+    suspend fun getProfile(name: String, platform: String = "", gamePath: String = ""): ControllerProfile?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveProfile(profile: ControllerProfile)
+
+    @Query("SELECT * FROM controller_profiles")
+    fun getAllProfiles(): Flow<List<ControllerProfile>>
+}
+
 class Converters {
     @TypeConverter
     fun fromPlatform(value: Platform): String = value.name
@@ -40,12 +54,41 @@ class Converters {
     } catch (e: Exception) {
         Platform.UNKNOWN
     }
+
+    @TypeConverter
+    fun fromControllerModel(value: ControllerModel): String = value.name
+
+    @TypeConverter
+    fun toControllerModel(value: String): ControllerModel = try {
+        if (value == "NINTENDO") ControllerModel.N64 else ControllerModel.valueOf(value)
+    } catch (e: Exception) {
+        ControllerModel.GENERIC_ABXY
+    }
+
+    @TypeConverter
+    fun fromIntMap(map: Map<Int, Int>): String {
+        return map.entries.joinToString(";") { "${it.key}:${it.value}" }
+    }
+
+    @TypeConverter
+    fun toIntMap(value: String): Map<Int, Int> {
+        if (value.isBlank()) return emptyMap()
+        return try {
+            value.split(";").associate {
+                val (k, v) = it.split(":")
+                k.toInt() to v.toInt()
+            }
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
 }
 
-@Database(entities = [GameFile::class], version = 1, exportSchema = false)
+@Database(entities = [GameFile::class, ControllerProfile::class], version = 5, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class GameDatabase : RoomDatabase() {
     abstract fun gameDao(): GameDao
+    abstract fun inputDao(): InputDao
 
     companion object {
         @Volatile
@@ -57,7 +100,9 @@ abstract class GameDatabase : RoomDatabase() {
                     context.applicationContext,
                     GameDatabase::class.java,
                     "arc_database"
-                ).build()
+                )
+                .fallbackToDestructiveMigration() // Simple for dev version
+                .build()
                 INSTANCE = instance
                 instance
             }

@@ -175,55 +175,60 @@ void VideoRefreshCallback(const void *data, unsigned width, unsigned height,
     }
 
     if (g_eglDisplay != EGL_NO_DISPLAY && g_eglSurface != EGL_NO_SURFACE) {
-      if (data != RETRO_HW_FRAME_BUFFER_VALID && g_glProgram != 0 &&
-          data != nullptr) {
-        GLuint textureId = (GLuint)(uintptr_t)data;
+      if (data != nullptr) {
+        if (data != RETRO_HW_FRAME_BUFFER_VALID && g_glProgram != 0) {
+          GLuint textureId = (GLuint)(uintptr_t)data;
 
-        // Use the game resolution for viewport to match the buffer geometry
-        glViewport(0, 0, width, height);
+          // Use the game resolution for viewport to match the buffer geometry
+          glViewport(0, 0, width, height);
 
-        // ISOLATE BLITTER STATE
-        // GoldenEye sets a small scissor box for HUD elements; we MUST disable it to capture the whole screen.
-        glDisable(GL_SCISSOR_TEST);
-        glDisable(GL_DEPTH_TEST);
-        glDisable(GL_STENCIL_TEST);
-        glDisable(GL_BLEND);
-        glDisable(GL_CULL_FACE);
+          // ISOLATE BLITTER STATE
+          // GoldenEye sets a small scissor box for HUD elements; we MUST disable it to capture the whole screen.
+          glDisable(GL_SCISSOR_TEST);
+          glDisable(GL_DEPTH_TEST);
+          glDisable(GL_STENCIL_TEST);
+          glDisable(GL_BLEND);
+          glDisable(GL_CULL_FACE);
 
-        glUseProgram(g_glProgram);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, textureId);
+          glUseProgram(g_glProgram);
+          glActiveTexture(GL_TEXTURE0);
+          glBindTexture(GL_TEXTURE_2D, textureId);
 
-        // Better texture filtering for N64 resolutions
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+          // Better texture filtering for N64 resolutions
+          glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+          glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+          glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+          glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-        glUniform1i(g_glSamplerLoc, 0);
+          glUniform1i(g_glSamplerLoc, 0);
 
-        glBindBuffer(GL_ARRAY_BUFFER, g_glVBO);
-        glEnableVertexAttribArray(g_glPositionLoc);
-        glVertexAttribPointer(g_glPositionLoc, 2, GL_FLOAT, GL_FALSE,
-                              4 * sizeof(float), (void *)0);
-        glEnableVertexAttribArray(g_glTexCoordLoc);
-        glVertexAttribPointer(g_glTexCoordLoc, 2, GL_FLOAT, GL_FALSE,
-                              4 * sizeof(float), (void *)(2 * sizeof(float)));
+          glBindBuffer(GL_ARRAY_BUFFER, g_glVBO);
+          glEnableVertexAttribArray(g_glPositionLoc);
+          glVertexAttribPointer(g_glPositionLoc, 2, GL_FLOAT, GL_FALSE,
+                                4 * sizeof(float), (void *)0);
+          glEnableVertexAttribArray(g_glTexCoordLoc);
+          glVertexAttribPointer(g_glTexCoordLoc, 2, GL_FLOAT, GL_FALSE,
+                                4 * sizeof(float), (void *)(2 * sizeof(float)));
 
-        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+          glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
-        glDisableVertexAttribArray(g_glPositionLoc);
-        glDisableVertexAttribArray(g_glTexCoordLoc);
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindTexture(GL_TEXTURE_2D, 0);
+          glDisableVertexAttribArray(g_glPositionLoc);
+          glDisableVertexAttribArray(g_glTexCoordLoc);
+          glBindBuffer(GL_ARRAY_BUFFER, 0);
+          glBindTexture(GL_TEXTURE_2D, 0);
+        }
 
-        // DO NOT RESTORE SCISSOR/DEPTH - Keep the frontend surface clean.
-        // This ensures PixelCopy captures the entire surface, not just a scissored fragment.
-      }
-
-      eglSwapBuffers(g_eglDisplay, g_eglSurface);
-      if (g_saveStateRequested.load()) {
-          glFinish();
+        if (!eglSwapBuffers(g_eglDisplay, g_eglSurface)) {
+          EGLint err = eglGetError();
+          LOGE("eglSwapBuffers failed: 0x%x", err);
+          if (err == EGL_BAD_SURFACE || err == EGL_BAD_NATIVE_WINDOW) {
+              // Surface is gone, we should probably stop
+              return;
+          }
+        }
+        if (g_saveStateRequested.load()) {
+            glFinish();
+        }
       }
     }
     return;

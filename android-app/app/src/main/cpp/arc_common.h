@@ -89,6 +89,7 @@ typedef void (*retro_set_input_poll_t)(retro_input_poll_t cb);
 typedef void (*retro_set_input_state_t)(retro_input_state_t cb);
 typedef void (*retro_get_system_av_info_t)(struct retro_system_av_info *info);
 typedef void (*retro_get_system_info_t)(struct retro_system_info *info);
+typedef void (*retro_set_controller_port_device_t)(unsigned port, unsigned device);
 
 // Core functions
 extern retro_init_t core_init;
@@ -109,6 +110,7 @@ extern retro_set_input_poll_t core_set_input_poll;
 extern retro_set_input_state_t core_set_input_state;
 extern retro_get_system_av_info_t core_get_system_av_info;
 extern retro_get_system_info_t core_get_system_info;
+extern retro_set_controller_port_device_t core_set_controller_port_device;
 
 extern struct retro_system_av_info g_avInfo;
 extern std::string g_systemDir;

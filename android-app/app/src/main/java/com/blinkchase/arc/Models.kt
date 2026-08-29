@@ -36,6 +36,20 @@ enum class OrientationMode {
     SENSOR          // Use sensors for all orientations
 }
 
+enum class EmulatedDevice {
+    JOYPAD,         // Digital only (SNES, Genesis, GB)
+    ANALOG,         // Digital + Analog (PS1 DualShock, N64)
+    MOUSE,          // Mouse emulation
+    LIGHTGUN        // Lightgun emulation
+}
+
+enum class ControllerModel {
+    GENERIC_ABXY,   // A, B, X, Y (SNES/Android standard)
+    XBOX,           // A, B, X, Y (Xbox layout)
+    PLAYSTATION,    // Cross, Circle, Square, Triangle
+    N64             // N64 layout (A, B, C-Buttons, Z)
+}
+
 enum class Platform {
     SNES, GBA, GB, GBC, GENESIS, N64, PS1, GAMECUBE, WII, UNKNOWN;
 
@@ -63,11 +77,29 @@ data class GameFile(
     val isFavorite: Boolean = false
 )
 
+@Entity(tableName = "controller_profiles", primaryKeys = ["deviceName", "platform", "gamePath"])
+data class ControllerProfile(
+    val deviceName: String,
+    val platform: String = "", // empty string for Global
+    val gamePath: String = "", // empty string for Global/Platform
+    val buttonMap: Map<Int, Int> = emptyMap(), // Physical KeyCode -> Libretro BTN_ID
+    val axisMap: Map<Int, Int> = emptyMap(),    // Physical AxisID -> Libretro AXIS_ID/Direction
+    val model: ControllerModel = ControllerModel.GENERIC_ABXY
+)
+
 data class GameCheat(var name: String, var code: String, var enabled: Boolean)
 
 enum class SortMode { NAME, DATE_ADDED, LAST_PLAYED }
 
-enum class Screen { HOME, LIBRARY, IMPORT, SEARCH, SETTINGS, GAME, ABOUT, HELP, BIOS }
+enum class Screen { HOME, LIBRARY, IMPORT, SEARCH, SETTINGS, GAME, ABOUT, HELP, BIOS, CONTROLLER_MAPPING, CONTROLLER_TEST }
+
+// Data class to hold individual button properties for touch layouts
+data class ButtonProps(
+    val x: Float = 0f,
+    val y: Float = 0f,
+    val scale: Float = 1.0f,
+    val alpha: Float = 1.0f
+)
 
 // Data class to hold control layout configuration
 data class ControlLayoutConfig(
