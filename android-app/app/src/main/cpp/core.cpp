@@ -164,17 +164,9 @@ void EmuThreadFunc() {
       continue;
     }
 
-    // 3. PAUSE HANDLING
-    if (g_isPaused.load()) {
-      if (eglInitialized && g_useHwRender) {
-        // Optional: you could deinit EGL here to save battery, but let's keep it simple
-      }
-      std::this_thread::sleep_for(std::chrono::milliseconds(16));
-      lastFrameTime = std::chrono::steady_clock::now();
-      continue;
-    }
-
-    // 4. WINDOW & EGL SETUP
+    // 3. WINDOW & EGL SETUP (PRIORITY)
+    // We do this BEFORE the pause check so that if a new surface is bound while the
+    // engine is paused, we pick it up and initialize the EGL context immediately.
     if (!g_nativeWindow) {
       if (eglInitialized) {
         if (g_useHwRender) deinitEGL();
@@ -193,12 +185,25 @@ void EmuThreadFunc() {
       }
     }
 
+    // 4. PAUSE HANDLING
+    // If g_forceOneRun is true, we bypass the pause check ONCE to refresh the screen.
+    if (g_isPaused.load() && !g_forceOneRun.load()) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(16));
+      lastFrameTime = std::chrono::steady_clock::now();
+      continue;
+    }
+
     // 5. CORE EXECUTION
     if (core_run) {
       std::lock_guard<std::recursive_mutex> lock(g_emuMutex);
       core_run();
     }
     frameCount++;
+
+    // Clear the one-shot flag if it was set
+    if (g_forceOneRun.load()) {
+        g_forceOneRun.store(false);
+    }
 
     // 6. TIMING & FPS
     auto now = std::chrono::steady_clock::now();
@@ -213,8 +218,8 @@ void EmuThreadFunc() {
     }
     lastFrameTime = std::chrono::steady_clock::now();
 
-    if (std::chrono::duration_cast<std::chrono::milliseconds>(now - lastFpsUpdate).count() >= 1000) {
-      g_currentFps.store(frameCount);
+    if (std::chrono::duration_cast<std::chrono::milliseconds>(now - lastFpsUpdate).count() >= 500) {
+      g_currentFps.store(frameCount * 2);
       frameCount = 0;
       lastFpsUpdate = now;
     }

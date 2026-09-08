@@ -81,6 +81,11 @@ JNIEXPORT void JNICALL Java_com_blinkchase_arc_MainActivity_nativePauseGame(
   g_isPaused.store(true);
 }
 
+JNIEXPORT void JNICALL Java_com_blinkchase_arc_MainActivity_nativeForceNextFrame(
+    JNIEnv *env, jobject thiz) {
+  g_forceOneRun.store(true);
+}
+
 JNIEXPORT void JNICALL Java_com_blinkchase_arc_MainActivity_nativeResumeGame(
     JNIEnv *env, jobject thiz) {
   g_isPaused.store(false);
@@ -270,6 +275,7 @@ Java_com_blinkchase_arc_MainActivity_nativeOnSurfaceDestroyed(JNIEnv *env,
                                                                jobject thiz) {
   std::lock_guard<std::mutex> lock(g_windowMutex);
   LOGI("Surface destroyed");
+  cleanupSurfaceEGL();
   if (g_nativeWindow) {
     ANativeWindow_release(g_nativeWindow);
     g_nativeWindow = nullptr;
@@ -282,7 +288,11 @@ Java_com_blinkchase_arc_MainActivity_nativeOnSurfaceChanged(JNIEnv *env,
                                                               jobject surface,
                                                               jint width,
                                                               jint height) {
-  // Stub
+  std::lock_guard<std::mutex> lock(g_windowMutex);
+  if (g_nativeWindow) {
+      g_prevWidth = 0; // Force geometry re-measurement in VideoRefreshCallback
+      LOGI("Surface changed: %dx%d", width, height);
+  }
 }
 
 JNIEXPORT void JNICALL

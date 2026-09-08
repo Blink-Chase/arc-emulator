@@ -50,6 +50,17 @@ enum class ControllerModel {
     N64             // N64 layout (A, B, C-Buttons, Z)
 }
 
+enum class VisualStyle {
+    MODERN,
+    CLASSIC
+}
+
+enum class VerticalAlignment {
+    TOP,
+    CENTER,
+    BOTTOM
+}
+
 enum class Platform {
     SNES, GBA, GB, GBC, GENESIS, N64, PS1, GAMECUBE, WII, UNKNOWN;
 
@@ -105,12 +116,15 @@ data class ButtonProps(
 data class ControlLayoutConfig(
     val style: InputStyle = InputStyle.STANDARD,
     val position: ControlPosition = ControlPosition.DEFAULT,
+    val visualStyle: VisualStyle = VisualStyle.MODERN,
     val opacity: Float = 1.0f,
     val buttonSize: Float = 1.0f,
     val hapticFeedback: Boolean = true,
     val showInLandscape: Boolean = true,
     val showInPortrait: Boolean = true,
-    val autoHideDelay: Int = 0  // 0 = never auto-hide, otherwise seconds
+    val autoHideDelay: Int = 0, // 0 = never auto-hide, otherwise seconds
+    val portraitGameRatio: Float = 0.45f,
+    val portraitAlignment: VerticalAlignment = VerticalAlignment.CENTER
 )
 
 // Game state preservation data

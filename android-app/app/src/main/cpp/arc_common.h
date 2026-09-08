@@ -124,6 +124,7 @@ extern std::atomic<int> g_videoRefreshCount;
 
 extern std::string g_romPath;
 extern std::atomic<bool> g_loadRequested;
+extern std::atomic<bool> g_forceOneRun;
 extern std::atomic<bool> g_saveStateRequested;
 extern std::atomic<bool> g_loadStateRequested;
 extern std::atomic<bool> g_stateOperationSuccess; // New: Tell UI if it worked

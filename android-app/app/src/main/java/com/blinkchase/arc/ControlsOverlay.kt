@@ -16,17 +16,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.material.icons.automirrored.filled.*
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import kotlin.math.roundToInt
 
 @Composable
@@ -47,9 +51,6 @@ fun ControlsOverlay(
     onMenuClick: () -> Unit = {},
     onInteraction: () -> Unit = {}
 ) {
-    val context = LocalContext.current
-    
-    // Global opacity from config
     val globalOpacity = when (config.style) {
         InputStyle.STANDARD -> config.opacity
         InputStyle.COMPACT -> config.opacity * 0.9f
@@ -58,92 +59,58 @@ fun ControlsOverlay(
         InputStyle.HIDDEN -> 0f
     }
     
-    // Global size multiplier
-    val globalSizeMultiplier = when (config.style) {
+    // Improved Scale Factor: Optimized to keep buttons large (~100% size at 42% ratio)
+    val portraitRatioScale = if (!isLandscape) {
+        (1.22f - (config.portraitGameRatio * 0.52f)).coerceIn(0.85f, 1.25f)
+    } else 1.0f
+
+    val globalSizeMultiplier = (when (config.style) {
         InputStyle.COMPACT, InputStyle.MINIMALIST -> config.buttonSize * 0.85f
         else -> config.buttonSize
-    }
+    }) * portraitRatioScale
 
-    Box(modifier = modifier) {
+    BoxWithConstraints(modifier = modifier) {
+        val availableHeight = maxHeight
+        
+        // vertical scale for internal spacing - more generous floor at 0.6f
+        val vScale = (availableHeight.value / 380f).coerceIn(0.6f, 1.0f)
+
         if (isLandscape) {
             LandscapeControlsLayout(
-                platform = platform,
-                model = model,
-                globalOpacity = globalOpacity,
-                globalSizeMultiplier = globalSizeMultiplier,
-                buttonProps = buttonProps,
-                selectedButtonId = selectedButtonId,
-                onSelectButton = onSelectButton,
-                enabled = enabled,
-                isEditing = isEditing,
-                showFF = showFF,
-                onUpdateProps = onUpdateProps,
-                onFastForward = onFastForward,
-                onMenuClick = onMenuClick,
-                onInteraction = onInteraction
+                platform = platform, model = model, config = config,
+                globalOpacity = globalOpacity, globalSizeMultiplier = globalSizeMultiplier,
+                buttonProps = buttonProps, selectedButtonId = selectedButtonId, onSelectButton = onSelectButton,
+                enabled = enabled, isEditing = isEditing, showFF = showFF,
+                onUpdateProps = onUpdateProps, onFastForward = onFastForward,
+                onMenuClick = onMenuClick, onInteraction = onInteraction
             )
         } else {
-            PortraitControlsLayout(
-                platform = platform,
-                model = model,
-                globalOpacity = globalOpacity,
-                globalSizeMultiplier = globalSizeMultiplier,
-                buttonProps = buttonProps,
-                selectedButtonId = selectedButtonId,
-                onSelectButton = onSelectButton,
-                enabled = enabled,
-                isEditing = isEditing,
-                showFF = showFF,
-                onUpdateProps = onUpdateProps,
-                onFastForward = onFastForward,
-                onMenuClick = onMenuClick,
-                onInteraction = onInteraction
-            )
+            Box(modifier = Modifier.fillMaxSize()) {
+                when (platform) {
+                    Platform.N64 -> PortraitN64Layout(config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onMenuClick, onInteraction, vScale)
+                    Platform.PS1 -> PortraitPS1Layout(model, config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onMenuClick, onInteraction, vScale)
+                    Platform.GENESIS -> PortraitGenesisLayout(config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onMenuClick, onInteraction, vScale)
+                    else -> PortraitSNESLayout(model, config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onMenuClick, onInteraction)
+                }
+            }
         }
 
-        // Selection Controls Overlay (Pro Customizer)
         if (isEditing && selectedButtonId != null) {
             val currentProps = buttonProps[selectedButtonId] ?: ButtonProps()
-            
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(16.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f), RoundedCornerShape(12.dp))
-                    .padding(16.dp)
-            ) {
+            Box(modifier = Modifier.align(Alignment.BottomStart).padding(16.dp).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f), RoundedCornerShape(12.dp)).padding(16.dp)) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Selected Button ID: $selectedButtonId", style = MaterialTheme.typography.labelSmall)
-                    
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Icon(Icons.Default.Scale, null, modifier = Modifier.size(16.dp))
-                        Slider(
-                            value = currentProps.scale,
-                            onValueChange = { onUpdateProps(selectedButtonId!!, currentProps.copy(scale = it)) },
-                            valueRange = 0.5f..2.5f,
-                            modifier = Modifier.width(120.dp)
-                        )
+                        Slider(value = currentProps.scale, onValueChange = { onUpdateProps(selectedButtonId, currentProps.copy(scale = it)) }, valueRange = 0.5f..2.5f, modifier = Modifier.width(120.dp))
                         Text("${(currentProps.scale * 100).roundToInt()}%", style = MaterialTheme.typography.labelSmall)
                     }
-
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Icon(Icons.Default.Opacity, null, modifier = Modifier.size(16.dp))
-                        Slider(
-                            value = currentProps.alpha,
-                            onValueChange = { onUpdateProps(selectedButtonId!!, currentProps.copy(alpha = it)) },
-                            valueRange = 0.1f..1.0f,
-                            modifier = Modifier.width(120.dp)
-                        )
+                        Slider(value = currentProps.alpha, onValueChange = { onUpdateProps(selectedButtonId, currentProps.copy(alpha = it)) }, valueRange = 0.1f..1.0f, modifier = Modifier.width(120.dp))
                         Text("${(currentProps.alpha * 100).roundToInt()}%", style = MaterialTheme.typography.labelSmall)
                     }
-                    
-                    Button(
-                        onClick = { onSelectButton(null) },
-                        modifier = Modifier.height(32.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
-                    ) {
-                        Text("Deselect", fontSize = 12.sp)
-                    }
+                    Button(onClick = { onSelectButton(null) }, modifier = Modifier.height(32.dp), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)) { Text("Deselect", fontSize = 12.sp) }
                 }
             }
         }
@@ -152,564 +119,443 @@ fun ControlsOverlay(
 
 @Composable
 private fun LandscapeControlsLayout(
-    platform: Platform,
-    model: ControllerModel,
-    globalOpacity: Float,
-    globalSizeMultiplier: Float,
-    buttonProps: Map<Int, ButtonProps>,
-    selectedButtonId: Int?,
-    onSelectButton: (Int?) -> Unit,
-    enabled: Boolean,
-    isEditing: Boolean,
-    showFF: Boolean,
-    onUpdateProps: (Int, ButtonProps) -> Unit,
-    onFastForward: (Boolean) -> Unit,
-    onMenuClick: () -> Unit,
-    onInteraction: () -> Unit
-) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        if (showFF) {
-            FastForwardButton(
-                modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
-                onFastForward = onFastForward,
-                enabled = enabled,
-                opacity = globalOpacity,
-                onInteraction = onInteraction
-            )
-        }
-
-        MenuButton(
-            modifier = Modifier.align(Alignment.TopCenter).padding(16.dp),
-            onClick = onMenuClick,
-            opacity = globalOpacity,
-            onInteraction = onInteraction
-        )
-
-        // Platform-specific layouts
-        when (platform) {
-            Platform.PS1 -> LandscapePS1Layout(model, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
-            Platform.N64 -> LandscapeN64Layout(model, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
-            Platform.GENESIS -> LandscapeGenesisLayout(model, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
-            else -> LandscapeSNESLayout(model, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
-        }
-    }
-}
-
-@Composable
-private fun PortraitControlsLayout(
-    platform: Platform,
-    model: ControllerModel,
-    globalOpacity: Float,
-    globalSizeMultiplier: Float,
-    buttonProps: Map<Int, ButtonProps>,
-    selectedButtonId: Int?,
-    onSelectButton: (Int?) -> Unit,
-    enabled: Boolean,
-    isEditing: Boolean,
-    showFF: Boolean,
-    onUpdateProps: (Int, ButtonProps) -> Unit,
-    onFastForward: (Boolean) -> Unit,
-    onMenuClick: () -> Unit,
-    onInteraction: () -> Unit
-) {
-    val context = LocalContext.current
-    Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            GameButton(
-                icon = Icons.Default.KeyboardArrowLeft,
-                buttonId = MainActivity.BTN_L,
-                modifier = Modifier.size((70 * globalSizeMultiplier).dp, (35 * globalSizeMultiplier).dp),
-                props = buttonProps[MainActivity.BTN_L],
-                isSelected = selectedButtonId == MainActivity.BTN_L,
-                onSelect = { onSelectButton(MainActivity.BTN_L) },
-                enabled = enabled,
-                isEditing = isEditing,
-                onUpdateProps = onUpdateProps,
-                alpha = globalOpacity,
-                onInteraction = onInteraction
-            )
-
-            MenuButton(onClick = onMenuClick, opacity = globalOpacity, onInteraction = onInteraction)
-
-            GameButton(
-                icon = Icons.Default.KeyboardArrowRight,
-                buttonId = MainActivity.BTN_R,
-                modifier = Modifier.size((70 * globalSizeMultiplier).dp, (35 * globalSizeMultiplier).dp),
-                props = buttonProps[MainActivity.BTN_R],
-                isSelected = selectedButtonId == MainActivity.BTN_R,
-                onSelect = { onSelectButton(MainActivity.BTN_R) },
-                enabled = enabled,
-                isEditing = isEditing,
-                onUpdateProps = onUpdateProps,
-                alpha = globalOpacity,
-                onInteraction = onInteraction
-            )
-        }
-
-        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-            Box(modifier = Modifier.align(Alignment.TopStart).padding(start = 16.dp, top = 16.dp)) {
-                if (platform == Platform.N64) {
-                    VirtualJoystick(
-                        modifier = Modifier.alpha(globalOpacity),
-                        size = (160 * globalSizeMultiplier).dp,
-                        onMoved = { x, y ->
-                            onInteraction()
-                            (context as? MainActivity)?.setAnalogInput(x, y)
-                        }
-                    )
-                } else {
-                    DPadLayout(globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
-                }
-            }
-
-            Row(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                GameButton(
-                    icon = Icons.Default.HorizontalRule,
-                    buttonId = MainActivity.BTN_SELECT,
-                    modifier = Modifier.size((70 * globalSizeMultiplier).dp, (35 * globalSizeMultiplier).dp),
-                    props = buttonProps[MainActivity.BTN_SELECT],
-                    isSelected = selectedButtonId == MainActivity.BTN_SELECT,
-                    onSelect = { onSelectButton(MainActivity.BTN_SELECT) },
-                    enabled = enabled,
-                    isEditing = isEditing,
-                    onUpdateProps = onUpdateProps,
-                    alpha = globalOpacity,
-                    onInteraction = onInteraction
-                )
-                GameButton(
-                    icon = Icons.Default.PlayArrow,
-                    buttonId = MainActivity.BTN_START,
-                    modifier = Modifier.size((70 * globalSizeMultiplier).dp, (35 * globalSizeMultiplier).dp),
-                    props = buttonProps[MainActivity.BTN_START],
-                    isSelected = selectedButtonId == MainActivity.BTN_START,
-                    onSelect = { onSelectButton(MainActivity.BTN_START) },
-                    enabled = enabled,
-                    isEditing = isEditing,
-                    onUpdateProps = onUpdateProps,
-                    alpha = globalOpacity,
-                    onInteraction = onInteraction
-                )
-            }
-
-            Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 16.dp, bottom = 72.dp)) {
-                SNESActionButtons(model, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
-            }
-        }
-    }
-}
-
-// =========================== Layout Implementation Helpers ===========================
-
-@Composable
-private fun LandscapePS1Layout(
-    model: ControllerModel,
+    platform: Platform, model: ControllerModel, config: ControlLayoutConfig,
     globalOpacity: Float, globalSizeMultiplier: Float,
     buttonProps: Map<Int, ButtonProps>, selectedButtonId: Int?, onSelectButton: (Int?) -> Unit,
-    enabled: Boolean, isEditing: Boolean, onUpdateProps: (Int, ButtonProps) -> Unit, onInteraction: () -> Unit
+    enabled: Boolean, isEditing: Boolean, showFF: Boolean,
+    onUpdateProps: (Int, ButtonProps) -> Unit, onFastForward: (Boolean) -> Unit,
+    onMenuClick: () -> Unit, onInteraction: () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.align(Alignment.TopStart).padding(start = 24.dp, top = 80.dp)) {
-            GameButton(
-                icon = Icons.Default.KeyboardDoubleArrowDown,
-                text = "L2",
-                buttonId = MainActivity.BTN_L2,
-                modifier = Modifier.size((70 * globalSizeMultiplier).dp, (35 * globalSizeMultiplier).dp),
-                props = buttonProps[MainActivity.BTN_L2],
-                isSelected = selectedButtonId == MainActivity.BTN_L2,
-                onSelect = { onSelectButton(MainActivity.BTN_L2) },
-                enabled = enabled,
-                isEditing = isEditing,
-                onUpdateProps = onUpdateProps,
-                alpha = globalOpacity,
-                onInteraction = onInteraction
-            )
-            Spacer(Modifier.height(8.dp))
-            GameButton(
-                icon = Icons.Default.KeyboardArrowLeft,
-                text = "L1",
-                buttonId = MainActivity.BTN_L,
-                modifier = Modifier.size((70 * globalSizeMultiplier).dp, (35 * globalSizeMultiplier).dp),
-                props = buttonProps[MainActivity.BTN_L],
-                isSelected = selectedButtonId == MainActivity.BTN_L,
-                onSelect = { onSelectButton(MainActivity.BTN_L) },
-                enabled = enabled,
-                isEditing = isEditing,
-                onUpdateProps = onUpdateProps,
-                alpha = globalOpacity,
-                onInteraction = onInteraction
-            )
-        }
-        Column(modifier = Modifier.align(Alignment.TopEnd).padding(end = 24.dp, top = 80.dp)) {
-            GameButton(
-                icon = Icons.Default.KeyboardDoubleArrowDown,
-                text = "R2",
-                buttonId = MainActivity.BTN_R2,
-                modifier = Modifier.size((70 * globalSizeMultiplier).dp, (35 * globalSizeMultiplier).dp),
-                props = buttonProps[MainActivity.BTN_R2],
-                isSelected = selectedButtonId == MainActivity.BTN_R2,
-                onSelect = { onSelectButton(MainActivity.BTN_R2) },
-                enabled = enabled,
-                isEditing = isEditing,
-                onUpdateProps = onUpdateProps,
-                alpha = globalOpacity,
-                onInteraction = onInteraction
-            )
-            Spacer(Modifier.height(8.dp))
-            GameButton(
-                icon = Icons.Default.KeyboardArrowRight,
-                text = "R1",
-                buttonId = MainActivity.BTN_R,
-                modifier = Modifier.size((70 * globalSizeMultiplier).dp, (35 * globalSizeMultiplier).dp),
-                props = buttonProps[MainActivity.BTN_R],
-                isSelected = selectedButtonId == MainActivity.BTN_R,
-                onSelect = { onSelectButton(MainActivity.BTN_R) },
-                enabled = enabled,
-                isEditing = isEditing,
-                onUpdateProps = onUpdateProps,
-                alpha = globalOpacity,
-                onInteraction = onInteraction
-            )
-        }
-        Box(modifier = Modifier.align(Alignment.CenterStart).padding(start = 32.dp)) {
-            DPadLayout(globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
-        }
-        Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 32.dp)) {
-            PS1ActionButtons(model, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
+        MenuButton(modifier = Modifier.align(Alignment.TopCenter).padding(16.dp), onClick = onMenuClick, opacity = globalOpacity, onInteraction = onInteraction)
+        when (platform) {
+            Platform.N64 -> LandscapeN64Layout(config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
+            Platform.PS1 -> LandscapePS1Layout(model, config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
+            Platform.GENESIS -> LandscapeGenesisLayout(config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
+            else -> LandscapeSNESLayout(model, config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
         }
     }
 }
 
 @Composable
 private fun LandscapeN64Layout(
-    model: ControllerModel,
-    globalOpacity: Float, globalSizeMultiplier: Float,
-    buttonProps: Map<Int, ButtonProps>, selectedButtonId: Int?, onSelectButton: (Int?) -> Unit,
-    enabled: Boolean, isEditing: Boolean, onUpdateProps: (Int, ButtonProps) -> Unit, onInteraction: () -> Unit
+    config: ControlLayoutConfig, opacity: Float, size: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit, onInteraction: () -> Unit
 ) {
     val context = LocalContext.current
     Box(modifier = Modifier.fillMaxSize()) {
-        Box(modifier = Modifier.align(Alignment.CenterStart).padding(start = 48.dp)) {
-            VirtualJoystick(modifier = Modifier.alpha(globalOpacity), size = (160 * globalSizeMultiplier).dp, onMoved = { x, y -> onInteraction(); (context as? MainActivity)?.setAnalogInput(x, y) })
+        Box(modifier = Modifier.align(Alignment.TopStart).padding(start = 64.dp, top = 24.dp)) {
+            GameButton(icon = Icons.Default.KeyboardArrowLeft, text = "L", buttonId = MainActivity.BTN_L, modifier = Modifier.size((70 * size).dp, (35 * size).dp), props = buttonProps[MainActivity.BTN_L], isSelected = selectedId == MainActivity.BTN_L, onSelect = { onSelect(MainActivity.BTN_L) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, onInteraction = onInteraction)
         }
-        Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 48.dp)) {
-            N64ActionButtons(globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
+        Box(modifier = Modifier.align(Alignment.TopEnd).padding(end = 64.dp, top = 24.dp)) {
+            GameButton(icon = Icons.Default.KeyboardArrowRight, text = "R", buttonId = MainActivity.BTN_R, modifier = Modifier.size((70 * size).dp, (35 * size).dp), props = buttonProps[MainActivity.BTN_R], isSelected = selectedId == MainActivity.BTN_R, onSelect = { onSelect(MainActivity.BTN_R) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, onInteraction = onInteraction)
+        }
+        Box(modifier = Modifier.align(Alignment.TopStart).padding(start = 48.dp, top = 70.dp)) {
+            DPadLayout(config, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction, isN64 = true)
+        }
+        Box(modifier = Modifier.align(Alignment.TopStart).padding(start = 72.dp, top = 230.dp)) {
+            VirtualJoystick(modifier = Modifier.alpha(opacity), size = (100 * size).dp, onMoved = { x, y -> onInteraction(); (context as? MainActivity)?.setAnalogInput(x, y) })
+        }
+        Box(modifier = Modifier.align(Alignment.TopStart).padding(start = 165.dp, top = 24.dp)) {
+            N64StartButton(opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+        }
+        Box(modifier = Modifier.align(Alignment.BottomEnd).padding(end = 48.dp, bottom = 30.dp)) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                val btnSize = (60 * size).dp
+                Box(modifier = Modifier.size((130 * size).dp)) {
+                    Box(modifier = Modifier.align(Alignment.TopCenter)) {
+                        GameButton(text = "Z", buttonId = MainActivity.BTN_Z, modifier = Modifier.size(btnSize), props = buttonProps[MainActivity.BTN_Z], isSelected = selectedId == MainActivity.BTN_Z, onSelect = { onSelect(MainActivity.BTN_Z) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = Color(0xFFB39DDB), onInteraction = onInteraction)
+                    }
+                    Box(modifier = Modifier.align(Alignment.BottomStart)) {
+                        GameButton(text = "B", buttonId = MainActivity.BTN_B, modifier = Modifier.size(btnSize), props = buttonProps[MainActivity.BTN_B], isSelected = selectedId == MainActivity.BTN_B, onSelect = { onSelect(MainActivity.BTN_B) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = Color(0xFF4CAF50), onInteraction = onInteraction)
+                    }
+                    Box(modifier = Modifier.align(Alignment.BottomEnd)) {
+                        GameButton(text = "A", buttonId = MainActivity.BTN_A, modifier = Modifier.size(btnSize), props = buttonProps[MainActivity.BTN_A], isSelected = selectedId == MainActivity.BTN_A, onSelect = { onSelect(MainActivity.BTN_A) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = Color(0xFF2196F3), onInteraction = onInteraction)
+                    }
+                }
+                CButtonCluster(opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction, baseBtnSize = 35)
+            }
         }
     }
 }
 
 @Composable
-private fun LandscapeGenesisLayout(
-    model: ControllerModel,
-    globalOpacity: Float, globalSizeMultiplier: Float,
-    buttonProps: Map<Int, ButtonProps>, selectedButtonId: Int?, onSelectButton: (Int?) -> Unit,
-    enabled: Boolean, isEditing: Boolean, onUpdateProps: (Int, ButtonProps) -> Unit, onInteraction: () -> Unit
+private fun PortraitN64Layout(
+    config: ControlLayoutConfig, opacity: Float, size: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit,
+    onMenu: () -> Unit, onInteraction: () -> Unit,
+    vScale: Float = 1.0f 
 ) {
+    val context = LocalContext.current
     Box(modifier = Modifier.fillMaxSize()) {
-        Box(modifier = Modifier.align(Alignment.CenterStart).padding(start = 32.dp)) {
-            DPadLayout(globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
+        // HEADER: L, Start, R
+        Row(
+            modifier = Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = (8 * vScale).dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            GameButton(icon = Icons.Default.KeyboardArrowLeft, text = "L", buttonId = MainActivity.BTN_L, modifier = Modifier.size((70 * size).dp, (35 * size).dp), props = buttonProps[MainActivity.BTN_L], isSelected = selectedId == MainActivity.BTN_L, onSelect = { onSelect(MainActivity.BTN_L) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, onInteraction = onInteraction)
+            N64StartButton(opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+            GameButton(icon = Icons.Default.KeyboardArrowRight, text = "R", buttonId = MainActivity.BTN_R, modifier = Modifier.size((70 * size).dp, (35 * size).dp), props = buttonProps[MainActivity.BTN_R], isSelected = selectedId == MainActivity.BTN_R, onSelect = { onSelect(MainActivity.BTN_R) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, onInteraction = onInteraction)
         }
-        Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 32.dp)) {
-            GenesisActionButtons(globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
+
+        // MIDDLE AREA: Joystick Left, Actions Right (Shifted UP)
+        // Joystick
+        Box(modifier = Modifier.align(Alignment.CenterStart).padding(start = 24.dp).offset(y = (-45 * vScale).dp)) {
+            VirtualJoystick(modifier = Modifier.alpha(opacity), size = (130 * size).dp, onMoved = { x, y -> onInteraction(); (context as? MainActivity)?.setAnalogInput(x, y) })
+        }
+
+        // Action Triangle (Z, B, A)
+        Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 24.dp).offset(y = (-45 * vScale).dp)) {
+            val btnSize = (64 * size).dp
+            Box(modifier = Modifier.size((140 * size).dp)) {
+                Box(modifier = Modifier.align(Alignment.TopCenter)) {
+                    GameButton(text = "Z", buttonId = MainActivity.BTN_Z, modifier = Modifier.size(btnSize), props = buttonProps[MainActivity.BTN_Z], isSelected = selectedId == MainActivity.BTN_Z, onSelect = { onSelect(MainActivity.BTN_Z) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = Color(0xFFB39DDB), onInteraction = onInteraction)
+                }
+                Box(modifier = Modifier.align(Alignment.BottomStart)) {
+                    GameButton(text = "B", buttonId = MainActivity.BTN_B, modifier = Modifier.size(btnSize), props = buttonProps[MainActivity.BTN_B], isSelected = selectedId == MainActivity.BTN_B, onSelect = { onSelect(MainActivity.BTN_B) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = Color(0xFF4CAF50), onInteraction = onInteraction)
+                }
+                Box(modifier = Modifier.align(Alignment.BottomEnd)) {
+                    GameButton(text = "A", buttonId = MainActivity.BTN_A, modifier = Modifier.size(btnSize), props = buttonProps[MainActivity.BTN_A], isSelected = selectedId == MainActivity.BTN_A, onSelect = { onSelect(MainActivity.BTN_A) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = Color(0xFF2196F3), onInteraction = onInteraction)
+                }
+            }
+        }
+
+        // BOTTOM AREA: DPad and C-Buttons (Lowered more toward Menu)
+        Box(modifier = Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = (55 * vScale).dp)) {
+            DPadLayout(config, opacity, size * 0.85f, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction, isN64 = true)
+        }
+        Box(modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = (55 * vScale).dp)) {
+            CButtonCluster(opacity, size * 0.85f, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction, baseBtnSize = 45)
+        }
+
+        // MENU BUTTON: Absolute Bottom Middle
+        Box(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = (16 * vScale).dp)) {
+            MenuButton(onClick = onMenu, opacity = opacity, onInteraction = onInteraction)
+        }
+    }
+}
+
+@Composable
+private fun LandscapePS1Layout(
+    model: ControllerModel, config: ControlLayoutConfig, opacity: Float, size: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit, onInteraction: () -> Unit
+) {
+    // Reduced base size for PS1 Landscape Triggers (86x40dp)
+    val trigW = (86 * size).dp
+    val trigH = (40 * size).dp
+    
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Triggers moved UP (Reduced top padding) and more INWARD
+        Column(modifier = Modifier.align(Alignment.TopStart).padding(start = 64.dp, top = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            GameButton(icon = Icons.Default.KeyboardDoubleArrowDown, text = "L2", buttonId = MainActivity.BTN_L2, modifier = Modifier.size(trigW, trigH), props = buttonProps[MainActivity.BTN_L2], isSelected = selectedId == MainActivity.BTN_L2, onSelect = { onSelect(MainActivity.BTN_L2) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, onInteraction = onInteraction)
+            GameButton(icon = Icons.Default.KeyboardArrowLeft, text = "L1", buttonId = MainActivity.BTN_L, modifier = Modifier.size(trigW, trigH), props = buttonProps[MainActivity.BTN_L], isSelected = selectedId == MainActivity.BTN_L, onSelect = { onSelect(MainActivity.BTN_L) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, onInteraction = onInteraction)
+        }
+        Column(modifier = Modifier.align(Alignment.TopEnd).padding(end = 64.dp, top = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            GameButton(icon = Icons.Default.KeyboardDoubleArrowDown, text = "R2", buttonId = MainActivity.BTN_R2, modifier = Modifier.size(trigW, trigH), props = buttonProps[MainActivity.BTN_R2], isSelected = selectedId == MainActivity.BTN_R2, onSelect = { onSelect(MainActivity.BTN_R2) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, onInteraction = onInteraction)
+            GameButton(icon = Icons.Default.KeyboardArrowRight, text = "R1", buttonId = MainActivity.BTN_R, modifier = Modifier.size(trigW, trigH), props = buttonProps[MainActivity.BTN_R], isSelected = selectedId == MainActivity.BTN_R, onSelect = { onSelect(MainActivity.BTN_R) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, onInteraction = onInteraction)
+        }
+        // DPad and Action Buttons moved DOWN
+        Box(modifier = Modifier.align(Alignment.CenterStart).padding(start = 32.dp, top = 48.dp)) { DPadLayout(config, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction) }
+        Row(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
+            GameButton(icon = Icons.Default.HorizontalRule, text = "SEL", buttonId = MainActivity.BTN_SELECT, modifier = Modifier.size((60 * size).dp, (30 * size).dp), props = buttonProps[MainActivity.BTN_SELECT], isSelected = selectedId == MainActivity.BTN_SELECT, onSelect = { onSelect(MainActivity.BTN_SELECT) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, onInteraction = onInteraction)
+            GameButton(icon = Icons.Default.PlayArrow, text = "START", buttonId = MainActivity.BTN_START, modifier = Modifier.size((60 * size).dp, (30 * size).dp), props = buttonProps[MainActivity.BTN_START], isSelected = selectedId == MainActivity.BTN_START, onSelect = { onSelect(MainActivity.BTN_START) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, onInteraction = onInteraction)
+        }
+        Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 32.dp, top = 48.dp)) { PS1ActionButtons(model, config, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction) }
+    }
+}
+
+@Composable
+private fun PortraitPS1Layout(
+    model: ControllerModel, config: ControlLayoutConfig, opacity: Float, size: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit,
+    onMenu: () -> Unit, onInteraction: () -> Unit,
+    vScale: Float = 1.0f
+) {
+    // Reduced base size for PS1 Portrait Triggers (74x34dp)
+    val triggerSize = (74 * size).dp
+    val triggerHeight = (34 * size).dp
+    val isModern = config.visualStyle == VisualStyle.MODERN
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxWidth().padding(top = (8 * vScale).dp), contentAlignment = Alignment.TopCenter) {
+            MenuButton(onClick = onMenu, opacity = opacity, onInteraction = onInteraction)
+        }
+
+        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            // TRIGGERS moved UP (Reduced top padding)
+            Column(modifier = Modifier.align(Alignment.TopStart).padding(start = 22.dp, top = (12 * vScale).dp), verticalArrangement = Arrangement.spacedBy((4 * vScale).dp)) {
+                GameButton(icon = Icons.Default.KeyboardDoubleArrowDown, text = "L2", buttonId = MainActivity.BTN_L2, modifier = Modifier.size(triggerSize, triggerHeight), props = buttonProps[MainActivity.BTN_L2], isSelected = selectedId == MainActivity.BTN_L2, onSelect = { onSelect(MainActivity.BTN_L2) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, onInteraction = onInteraction)
+                GameButton(icon = Icons.Default.KeyboardArrowLeft, text = "L1", buttonId = MainActivity.BTN_L, modifier = Modifier.size(triggerSize, triggerHeight).offset(x = if (isModern) 24.dp else 0.dp, y = if (isModern) 12.dp else 0.dp), props = buttonProps[MainActivity.BTN_L], isSelected = selectedId == MainActivity.BTN_L, onSelect = { onSelect(MainActivity.BTN_L) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, onInteraction = onInteraction)
+            }
+
+            Column(modifier = Modifier.align(Alignment.TopEnd).padding(end = 22.dp, top = (12 * vScale).dp), verticalArrangement = Arrangement.spacedBy((4 * vScale).dp)) {
+                GameButton(icon = Icons.Default.KeyboardDoubleArrowDown, text = "R2", buttonId = MainActivity.BTN_R2, modifier = Modifier.size(triggerSize, triggerHeight), props = buttonProps[MainActivity.BTN_R2], isSelected = selectedId == MainActivity.BTN_R2, onSelect = { onSelect(MainActivity.BTN_R2) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, onInteraction = onInteraction)
+                GameButton(icon = Icons.Default.KeyboardArrowRight, text = "R1", buttonId = MainActivity.BTN_R, modifier = Modifier.size(triggerSize, triggerHeight).offset(x = if (isModern) (-24).dp else 0.dp, y = if (isModern) 12.dp else 0.dp), props = buttonProps[MainActivity.BTN_R], isSelected = selectedId == MainActivity.BTN_R, onSelect = { onSelect(MainActivity.BTN_R) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, onInteraction = onInteraction)
+            }
+
+            Box(modifier = Modifier.align(Alignment.CenterStart).padding(start = 16.dp)) {
+                DPadLayout(config, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+            }
+            CenterButtons(config, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+            Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 16.dp)) {
+                PS1ActionButtons(model, config, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PortraitSNESLayout(
+    model: ControllerModel, config: ControlLayoutConfig, opacity: Float, size: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit,
+    onMenu: () -> Unit, onInteraction: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        ShoulderButtonsPortrait(config, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onMenu, onInteraction)
+        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            Box(modifier = Modifier.align(Alignment.TopStart).padding(start = 16.dp, top = 16.dp)) { DPadLayout(config, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction) }
+            CenterButtons(config, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+            Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 16.dp, bottom = 60.dp)) { SNESActionButtons(model, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction) }
         }
     }
 }
 
 @Composable
 private fun LandscapeSNESLayout(
-    model: ControllerModel,
-    globalOpacity: Float, globalSizeMultiplier: Float,
-    buttonProps: Map<Int, ButtonProps>, selectedButtonId: Int?, onSelectButton: (Int?) -> Unit,
-    enabled: Boolean, isEditing: Boolean, onUpdateProps: (Int, ButtonProps) -> Unit, onInteraction: () -> Unit
+    model: ControllerModel, config: ControlLayoutConfig, opacity: Float, size: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit, onInteraction: () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
-        Box(modifier = Modifier.align(Alignment.CenterStart).padding(start = 32.dp)) {
-            DPadLayout(globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
+        Box(modifier = Modifier.align(Alignment.CenterStart).padding(start = 32.dp)) { DPadLayout(config, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction) }
+        Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 32.dp)) { SNESActionButtons(model, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction) }
+    }
+}
+
+@Composable
+private fun LandscapeGenesisLayout(
+    config: ControlLayoutConfig, opacity: Float, size: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit, onInteraction: () -> Unit
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.align(Alignment.CenterStart).padding(start = 32.dp)) { DPadLayout(config, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction) }
+        
+        // Added missing START button for Genesis Landscape
+        Box(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp)) {
+            GameButton(
+                text = "START", 
+                buttonId = MainActivity.BTN_START, 
+                modifier = Modifier.size((70 * size).dp, (30 * size).dp), 
+                props = buttonProps[MainActivity.BTN_START], 
+                isSelected = selectedId == MainActivity.BTN_START, 
+                onSelect = { onSelect(MainActivity.BTN_START) }, 
+                enabled = enabled, 
+                isEditing = isEditing, 
+                onUpdateProps = onUpdate, 
+                alpha = opacity, 
+                onInteraction = onInteraction
+            )
         }
-        Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 32.dp)) {
-            SNESActionButtons(model, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
+
+        Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 32.dp)) { GenesisActionButtons(opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction) }
+    }
+}
+
+@Composable
+private fun PortraitGenesisLayout(
+    config: ControlLayoutConfig, opacity: Float, size: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit,
+    onMenu: () -> Unit, onInteraction: () -> Unit,
+    vScale: Float = 1.0f
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxWidth().padding(top = (8 * vScale).dp), contentAlignment = Alignment.TopCenter) {
+            MenuButton(onClick = onMenu, opacity = opacity, onInteraction = onInteraction)
+        }
+
+        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            Box(modifier = Modifier.align(Alignment.TopCenter).padding(top = (24 * vScale).dp)) {
+                GameButton(text = "START", buttonId = MainActivity.BTN_START, modifier = Modifier.size((70 * size).dp, (35 * size).dp), props = buttonProps[MainActivity.BTN_START], isSelected = selectedId == MainActivity.BTN_START, onSelect = { onSelect(MainActivity.BTN_START) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, onInteraction = onInteraction)
+            }
+            Box(modifier = Modifier.align(Alignment.CenterStart).padding(start = 16.dp)) { DPadLayout(config, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction) }
+            Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 16.dp)) { GenesisActionButtons(opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction) }
         }
     }
 }
 
 @Composable
 private fun DPadLayout(
-    globalOpacity: Float, globalSizeMultiplier: Float,
-    buttonProps: Map<Int, ButtonProps>, selectedButtonId: Int?, onSelectButton: (Int?) -> Unit,
-    enabled: Boolean, isEditing: Boolean, onUpdateProps: (Int, ButtonProps) -> Unit, onInteraction: () -> Unit
+    config: ControlLayoutConfig, opacity: Float, size: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit,
+    onInteraction: () -> Unit, isN64: Boolean = false
 ) {
-    val btnSize = (55 * globalSizeMultiplier).dp
+    // Significantly increased base size for DPad (68dp from 64dp) for better reach
+    val btnSize = ((if (isN64) 55 else 56) * size).dp
+    val isClassic = config.visualStyle == VisualStyle.CLASSIC
+    val buttonColor = if (isN64 && isClassic) Color(0xFFE0E0E0) else MaterialTheme.colorScheme.primary
+    val iconTint = if (isN64 && isClassic) Color.Black else Color.White
+    val borderColor = if (isClassic) Color.LightGray.copy(alpha = 0.5f) else Color.Transparent
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        GameButton(
-            icon = Icons.Default.ArrowUpward,
-            buttonId = MainActivity.BTN_UP,
-            modifier = Modifier.size(btnSize),
-            props = buttonProps[MainActivity.BTN_UP],
-            isSelected = selectedButtonId == MainActivity.BTN_UP,
-            onSelect = { onSelectButton(MainActivity.BTN_UP) },
-            enabled = enabled,
-            isEditing = isEditing,
-            onUpdateProps = onUpdateProps,
-            alpha = globalOpacity,
-            onInteraction = onInteraction
-        )
+        GameButton(icon = Icons.Default.ArrowUpward, buttonId = MainActivity.BTN_UP, modifier = Modifier.size(btnSize), props = buttonProps[MainActivity.BTN_UP], isSelected = selectedId == MainActivity.BTN_UP, onSelect = { onSelect(MainActivity.BTN_UP) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = buttonColor, iconTint = iconTint, borderColor = borderColor, onInteraction = onInteraction)
         Row {
-            GameButton(
-                icon = Icons.AutoMirrored.Filled.ArrowBack,
-                buttonId = MainActivity.BTN_LEFT,
-                modifier = Modifier.size(btnSize),
-                props = buttonProps[MainActivity.BTN_LEFT],
-                isSelected = selectedButtonId == MainActivity.BTN_LEFT,
-                onSelect = { onSelectButton(MainActivity.BTN_LEFT) },
-                enabled = enabled,
-                isEditing = isEditing,
-                onUpdateProps = onUpdateProps,
-                alpha = globalOpacity,
-                onInteraction = onInteraction
-            )
+            GameButton(icon = Icons.AutoMirrored.Filled.ArrowBack, buttonId = MainActivity.BTN_LEFT, modifier = Modifier.size(btnSize), props = buttonProps[MainActivity.BTN_LEFT], isSelected = selectedId == MainActivity.BTN_LEFT, onSelect = { onSelect(MainActivity.BTN_LEFT) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = buttonColor, iconTint = iconTint, borderColor = borderColor, onInteraction = onInteraction)
             Spacer(Modifier.size(btnSize))
-            GameButton(
-                icon = Icons.AutoMirrored.Filled.ArrowForward,
-                buttonId = MainActivity.BTN_RIGHT,
-                modifier = Modifier.size(btnSize),
-                props = buttonProps[MainActivity.BTN_RIGHT],
-                isSelected = selectedButtonId == MainActivity.BTN_RIGHT,
-                onSelect = { onSelectButton(MainActivity.BTN_RIGHT) },
-                enabled = enabled,
-                isEditing = isEditing,
-                onUpdateProps = onUpdateProps,
-                alpha = globalOpacity,
-                onInteraction = onInteraction
-            )
+            GameButton(icon = Icons.AutoMirrored.Filled.ArrowForward, buttonId = MainActivity.BTN_RIGHT, modifier = Modifier.size(btnSize), props = buttonProps[MainActivity.BTN_RIGHT], isSelected = selectedId == MainActivity.BTN_RIGHT, onSelect = { onSelect(MainActivity.BTN_RIGHT) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = buttonColor, iconTint = iconTint, borderColor = borderColor, onInteraction = onInteraction)
         }
-        GameButton(
-            icon = Icons.Default.ArrowDownward,
-            buttonId = MainActivity.BTN_DOWN,
-            modifier = Modifier.size(btnSize),
-            props = buttonProps[MainActivity.BTN_DOWN],
-            isSelected = selectedButtonId == MainActivity.BTN_DOWN,
-            onSelect = { onSelectButton(MainActivity.BTN_DOWN) },
-            enabled = enabled,
-            isEditing = isEditing,
-            onUpdateProps = onUpdateProps,
-            alpha = globalOpacity,
-            onInteraction = onInteraction
-        )
+        GameButton(icon = Icons.Default.ArrowDownward, buttonId = MainActivity.BTN_DOWN, modifier = Modifier.size(btnSize), props = buttonProps[MainActivity.BTN_DOWN], isSelected = selectedId == MainActivity.BTN_DOWN, onSelect = { onSelect(MainActivity.BTN_DOWN) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = buttonColor, iconTint = iconTint, borderColor = borderColor, onInteraction = onInteraction)
     }
 }
 
 @Composable
 private fun SNESActionButtons(
-    model: ControllerModel,
-    globalOpacity: Float, globalSizeMultiplier: Float,
-    buttonProps: Map<Int, ButtonProps>, selectedButtonId: Int?, onSelectButton: (Int?) -> Unit,
-    enabled: Boolean, isEditing: Boolean, onUpdateProps: (Int, ButtonProps) -> Unit, onInteraction: () -> Unit
+    model: ControllerModel, opacity: Float, size: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit, onInteraction: () -> Unit
 ) {
-    val btnSize = (55 * globalSizeMultiplier).dp
-    
+    val btnSize = (48 * size).dp
     val (labelA, labelB, labelX, labelY) = when(model) {
         ControllerModel.PLAYSTATION -> listOf("○", "✕", "△", "□")
         ControllerModel.XBOX -> listOf("B", "A", "Y", "X")
-        ControllerModel.N64 -> listOf("A", "B", "C-Up", "C-Left")
         else -> listOf("A", "B", "X", "Y")
     }
-
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        GameButton(
-            text = labelX,
-            buttonId = MainActivity.BTN_X,
-            modifier = Modifier.size(btnSize),
-            icon = when (model) {
-                ControllerModel.N64 -> Icons.Default.ArrowDropUp
-                ControllerModel.PLAYSTATION -> Icons.Default.ChangeHistory
-                else -> null
-            },
-            props = buttonProps[MainActivity.BTN_X],
-            isSelected = selectedButtonId == MainActivity.BTN_X,
-            onSelect = { onSelectButton(MainActivity.BTN_X) },
-            enabled = enabled,
-            isEditing = isEditing,
-            onUpdateProps = onUpdateProps,
-            alpha = globalOpacity,
-            onInteraction = onInteraction
-        )
+        GameButton(text = labelX, buttonId = MainActivity.BTN_X, modifier = Modifier.size(btnSize), props = buttonProps[MainActivity.BTN_X], isSelected = selectedId == MainActivity.BTN_X, onSelect = { onSelect(MainActivity.BTN_X) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, onInteraction = onInteraction)
         Row {
-            GameButton(
-                text = labelY,
-                buttonId = MainActivity.BTN_Y,
-                modifier = Modifier.size(btnSize),
-                icon = when (model) {
-                    ControllerModel.N64 -> Icons.AutoMirrored.Filled.ArrowLeft
-                    ControllerModel.PLAYSTATION -> Icons.Default.CheckBoxOutlineBlank
-                    else -> null
-                },
-                props = buttonProps[MainActivity.BTN_Y],
-                isSelected = selectedButtonId == MainActivity.BTN_Y,
-                onSelect = { onSelectButton(MainActivity.BTN_Y) },
-                enabled = enabled,
-                isEditing = isEditing,
-                onUpdateProps = onUpdateProps,
-                alpha = globalOpacity,
-                onInteraction = onInteraction
-            )
+            GameButton(text = labelY, buttonId = MainActivity.BTN_Y, modifier = Modifier.size(btnSize), props = buttonProps[MainActivity.BTN_Y], isSelected = selectedId == MainActivity.BTN_Y, onSelect = { onSelect(MainActivity.BTN_Y) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = Color(0xFFE91E63), onInteraction = onInteraction)
             Spacer(Modifier.size(btnSize))
-            GameButton(
-                text = labelA,
-                buttonId = MainActivity.BTN_A,
-                modifier = Modifier.size(btnSize),
-                icon = if (model == ControllerModel.PLAYSTATION) Icons.Default.RadioButtonUnchecked else null,
-                props = buttonProps[MainActivity.BTN_A],
-                isSelected = selectedButtonId == MainActivity.BTN_A,
-                onSelect = { onSelectButton(MainActivity.BTN_A) },
-                enabled = enabled,
-                isEditing = isEditing,
-                onUpdateProps = onUpdateProps,
-                alpha = globalOpacity,
-                buttonColor = Color(0xFFE91E63),
-                onInteraction = onInteraction
-            )
+            GameButton(text = labelA, buttonId = MainActivity.BTN_A, modifier = Modifier.size(btnSize), props = buttonProps[MainActivity.BTN_A], isSelected = selectedId == MainActivity.BTN_A, onSelect = { onSelect(MainActivity.BTN_A) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = Color(0xFFE91E63), onInteraction = onInteraction)
         }
-        GameButton(
-            text = labelB,
-            buttonId = MainActivity.BTN_B,
-            modifier = Modifier.size(btnSize),
-            icon = if (model == ControllerModel.PLAYSTATION) Icons.Default.Close else null,
-            props = buttonProps[MainActivity.BTN_B],
-            isSelected = selectedButtonId == MainActivity.BTN_B,
-            onSelect = { onSelectButton(MainActivity.BTN_B) },
-            enabled = enabled,
-            isEditing = isEditing,
-            onUpdateProps = onUpdateProps,
-            alpha = globalOpacity,
-            buttonColor = Color(0xFF4CAF50),
-            onInteraction = onInteraction
-        )
+        GameButton(text = labelB, buttonId = MainActivity.BTN_B, modifier = Modifier.size(btnSize), props = buttonProps[MainActivity.BTN_B], isSelected = selectedId == MainActivity.BTN_B, onSelect = { onSelect(MainActivity.BTN_B) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = Color(0xFF4CAF50), onInteraction = onInteraction)
     }
 }
 
 @Composable
 private fun PS1ActionButtons(
-    model: ControllerModel,
-    globalOpacity: Float, globalSizeMultiplier: Float,
-    buttonProps: Map<Int, ButtonProps>, selectedButtonId: Int?, onSelectButton: (Int?) -> Unit,
-    enabled: Boolean, isEditing: Boolean, onUpdateProps: (Int, ButtonProps) -> Unit, onInteraction: () -> Unit
+    model: ControllerModel, config: ControlLayoutConfig, opacity: Float, size: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit, onInteraction: () -> Unit
 ) {
-    // Reuse SNES layout logic but specifically for PS1 buttons
-    SNESActionButtons(model, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
-}
-
-@Composable
-private fun N64ActionButtons(
-    globalOpacity: Float, globalSizeMultiplier: Float,
-    buttonProps: Map<Int, ButtonProps>, selectedButtonId: Int?, onSelectButton: (Int?) -> Unit,
-    enabled: Boolean, isEditing: Boolean, onUpdateProps: (Int, ButtonProps) -> Unit, onInteraction: () -> Unit
-) {
-    val btnSize = (68 * globalSizeMultiplier).dp
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            GameButton(
-                text = "Z",
-                buttonId = MainActivity.BTN_Z,
-                modifier = Modifier.size(btnSize),
-                icon = Icons.Default.KeyboardDoubleArrowDown,
-                props = buttonProps[MainActivity.BTN_Z],
-                isSelected = selectedButtonId == MainActivity.BTN_Z,
-                onSelect = { onSelectButton(MainActivity.BTN_Z) },
-                enabled = enabled,
-                isEditing = isEditing,
-                onUpdateProps = onUpdateProps,
-                alpha = globalOpacity,
-                buttonColor = Color(0xFFB39DDB),
-                onInteraction = onInteraction
-            )
-            GameButton(
-                text = "B",
-                buttonId = MainActivity.BTN_B,
-                modifier = Modifier.size(btnSize),
-                props = buttonProps[MainActivity.BTN_B],
-                isSelected = selectedButtonId == MainActivity.BTN_B,
-                onSelect = { onSelectButton(MainActivity.BTN_B) },
-                enabled = enabled,
-                isEditing = isEditing,
-                onUpdateProps = onUpdateProps,
-                alpha = globalOpacity,
-                onInteraction = onInteraction
-            )
+    // Increased base size for PS1 Action Buttons (56dp)
+    val btnSize = (56 * size).dp
+    val isClassic = config.visualStyle == VisualStyle.CLASSIC
+    val buttonColor = if (isClassic) Color.Black else MaterialTheme.colorScheme.primary
+    val borderColor = if (isClassic) Color(0xFFBDBDBD) else Color.Transparent
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        GameButton(text = if (isClassic) "" else "△", buttonId = MainActivity.BTN_X, modifier = Modifier.size(btnSize), icon = Icons.Default.ChangeHistory, iconOffset = DpOffset(0.dp, (-2).dp), props = buttonProps[MainActivity.BTN_X], isSelected = selectedId == MainActivity.BTN_X, onSelect = { onSelect(MainActivity.BTN_X) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = buttonColor, iconTint = if (isClassic) Color.Green else Color.White, borderColor = borderColor, onInteraction = onInteraction)
+        Row {
+            GameButton(text = if (isClassic) "" else "□", buttonId = MainActivity.BTN_Y, modifier = Modifier.size(btnSize), icon = Icons.Default.CheckBoxOutlineBlank, props = buttonProps[MainActivity.BTN_Y], isSelected = selectedId == MainActivity.BTN_Y, onSelect = { onSelect(MainActivity.BTN_Y) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = buttonColor, iconTint = if (isClassic) Color(0xFFF06292) else Color.White, borderColor = borderColor, onInteraction = onInteraction)
+            Spacer(Modifier.size(btnSize))
+            GameButton(text = if (isClassic) "" else "○", buttonId = MainActivity.BTN_A, modifier = Modifier.size(btnSize), icon = Icons.Default.RadioButtonUnchecked, iconOffset = DpOffset(1.dp, 0.dp), props = buttonProps[MainActivity.BTN_A], isSelected = selectedId == MainActivity.BTN_A, onSelect = { onSelect(MainActivity.BTN_A) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = buttonColor, iconTint = if (isClassic) Color.Red else Color.White, borderColor = borderColor, onInteraction = onInteraction)
         }
-        GameButton(
-            text = "A",
-            buttonId = MainActivity.BTN_A,
-            modifier = Modifier.size(btnSize),
-            props = buttonProps[MainActivity.BTN_A],
-            isSelected = selectedButtonId == MainActivity.BTN_A,
-            onSelect = { onSelectButton(MainActivity.BTN_A) },
-            enabled = enabled,
-            isEditing = isEditing,
-            onUpdateProps = onUpdateProps,
-            alpha = globalOpacity,
-            buttonColor = Color(0xFF4CAF50),
-            onInteraction = onInteraction
-        )
+        GameButton(text = if (isClassic) "" else "✕", buttonId = MainActivity.BTN_B, modifier = Modifier.size(btnSize), icon = Icons.Default.Close, props = buttonProps[MainActivity.BTN_B], isSelected = selectedId == MainActivity.BTN_B, onSelect = { onSelect(MainActivity.BTN_B) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = buttonColor, iconTint = if (isClassic) Color(0xFF64B5F6) else Color.White, borderColor = borderColor, onInteraction = onInteraction)
     }
 }
 
 @Composable
 private fun GenesisActionButtons(
-    globalOpacity: Float, globalSizeMultiplier: Float,
-    buttonProps: Map<Int, ButtonProps>, selectedButtonId: Int?, onSelectButton: (Int?) -> Unit,
-    enabled: Boolean, isEditing: Boolean, onUpdateProps: (Int, ButtonProps) -> Unit, onInteraction: () -> Unit
+    opacity: Float, size: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit, onInteraction: () -> Unit
 ) {
-    val btnSize = (60 * globalSizeMultiplier).dp
-    Column(horizontalAlignment = Alignment.End) {
-        GameButton(
-            text = "C",
-            buttonId = MainActivity.BTN_A,
-            modifier = Modifier.size(btnSize),
-            props = buttonProps[MainActivity.BTN_A],
-            isSelected = selectedButtonId == MainActivity.BTN_A,
-            onSelect = { onSelectButton(MainActivity.BTN_A) },
-            enabled = enabled,
-            isEditing = isEditing,
-            onUpdateProps = onUpdateProps,
-            alpha = globalOpacity,
-            onInteraction = onInteraction
-        )
-        Spacer(Modifier.height(4.dp))
-        Row {
-            GameButton(
-                text = "B",
-                buttonId = MainActivity.BTN_B,
-                modifier = Modifier.size(btnSize),
-                props = buttonProps[MainActivity.BTN_B],
-                isSelected = selectedButtonId == MainActivity.BTN_B,
-                onSelect = { onSelectButton(MainActivity.BTN_B) },
-                enabled = enabled,
-                isEditing = isEditing,
-                onUpdateProps = onUpdateProps,
-                alpha = globalOpacity,
-                onInteraction = onInteraction
-            )
-            Spacer(Modifier.width(4.dp))
+    val btnSize = (60 * size).dp
+    // Triangle cluster (B top, A left, C right)
+    Box(modifier = Modifier.size((140 * size).dp)) {
+        // Top: B (Center)
+        Box(modifier = Modifier.align(Alignment.TopCenter)) {
+            GameButton(text = "B", buttonId = MainActivity.BTN_B, modifier = Modifier.size(btnSize), props = buttonProps[MainActivity.BTN_B], isSelected = selectedId == MainActivity.BTN_B, onSelect = { onSelect(MainActivity.BTN_B) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, onInteraction = onInteraction)
         }
-        Spacer(Modifier.height(4.dp))
+        // Bottom Left: A
+        Box(modifier = Modifier.align(Alignment.BottomStart)) {
+            GameButton(text = "A", buttonId = MainActivity.BTN_Y, modifier = Modifier.size(btnSize), props = buttonProps[MainActivity.BTN_Y], isSelected = selectedId == MainActivity.BTN_Y, onSelect = { onSelect(MainActivity.BTN_Y) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, onInteraction = onInteraction)
+        }
+        // Bottom Right: C
+        Box(modifier = Modifier.align(Alignment.BottomEnd)) {
+            GameButton(text = "C", buttonId = MainActivity.BTN_A, modifier = Modifier.size(btnSize), props = buttonProps[MainActivity.BTN_A], isSelected = selectedId == MainActivity.BTN_A, onSelect = { onSelect(MainActivity.BTN_A) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, onInteraction = onInteraction)
+        }
+    }
+}
+
+@Composable
+private fun CButtonCluster(
+    opacity: Float, size: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit, onInteraction: () -> Unit,
+    baseBtnSize: Int = 50
+) {
+    val btnSize = (baseBtnSize * size).dp
+    val cColor = Color(0xFFFFD54F)
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        GameButton(text = "C", buttonId = MainActivity.BTN_X, modifier = Modifier.size(btnSize), icon = Icons.Default.ArrowDropUp, props = buttonProps[MainActivity.BTN_X], isSelected = selectedId == MainActivity.BTN_X, onSelect = { onSelect(MainActivity.BTN_X) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = cColor, onInteraction = onInteraction)
         Row {
-            GameButton(
-                text = "A",
-                buttonId = MainActivity.BTN_Y,
-                modifier = Modifier.size(btnSize),
-                props = buttonProps[MainActivity.BTN_Y],
-                isSelected = selectedButtonId == MainActivity.BTN_Y,
-                onSelect = { onSelectButton(MainActivity.BTN_Y) },
-                enabled = enabled,
-                isEditing = isEditing,
-                onUpdateProps = onUpdateProps,
-                alpha = globalOpacity,
-                onInteraction = onInteraction
-            )
-            Spacer(Modifier.width(8.dp))
+            GameButton(text = "C", buttonId = MainActivity.BTN_Y, modifier = Modifier.size(btnSize), icon = Icons.AutoMirrored.Filled.ArrowLeft, props = buttonProps[MainActivity.BTN_Y], isSelected = selectedId == MainActivity.BTN_Y, onSelect = { onSelect(MainActivity.BTN_Y) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = cColor, onInteraction = onInteraction)
+            Spacer(Modifier.size(btnSize))
+            GameButton(text = "C", buttonId = MainActivity.BTN_R2, modifier = Modifier.size(btnSize), icon = Icons.AutoMirrored.Filled.ArrowRight, props = buttonProps[MainActivity.BTN_R2], isSelected = selectedId == MainActivity.BTN_R2, onSelect = { onSelect(MainActivity.BTN_R2) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = cColor, onInteraction = onInteraction)
+        }
+        GameButton(text = "C", buttonId = MainActivity.BTN_R3, modifier = Modifier.size(btnSize), icon = Icons.Default.ArrowDropDown, props = buttonProps[MainActivity.BTN_R3], isSelected = selectedId == MainActivity.BTN_R3, onSelect = { onSelect(MainActivity.BTN_R3) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = cColor, onInteraction = onInteraction)
+    }
+}
+
+@Composable
+private fun N64StartButton(
+    opacity: Float, size: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit, onInteraction: () -> Unit
+) {
+    GameButton(
+        text = "START", 
+        buttonId = MainActivity.BTN_START, 
+        modifier = Modifier.size((42 * size).dp), // Shrunken from 50dp
+        props = buttonProps[MainActivity.BTN_START], 
+        isSelected = selectedId == MainActivity.BTN_START, 
+        onSelect = { onSelect(MainActivity.BTN_START) }, 
+        enabled = enabled, 
+        isEditing = isEditing, 
+        onUpdateProps = onUpdate, 
+        alpha = opacity, 
+        buttonColor = Color.Red, 
+        onInteraction = onInteraction,
+        textStyle = MaterialTheme.typography.labelSmall.copy(
+            fontWeight = FontWeight.Black,
+            fontStyle = FontStyle.Italic,
+            fontFamily = FontFamily.SansSerif,
+            fontSize = (9 * size).sp // Slightly smaller text for smaller button
+        )
+    )
+}
+
+@Composable
+private fun ShoulderButtonsPortrait(
+    config: ControlLayoutConfig, opacity: Float, size: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit,
+    onMenu: () -> Unit, onInteraction: () -> Unit, isN64: Boolean = false
+) {
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        GameButton(icon = Icons.Default.KeyboardArrowLeft, text = if (isN64) "L" else "L1", buttonId = MainActivity.BTN_L, modifier = Modifier.size((70 * size).dp, (35 * size).dp), props = buttonProps[MainActivity.BTN_L], isSelected = selectedId == MainActivity.BTN_L, onSelect = { onSelect(MainActivity.BTN_L) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, onInteraction = onInteraction)
+        MenuButton(onClick = onMenu, opacity = opacity, onInteraction = onInteraction)
+        GameButton(icon = Icons.Default.KeyboardArrowRight, text = if (isN64) "R" else "R1", buttonId = MainActivity.BTN_R, modifier = Modifier.size((70 * size).dp, (35 * size).dp), props = buttonProps[MainActivity.BTN_R], isSelected = selectedId == MainActivity.BTN_R, onSelect = { onSelect(MainActivity.BTN_R) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, onInteraction = onInteraction)
+    }
+}
+
+@Composable
+private fun CenterButtons(
+    config: ControlLayoutConfig, opacity: Float, size: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit, onInteraction: () -> Unit
+) {
+    Row(modifier = Modifier.fillMaxWidth().fillMaxHeight().padding(bottom = 28.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.Bottom) {
+        Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+            GameButton(icon = Icons.Default.HorizontalRule, text = "SEL", buttonId = MainActivity.BTN_SELECT, modifier = Modifier.size((70 * size).dp, (35 * size).dp), props = buttonProps[MainActivity.BTN_SELECT], isSelected = selectedId == MainActivity.BTN_SELECT, onSelect = { onSelect(MainActivity.BTN_SELECT) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, onInteraction = onInteraction)
+            GameButton(icon = Icons.Default.PlayArrow, text = "START", buttonId = MainActivity.BTN_START, modifier = Modifier.size((70 * size).dp, (35 * size).dp), props = buttonProps[MainActivity.BTN_START], isSelected = selectedId == MainActivity.BTN_START, onSelect = { onSelect(MainActivity.BTN_START) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, onInteraction = onInteraction)
         }
     }
 }
@@ -720,6 +566,7 @@ fun GameButton(
     buttonId: Int,
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
+    iconOffset: DpOffset = DpOffset.Zero,
     props: ButtonProps? = null,
     isSelected: Boolean = false,
     onSelect: () -> Unit = {},
@@ -728,69 +575,343 @@ fun GameButton(
     onUpdateProps: (Int, ButtonProps) -> Unit = { _, _ -> },
     alpha: Float = 1.0f,
     buttonColor: Color = MaterialTheme.colorScheme.primary,
-    onInteraction: () -> Unit = {}
+    iconTint: Color = Color.White,
+    borderColor: Color = Color.Transparent,
+    onInteraction: () -> Unit = {},
+    textStyle: TextStyle? = null // Added textStyle override
 ) {
     val context = LocalContext.current
     val interactionSource = remember { MutableInteractionSource() }
-
     val currentProps = props ?: ButtonProps()
+    val currentPropsState = rememberUpdatedState(currentProps)
+    val onUpdateState = rememberUpdatedState(onUpdateProps)
     val offsetX = currentProps.x
     val offsetY = currentProps.y
     val currentScale = currentProps.scale
     val currentAlpha = currentProps.alpha * alpha
-
-    val dragModifier = if (isEditing) {
-        Modifier.pointerInput(Unit) {
-            detectDragGestures { change, dragAmount ->
-                change.consume()
-                onUpdateProps(buttonId, currentProps.copy(x = offsetX + dragAmount.x, y = offsetY + dragAmount.y))
-            }
-        }
-    } else Modifier
-
-    val borderModifier = if (isEditing && isSelected) {
-        Modifier.border(3.dp, Color.Cyan, CircleShape)
-    } else if (isEditing) {
-        Modifier.border(1.dp, Color.Red.copy(alpha = 0.5f), CircleShape)
-    } else Modifier
-
+    val dragModifier = if (isEditing) { Modifier.pointerInput(buttonId) { detectDragGestures { change, dragAmount -> change.consume(); val p = currentPropsState.value; onUpdateState.value(buttonId, p.copy(x = p.x + dragAmount.x, y = p.y + dragAmount.y)) } } } else Modifier
+    val selectionBorder = if (isEditing && isSelected) { Modifier.border(3.dp, Color.Cyan, CircleShape) } else if (isEditing) { Modifier.border(1.dp, Color.Red.copy(alpha = 0.5f), CircleShape) } else Modifier
+    val customBorder = if (borderColor != Color.Transparent) { Modifier.border(2.dp, borderColor, CircleShape) } else Modifier
     LaunchedEffect(interactionSource, enabled) {
         interactionSource.interactions.collect { interaction ->
             when (interaction) {
-                is PressInteraction.Press -> if (!isEditing && enabled) {
-                    onInteraction()
-                    (context as? MainActivity)?.sendInput(buttonId, 1)
-                }
-                is PressInteraction.Release, is PressInteraction.Cancel -> if (!isEditing && enabled) {
-                    (context as? MainActivity)?.sendInput(buttonId, 0)
-                }
+                is PressInteraction.Press -> if (!isEditing && enabled) { onInteraction(); (context as? MainActivity)?.sendInput(buttonId, 1) }
+                is PressInteraction.Release, is PressInteraction.Cancel -> if (!isEditing && enabled) { (context as? MainActivity)?.sendInput(buttonId, 0) }
             }
         }
     }
-
     Button(
         onClick = { if (isEditing) onSelect() },
         interactionSource = interactionSource,
         enabled = enabled,
-        modifier = modifier
-            .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
-            .scale(currentScale)
-            .then(dragModifier)
-            .then(borderModifier)
-            .alpha(currentAlpha),
+        modifier = modifier.offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }.scale(currentScale).then(dragModifier).then(selectionBorder).then(customBorder).alpha(currentAlpha),
         shape = CircleShape,
         colors = ButtonDefaults.buttonColors(containerColor = buttonColor),
         contentPadding = PaddingValues(0.dp)
     ) {
-        if (icon != null) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(24.dp),
-                tint = Color.White
+        if (icon != null) { Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(24.dp).offset(x = iconOffset.x, y = iconOffset.y), tint = iconTint) }
+        else { 
+            Text(
+                text = text, 
+                style = textStyle ?: MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold), 
+                color = iconTint
+            ) 
+        }
+    }
+}
+
+@Preview(showBackground = true, widthDp = 360, heightDp = 640)
+@Composable
+fun N64PortraitLargeScreenPreview() {
+    val ratio = 0.60f
+    MaterialTheme {
+        Column(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+            Box(modifier = Modifier.fillMaxWidth().weight(ratio).background(Color.DarkGray), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.fillMaxHeight().aspectRatio(4f/3f).background(Color.Gray), contentAlignment = Alignment.Center) {
+                    Text("GAME (4:3)", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                }
+            }
+            Box(modifier = Modifier.fillMaxWidth().weight(1f - ratio)) {
+                PortraitN64Layout(
+                    config = ControlLayoutConfig(visualStyle = VisualStyle.CLASSIC, portraitGameRatio = ratio),
+                    opacity = 1f,
+                    size = 1f,
+                    buttonProps = emptyMap(),
+                    selectedId = null,
+                    onSelect = {},
+                    enabled = true,
+                    isEditing = false,
+                    onUpdate = { _, _ -> },
+                    onMenu = {},
+                    onInteraction = {},
+                    vScale = 0.6f 
+                )
+            }
+        }
+    }
+}
+
+@Preview(showBackground = true, widthDp = 360, heightDp = 640)
+@Composable
+fun N64PortraitClassicPreview() {
+    val ratio = 0.42f
+    MaterialTheme {
+        Column(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+            Box(modifier = Modifier.fillMaxWidth().weight(ratio).background(Color.DarkGray), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.fillMaxHeight().aspectRatio(4f/3f).background(Color.Gray), contentAlignment = Alignment.Center) {
+                    Text("GAME (4:3)", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                }
+            }
+            Box(modifier = Modifier.fillMaxWidth().weight(1f - ratio)) {
+                PortraitN64Layout(
+                    config = ControlLayoutConfig(visualStyle = VisualStyle.CLASSIC, portraitGameRatio = ratio),
+                    opacity = 1f,
+                    size = 1f,
+                    buttonProps = emptyMap(),
+                    selectedId = null,
+                    onSelect = {},
+                    enabled = true,
+                    isEditing = false,
+                    onUpdate = { _, _ -> },
+                    onMenu = {},
+                    onInteraction = {},
+                    vScale = 0.9f
+                )
+            }
+        }
+    }
+}
+
+@Preview(showBackground = true, widthDp = 360, heightDp = 640)
+@Composable
+fun PS1PortraitLargeScreenPreview() {
+    val ratio = 0.60f
+    MaterialTheme {
+        Column(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+            Box(modifier = Modifier.fillMaxWidth().weight(ratio).background(Color.DarkGray), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.fillMaxHeight().aspectRatio(4f/3f).background(Color.Gray), contentAlignment = Alignment.Center) {
+                    Text("GAME (4:3)", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                }
+            }
+            Box(modifier = Modifier.fillMaxWidth().weight(1f - ratio)) {
+                PortraitPS1Layout(
+                    model = ControllerModel.PLAYSTATION,
+                    config = ControlLayoutConfig(visualStyle = VisualStyle.CLASSIC, portraitGameRatio = ratio),
+                    opacity = 1f,
+                    size = 1f,
+                    buttonProps = emptyMap(),
+                    selectedId = null,
+                    onSelect = {},
+                    enabled = true,
+                    isEditing = false,
+                    onUpdate = { _, _ -> },
+                    onMenu = {},
+                    onInteraction = {},
+                    vScale = 0.6f
+                )
+            }
+        }
+    }
+}
+
+@Preview(showBackground = true, widthDp = 360, heightDp = 640)
+@Composable
+fun PS1PortraitClassicPreview() {
+    val ratio = 0.42f
+    MaterialTheme {
+        Column(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+            Box(modifier = Modifier.fillMaxWidth().weight(ratio).background(Color.DarkGray), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.fillMaxHeight().aspectRatio(4f/3f).background(Color.Gray), contentAlignment = Alignment.Center) {
+                    Text("GAME (4:3)", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                }
+            }
+            Box(modifier = Modifier.fillMaxWidth().weight(1f - ratio)) {
+                PortraitPS1Layout(
+                    model = ControllerModel.PLAYSTATION,
+                    config = ControlLayoutConfig(visualStyle = VisualStyle.CLASSIC, portraitGameRatio = ratio),
+                    opacity = 1f,
+                    size = 1f,
+                    buttonProps = emptyMap(),
+                    selectedId = null,
+                    onSelect = {},
+                    enabled = true,
+                    isEditing = false,
+                    onUpdate = { _, _ -> },
+                    onMenu = {},
+                    onInteraction = {},
+                    vScale = 0.9f
+                )
+            }
+        }
+    }
+}
+
+@Preview(showBackground = true, widthDp = 360, heightDp = 640)
+@Composable
+fun PS1PortraitModernPreview() {
+    val ratio = 0.42f
+    MaterialTheme {
+        Column(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+            Box(modifier = Modifier.fillMaxWidth().weight(ratio).background(Color.DarkGray), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.fillMaxHeight().aspectRatio(4f/3f).background(Color.Gray), contentAlignment = Alignment.Center) {
+                    Text("GAME (4:3)", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                }
+            }
+            Box(modifier = Modifier.fillMaxWidth().weight(1f - ratio)) {
+                PortraitPS1Layout(
+                    model = ControllerModel.PLAYSTATION,
+                    config = ControlLayoutConfig(visualStyle = VisualStyle.MODERN, portraitGameRatio = ratio),
+                    opacity = 1f,
+                    size = 1f,
+                    buttonProps = emptyMap(),
+                    selectedId = null,
+                    onSelect = {},
+                    enabled = true,
+                    isEditing = false,
+                    onUpdate = { _, _ -> },
+                    onMenu = {},
+                    onInteraction = {},
+                    vScale = 0.9f
+                )
+            }
+        }
+    }
+}
+
+@Preview(showBackground = true, widthDp = 360, heightDp = 640)
+@Composable
+fun GenesisPortraitLargeScreenPreview() {
+    val ratio = 0.60f
+    MaterialTheme {
+        Column(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+            Box(modifier = Modifier.fillMaxWidth().weight(ratio).background(Color.DarkGray), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.fillMaxHeight().aspectRatio(4f/3f).background(Color.Gray), contentAlignment = Alignment.Center) {
+                    Text("GAME (4:3)", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                }
+            }
+            Box(modifier = Modifier.fillMaxWidth().weight(1f - ratio)) {
+                PortraitGenesisLayout(
+                    config = ControlLayoutConfig(visualStyle = VisualStyle.MODERN, portraitGameRatio = ratio),
+                    opacity = 1f,
+                    size = 1f,
+                    buttonProps = emptyMap(),
+                    selectedId = null,
+                    onSelect = {},
+                    enabled = true,
+                    isEditing = false,
+                    onUpdate = { _, _ -> },
+                    onMenu = {},
+                    onInteraction = {},
+                    vScale = 0.6f
+                )
+            }
+        }
+    }
+}
+
+@Preview(showBackground = true, widthDp = 360, heightDp = 640)
+@Composable
+fun GenesisPortraitPreview() {
+    val ratio = 0.42f
+    MaterialTheme {
+        Column(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+            Box(modifier = Modifier.fillMaxWidth().weight(ratio).background(Color.DarkGray), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.fillMaxHeight().aspectRatio(4f/3f).background(Color.Gray), contentAlignment = Alignment.Center) {
+                    Text("GAME (4:3)", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                }
+            }
+            Box(modifier = Modifier.fillMaxWidth().weight(1f - ratio)) {
+                PortraitGenesisLayout(
+                    config = ControlLayoutConfig(visualStyle = VisualStyle.MODERN, portraitGameRatio = ratio),
+                    opacity = 1f,
+                    size = 1f,
+                    buttonProps = emptyMap(),
+                    selectedId = null,
+                    onSelect = {},
+                    enabled = true,
+                    isEditing = false,
+                    onUpdate = { _, _ -> },
+                    onMenu = {},
+                    onInteraction = {},
+                    vScale = 0.9f
+                )
+            }
+        }
+    }
+}
+
+@Preview(showBackground = true, widthDp = 800, heightDp = 360)
+@Composable
+fun PS1LandscapePreview() {
+    MaterialTheme {
+        Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+            // Simulated 4:3 Game Screen
+            Box(modifier = Modifier.fillMaxHeight().aspectRatio(4f/3f).background(Color.DarkGray).align(Alignment.Center)) {
+                Text("GAME SCREEN (4:3)", color = Color.White, style = MaterialTheme.typography.titleMedium, modifier = Modifier.align(Alignment.Center))
+            }
+            LandscapePS1Layout(
+                model = ControllerModel.PLAYSTATION,
+                config = ControlLayoutConfig(visualStyle = VisualStyle.CLASSIC),
+                opacity = 1f,
+                size = 1f,
+                buttonProps = emptyMap(),
+                selectedId = null,
+                onSelect = {},
+                enabled = true,
+                isEditing = false,
+                onUpdate = { _, _ -> },
+                onInteraction = {}
             )
-        } else {
-            Text(text, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.ExtraBold)
+        }
+    }
+}
+
+@Preview(showBackground = true, widthDp = 800, heightDp = 360)
+@Composable
+fun GenesisLandscapePreview() {
+    MaterialTheme {
+        Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+            // Simulated 4:3 Game Screen
+            Box(modifier = Modifier.fillMaxHeight().aspectRatio(4f/3f).background(Color.DarkGray).align(Alignment.Center)) {
+                Text("GAME SCREEN (4:3)", color = Color.White, style = MaterialTheme.typography.titleMedium, modifier = Modifier.align(Alignment.Center))
+            }
+            LandscapeGenesisLayout(
+                config = ControlLayoutConfig(visualStyle = VisualStyle.MODERN),
+                opacity = 1f,
+                size = 1f,
+                buttonProps = emptyMap(),
+                selectedId = null,
+                onSelect = {},
+                enabled = true,
+                isEditing = false,
+                onUpdate = { _, _ -> },
+                onInteraction = {}
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, widthDp = 800, heightDp = 360)
+@Composable
+fun N64LandscapePreview() {
+    MaterialTheme {
+        Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+            // Simulated 4:3 Game Screen
+            Box(modifier = Modifier.fillMaxHeight().aspectRatio(4f/3f).background(Color.DarkGray).align(Alignment.Center)) {
+                Text("GAME SCREEN (4:3)", color = Color.White, style = MaterialTheme.typography.titleMedium, modifier = Modifier.align(Alignment.Center))
+            }
+            LandscapeN64Layout(
+                config = ControlLayoutConfig(visualStyle = VisualStyle.CLASSIC),
+                opacity = 1f,
+                size = 1f,
+                buttonProps = emptyMap(),
+                selectedId = null,
+                onSelect = {},
+                enabled = true,
+                isEditing = false,
+                onUpdate = { _, _ -> },
+                onInteraction = {}
+            )
         }
     }
 }

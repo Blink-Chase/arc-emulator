@@ -69,6 +69,7 @@ std::atomic<int> g_videoRefreshCount{0};
 
 std::string g_romPath;
 std::atomic<bool> g_loadRequested{false};
+std::atomic<bool> g_forceOneRun{false};
 std::atomic<bool> g_saveStateRequested{false};
 std::atomic<bool> g_loadStateRequested{false};
 std::atomic<bool> g_stateOperationSuccess{false};

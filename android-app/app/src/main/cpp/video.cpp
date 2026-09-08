@@ -129,7 +129,9 @@ bool setupEGL() {
   LOGI("EGL Initialized successfully (GLES %d)", useGLES3 ? 3 : 2);
 
   if (g_useHwRender) {
-    InitBlitter();
+    if (g_glProgram == 0) {
+      InitBlitter();
+    }
     if (g_hwRender.context_reset) {
       LOGI("VIDEO: Calling core context_reset");
       g_hwRender.context_reset();
@@ -139,15 +141,26 @@ bool setupEGL() {
   return true;
 }
 
+void cleanupSurfaceEGL() {
+  // We don't lock here because this is called from JNI with g_windowMutex
+  if (g_eglDisplay != EGL_NO_DISPLAY) {
+    eglMakeCurrent(g_eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+    if (g_eglSurface != EGL_NO_SURFACE) {
+      eglDestroySurface(g_eglDisplay, g_eglSurface);
+      g_eglSurface = EGL_NO_SURFACE;
+    }
+  }
+}
+
 void deinitEGL() {
   std::lock_guard<std::mutex> lock(g_windowMutex);
   if (g_eglDisplay != EGL_NO_DISPLAY) {
     eglMakeCurrent(g_eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE,
                    EGL_NO_CONTEXT);
-    if (g_eglContext != EGL_NO_CONTEXT)
-      eglDestroyContext(g_eglDisplay, g_eglContext);
     if (g_eglSurface != EGL_NO_SURFACE)
       eglDestroySurface(g_eglDisplay, g_eglSurface);
+    if (g_eglContext != EGL_NO_CONTEXT)
+      eglDestroyContext(g_eglDisplay, g_eglContext);
     eglTerminate(g_eglDisplay);
   }
   g_eglDisplay = EGL_NO_DISPLAY;
@@ -220,11 +233,14 @@ void VideoRefreshCallback(const void *data, unsigned width, unsigned height,
 
         if (!eglSwapBuffers(g_eglDisplay, g_eglSurface)) {
           EGLint err = eglGetError();
-          LOGE("eglSwapBuffers failed: 0x%x", err);
           if (err == EGL_BAD_SURFACE || err == EGL_BAD_NATIVE_WINDOW) {
-              // Surface is gone, we should probably stop
+              LOGW("eglSwapBuffers failed (0x%x), surface abandoned. Clearing.", err);
+              eglMakeCurrent(g_eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+              eglDestroySurface(g_eglDisplay, g_eglSurface);
+              g_eglSurface = EGL_NO_SURFACE;
               return;
           }
+          LOGE("eglSwapBuffers failed: 0x%x", err);
         }
         if (g_saveStateRequested.load()) {
             glFinish();

@@ -293,7 +293,7 @@ fun SaveManagerDialog(
                                             } else {
                                                 showMessage("Load failed")
                                             }
-                                            onDismiss() 
+                                            onDismiss()
                                         },
                                         enabled = exists,
                                         modifier = Modifier.weight(1f).height(36.dp),

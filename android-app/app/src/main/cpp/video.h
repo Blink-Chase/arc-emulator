@@ -6,6 +6,7 @@
 // Lifecycle
 void InitBlitter();
 bool setupEGL();
+void cleanupSurfaceEGL();
 void deinitEGL();
 
 // Libretro Callbacks

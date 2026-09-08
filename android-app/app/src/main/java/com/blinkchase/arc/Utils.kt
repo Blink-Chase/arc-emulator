@@ -169,6 +169,41 @@ object Utils {
             }
         }
     }
+
+    /**
+     * Helper to prevent log spam by grouping identical messages.
+     */
+    object Logger {
+        private val counts = mutableMapOf<String, Int>()
+        private val lastTime = mutableMapOf<String, Long>()
+        private const val GROUP_INTERVAL_MS = 1000 // Log every 1 second for repeaters
+
+        fun i(tag: String, msg: String) = log(android.util.Log.INFO, tag, msg)
+        fun d(tag: String, msg: String) = log(android.util.Log.DEBUG, tag, msg)
+        fun w(tag: String, msg: String) = log(android.util.Log.WARN, tag, msg)
+        fun e(tag: String, msg: String) = log(android.util.Log.ERROR, tag, msg)
+
+        private fun log(level: Int, tag: String, msg: String) {
+            // Strip common changing patterns like memory addresses (@0x...) to allow grouping
+            val sanitizedMsg = msg.replace(Regex("@0x[0-9a-fA-F]+"), "@0x...")
+            val key = "$tag:$sanitizedMsg"
+            val now = System.currentTimeMillis()
+            val last = lastTime[key] ?: 0L
+            val count = counts[key] ?: 0
+
+            if (now - last > GROUP_INTERVAL_MS) {
+                if (count > 0) {
+                    android.util.Log.println(level, tag, "[$tag x${count + 1}] $msg")
+                } else {
+                    android.util.Log.println(level, tag, "[$tag] $msg")
+                }
+                lastTime[key] = now
+                counts[key] = 0
+            } else {
+                counts[key] = count + 1
+            }
+        }
+    }
 }
 
 object LibraryDiagnostics {

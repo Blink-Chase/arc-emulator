@@ -76,7 +76,7 @@ class MainActivity : ComponentActivity() {
         const val BTN_UP = 4; const val BTN_DOWN = 5; const val BTN_LEFT = 6; const val BTN_RIGHT = 7
         const val BTN_A = 8; const val BTN_X = 9; const val BTN_L = 10; const val BTN_R = 11
         const val BTN_L2 = 12; const val BTN_R2 = 13; const val BTN_L3 = 14; const val BTN_R3 = 15
-        const val BTN_Z = 12
+        const val BTN_Z = 12 // Z usually maps to L2 in modern retro mapping
         const val KEY_LAST_CRASHED_CORE = "last_crashed_core"
         const val KEY_LAST_CRASHED_LAYOUT = "last_crashed_layout"
 
@@ -132,6 +132,7 @@ class MainActivity : ComponentActivity() {
     external fun nativeLoadGame(romPath: String): Boolean
     external fun nativePauseGame()
     external fun nativeResumeGame()
+    external fun nativeForceNextFrame()
     external fun resetGame()
     external fun nativeQuitGame()
     external fun nativeOnSurfaceCreated(surface: Surface)
@@ -148,19 +149,30 @@ class MainActivity : ComponentActivity() {
     external fun setCheat(index: Int, enabled: Boolean, code: String)
     external fun setControllerType(port: Int, type: Int)
     external fun getAudioSamples(buffer: ShortArray, maxSamples: Int): Int
+    external fun getNativeFps(): Int
     external fun getGameSampleRate(): Double
     external fun getAudioBufferOccupancy(): Int
 
-    fun setSurface(surface: Surface?) {
-        if (surface != null) {
-            Log.i("ArcNative", "Binding surface: $surface")
-            nativeOnSurfaceCreated(surface)
-            if (isEngineReady) {
-                updateNativeActivity()
+    private val surfaceLock = Any()
+
+    fun setSurface(surface: Surface?, width: Int = 0, height: Int = 0) {
+        synchronized(surfaceLock) {
+            if (surface != null && width > 0 && height > 0) {
+                Utils.Logger.i("ArcNative", "Binding surface: $surface Size: ${width}x${height}")
+                nativeOnSurfaceCreated(surface)
+                nativeOnSurfaceChanged(surface, width, height)
+                if (isEngineReady) {
+                    updateNativeActivity()
+                }
+            } else if (surface == null) {
+                Utils.Logger.i("ArcNative", "Unbinding surface (Force Release)")
+                nativeOnSurfaceDestroyed()
+                if (isEngineReady) {
+                    updateNativeActivity()
+                }
+            } else {
+                Utils.Logger.w("ArcNative", "Ignored binding for $surface - invalid size: ${width}x${height}")
             }
-        } else {
-            Log.i("ArcNative", "Unbinding surface (null)")
-            nativeOnSurfaceDestroyed()
         }
     }
 
@@ -226,7 +238,7 @@ class MainActivity : ComponentActivity() {
                             val params = audioTrack?.playbackParams ?: android.media.PlaybackParams()
                             audioTrack?.playbackParams = params.setSpeed(targetSpeed)
                             currentSpeed = targetSpeed
-                            Log.d("ArcAudio", "Sync: Adjusting audio speed to $targetSpeed (Buffer: $occupancy)")
+                            Utils.Logger.d("ArcAudio", "Sync: Adjusting audio speed to $targetSpeed (Buffer: $occupancy)")
                         } catch (e: Exception) {}
                     }
                 }
@@ -234,7 +246,7 @@ class MainActivity : ComponentActivity() {
                 // DEBUG: Log audio stats every 2 seconds
                 val now = System.currentTimeMillis()
                 if (now - lastLogTime > 2000) {
-                    Log.d("ArcAudio", "Audio Thread Alive. Samples processed in last 2s: $totalSamplesRead. Errors: $audioErrorCount")
+                    Utils.Logger.d("ArcAudio", "Audio Thread Alive. Samples processed in last 2s: $totalSamplesRead. Errors: $audioErrorCount")
                     totalSamplesRead = 0
                     lastLogTime = now
                 }
@@ -277,6 +289,12 @@ class MainActivity : ComponentActivity() {
 
     fun resumeGame() {
         inputManager.clearAll() // Sanitize inputs on resume
+        
+        // Force a native activity nudge to ensure surface is bound
+        if (isEngineReady) {
+            updateNativeActivity()
+        }
+        
         nativeResumeGame()
 
         // Initialize audio track if needed
