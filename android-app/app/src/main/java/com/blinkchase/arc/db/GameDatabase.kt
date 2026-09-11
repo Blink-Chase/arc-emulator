@@ -84,7 +84,7 @@ class Converters {
     }
 }
 
-@Database(entities = [GameFile::class, ControllerProfile::class], version = 5, exportSchema = false)
+@Database(entities = [GameFile::class, ControllerProfile::class], version = 6, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class GameDatabase : RoomDatabase() {
     abstract fun gameDao(): GameDao

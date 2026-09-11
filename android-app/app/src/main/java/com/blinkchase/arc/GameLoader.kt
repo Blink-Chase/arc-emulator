@@ -51,8 +51,8 @@ object GameLoader {
         // Step 3: Clean up previous state
         Log.d(TAG, "Cleaning up previous state...")
         try {
+            // No delay here, MainActivity.loadGame handles native cleanup
             mainActivity.resetAudio()
-            delay(100) // Give audio time to clean up
         } catch (e: Exception) {
             Log.w(TAG, "Error during cleanup: ${e.message}")
         }
@@ -65,8 +65,6 @@ object GameLoader {
             else -> 48000
         }
         Log.d(TAG, "Sample rate set to: ${mainActivity.targetSampleRate}")
-        
-        delay(200) // Allow system to stabilize
         
         // Step 5: Prepare cores list
         val internalCoresDir = File(context.filesDir, "cores")

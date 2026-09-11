@@ -117,6 +117,7 @@ fun GameScreen(
     var lastInteractionTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
     // Performance state
+    val showFpsCounter = remember { prefs.getBoolean(MainActivity.KEY_SHOW_FPS, true) }
     var fps by remember { mutableIntStateOf(0) }
     var speed by remember { mutableIntStateOf(0) }
 
@@ -139,16 +140,25 @@ fun GameScreen(
                         lastSamples = currentSamples
                         lastTime = now
 
-                        // Watchdog (Hard Flush)
-                        if (speed == 0 && !isPaused && !showMenu && !isNavigatingToMapper) {
+                        // Watchdog (Multi-stage recovery)
+                        if (speed == 0 && fps == 0 && !isPaused && !showMenu && !isNavigatingToMapper) {
                             zeroSpeedCount++
-                            if (zeroSpeedCount >= 2) {
-                                Utils.Logger.e("GameScreen", "WATCHDOG: Engine stall detected. Performing Hard Flush...")
+                            if (zeroSpeedCount == 3) {
+                                // Stage 1: Soft Nudge (at 1.5s)
+                                Utils.Logger.w("GameScreen", "WATCHDOG: Engine idle detected. Sending soft nudge...")
+                                mainActivity?.nativeForceNextFrame()
+                                mainActivity?.updateNativeActivity()
+                            } else if (zeroSpeedCount >= 6) {
+                                // Stage 2: Hard Flush (at 3.0s)
                                 gameSurfaceView?.let { view ->
-                                    mainActivity?.pauseGame()
-                                    mainActivity?.setSurface(null)
-                                    mainActivity?.setSurface(view.holder.surface, view.width, view.height)
-                                    mainActivity?.resumeGame()
+                                    mainActivity?.lifecycleScope?.launch(Dispatchers.Main) {
+                                        mainActivity?.pauseGame()
+                                        mainActivity?.setSurface(null)
+                                        delay(100) 
+                                        mainActivity?.setSurface(view.holder.surface, view.width, view.height)
+                                        mainActivity?.resumeGame()
+                                        mainActivity?.nativeForceNextFrame()
+                                    }
                                 }
                                 zeroSpeedCount = 0
                             }
@@ -348,7 +358,7 @@ fun GameScreen(
             }
         }
 
-        if (isGameLoaded) { FpsSpeedOverlay(fps, speed, Modifier.align(Alignment.TopStart).padding(12.dp)) }
+        if (isGameLoaded && showFpsCounter) { FpsSpeedOverlay(fps, speed, Modifier.align(Alignment.TopStart).padding(12.dp)) }
 
         if (!controlsVisible && isGameLoaded && !isAnyMenuOpen) {
             IconButton(onClick = { showMenu = true; if (autoPause && !isPaused) { isPaused = true; onTogglePause(true); wasPausedByMenu = true } }, modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(8.dp))) {

@@ -205,7 +205,7 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
     // Optimized for mobile stability and GoldenEye compatibility
 
     // Parallel N64 Overrides
-    // Optimized for Snapdragon 8 Gen 5 stability and Perfect Dark performance
+    // Optimized for Snapdragon 8 Gen 5 Stability
     g_coreVariables["parallel-n64-gfxplugin"] = "gliden64";
     g_coreVariables["parallel-n64-rspplugin"] = "hle";
     g_coreVariables["parallel-n64-cpucore"] = "cached_interpreter";

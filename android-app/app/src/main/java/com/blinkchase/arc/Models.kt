@@ -85,7 +85,10 @@ data class GameFile(
     val platform: Platform,
     val dateAdded: Long = System.currentTimeMillis(),
     val lastPlayed: Long = 0,
-    val isFavorite: Boolean = false
+    val isFavorite: Boolean = false,
+    val coverUrl: String? = null,
+    val thumbnailUrl: String? = null,
+    val description: String? = null
 )
 
 @Entity(tableName = "controller_profiles", primaryKeys = ["deviceName", "platform", "gamePath"])
@@ -102,7 +105,13 @@ data class GameCheat(var name: String, var code: String, var enabled: Boolean)
 
 enum class SortMode { NAME, DATE_ADDED, LAST_PLAYED }
 
-enum class Screen { HOME, LIBRARY, IMPORT, SEARCH, SETTINGS, GAME, ABOUT, HELP, BIOS, CONTROLLER_MAPPING, CONTROLLER_TEST }
+enum class LibraryViewStyle { DETAILED, POSTER }
+
+enum class SearchGrouping { UNIFIED, BY_PLATFORM }
+
+enum class HomeIdentity { ICON, TEXT }
+
+enum class Screen { HOME, LIBRARY, IMPORT, SEARCH, SETTINGS, GAME, ABOUT, HELP, BIOS, CONTROLLER_MAPPING, CONTROLLER_TEST, SETUP_GUIDE }
 
 // Data class to hold individual button properties for touch layouts
 data class ButtonProps(

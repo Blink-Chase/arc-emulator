@@ -4,10 +4,11 @@ import androidx.compose.ui.graphics.Color
 
 // Arc Brand Colors
 val ArcCyan = Color(0xFF00E5FF)
-val ArcTeal = Color(0xFF00BFA5)
+val ArcBlue = Color(0xFF2979FF)
 val ArcDeepBlue = Color(0xFF0D47A1)
-val ArcDarkBg = Color(0xFF101214)
-val ArcSurface = Color(0xFF1C1F22)
+val ArcTeal = Color(0xFF00BFA5)
+val ArcDarkBg = Color(0xFF0A0C10)
+val ArcSurface = Color(0xFF16191D)
 
 // Legacy compatibility (if needed)
 val Purple80 = Color(0xFFD0BCFF)

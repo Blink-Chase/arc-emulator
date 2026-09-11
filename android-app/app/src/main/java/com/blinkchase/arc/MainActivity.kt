@@ -1,11 +1,17 @@
 package com.blinkchase.arc
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+import android.content.ComponentName
+import android.content.pm.PackageManager
 import android.Manifest
 import android.util.Log
 import com.blinkchase.arc.ui.theme.ArcEmuTheme
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
@@ -13,6 +19,7 @@ import android.provider.Settings
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.Surface
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -72,6 +79,16 @@ class MainActivity : ComponentActivity() {
         const val KEY_SHOW_EXTENSIONS = "show_extensions"
         const val KEY_HIDE_TOUCH_ON_CONTROLLER = "hide_touch_on_controller"
         const val KEY_CONTROLLER_DEADZONE = "controller_deadzone"
+        const val KEY_RECENT_GRID_SIZE = "recent_grid_size"
+        const val KEY_DISCOVERY_GRID_SIZE = "discovery_grid_size"
+        const val KEY_SETUP_COMPLETE = "setup_complete_v15"
+        const val KEY_HOME_IDENTITY = "home_identity"
+        const val KEY_SETUP_MODE = "setup_mode"
+        const val KEY_TOUR_COMPLETE = "tour_complete"
+        const val KEY_LIBRARY_VIEW_STYLE = "library_view_style"
+        const val KEY_SEARCH_GROUPING = "search_grouping"
+        const val KEY_SCREENSCRAPER_KEY = "screenscraper_key"
+        const val KEY_SHOW_FPS = "show_fps"
         const val BTN_B = 0; const val BTN_Y = 1; const val BTN_SELECT = 2; const val BTN_START = 3
         const val BTN_UP = 4; const val BTN_DOWN = 5; const val BTN_LEFT = 6; const val BTN_RIGHT = 7
         const val BTN_A = 8; const val BTN_X = 9; const val BTN_L = 10; const val BTN_R = 11
@@ -115,7 +132,8 @@ class MainActivity : ComponentActivity() {
     val inputManager by lazy { InputManager(this) }
     var lastDeviceName: String? = null
     private var currentRetroType: Int = 1 // Default to Joypad
-    private var isEngineReady: Boolean = false
+    var isEngineReady: Boolean = false
+    var isSurfaceActive: Boolean = false // Track if we have a valid EGL surface
 
     // PERSISTENT NATIVE STATE - survives transitions
     var activeGamePath by mutableStateOf("")
@@ -157,6 +175,7 @@ class MainActivity : ComponentActivity() {
 
     fun setSurface(surface: Surface?, width: Int = 0, height: Int = 0) {
         synchronized(surfaceLock) {
+            isSurfaceActive = surface != null
             if (surface != null && width > 0 && height > 0) {
                 Utils.Logger.i("ArcNative", "Binding surface: $surface Size: ${width}x${height}")
                 nativeOnSurfaceCreated(surface)
@@ -177,13 +196,25 @@ class MainActivity : ComponentActivity() {
     }
 
     fun loadGame(romPath: String): Boolean {
+        // SAFETY: If a game was already loaded, shut it down cleanly first
+        if (isEngineReady) {
+            nativeQuitGame()
+            isEngineReady = false
+        }
+        
         resetAudio()
         val success = nativeLoadGame(romPath)
         if (success) {
             isEngineReady = true
             // Apply controller type safely after core is loaded and game is initialized
             setControllerType(0, currentRetroType)
-            // CRITICAL FIX: Start the audio thread immediately after loading!
+            
+            // PROACTIVE NUDGE: Kick the renderer once immediately
+            if (isSurfaceActive) {
+                nativeForceNextFrame()
+                updateNativeActivity()
+            }
+            
             resumeGame()
         }
         return success
@@ -392,7 +423,9 @@ class MainActivity : ComponentActivity() {
                 else -> null
             }
             ArcEmuTheme(darkTheme = isDarkTheme) {
-                Surface(modifier = Modifier.fillMaxSize()) { ArcApp(storageDir, savesDir, showExtensions) }
+                Surface(modifier = Modifier.fillMaxSize()) { 
+                    ArcApp(storageDir, savesDir, showExtensions) 
+                }
             }
         }
     }
@@ -473,6 +506,22 @@ class MainActivity : ComponentActivity() {
         val gameList by gameDao.getAllGames().collectAsState(initial = emptyList())
         val navBackStackEntry by navController.currentBackStackEntryAsState()
         val currentRoute = navBackStackEntry?.destination?.route
+
+        // Guided Tour State (Managed globally to follow navigation)
+        val setupMode = remember { prefs.getString(KEY_SETUP_MODE, "advanced") }
+        val tourComplete = remember { prefs.getBoolean(KEY_TOUR_COMPLETE, false) }
+        var tourStep by remember { mutableIntStateOf(if (setupMode == "simple" && !tourComplete) 1 else 0) }
+
+        // Trigger tour when arriving at Home screen if needed (handles transition from Setup)
+        LaunchedEffect(currentRoute) {
+            if (currentRoute == Screen.HOME.name) {
+                val mode = prefs.getString(KEY_SETUP_MODE, "advanced")
+                val complete = prefs.getBoolean(KEY_TOUR_COMPLETE, false)
+                if (mode == "simple" && !complete && tourStep == 0) {
+                    tourStep = 1
+                }
+            }
+        }
 
         val romImporter = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
             if (uris.isNotEmpty()) {
@@ -792,7 +841,7 @@ class MainActivity : ComponentActivity() {
 
         Scaffold(
             bottomBar = {
-                val hideBottomBarRoutes = listOf(Screen.GAME.name, Screen.ABOUT.name, Screen.HELP.name)
+                val hideBottomBarRoutes = listOf(Screen.GAME.name, Screen.ABOUT.name, Screen.HELP.name, Screen.SETUP_GUIDE.name)
                 if (currentRoute !in hideBottomBarRoutes) {
                     NavigationBar {
                         NavigationBarItem(
@@ -841,191 +890,321 @@ class MainActivity : ComponentActivity() {
                 }
             }
         ) { innerPadding ->
-            Box(modifier = Modifier.padding(innerPadding)) {
-                NavHost(navController = navController, startDestination = Screen.HOME.name) {
-                    composable(Screen.HOME.name) {
-                        ArcHomeScreen(
-                            games = gameList,
-                            recentGames = gameList.filter { it.lastPlayed > 0 }.sortedByDescending { it.lastPlayed }.take(5),
-                            storageDir = storageDir,
-                            gameDao = gameDao,
-                            showExtensions = isExtensionsShown,
-                            prefs = prefs,
-                            onGameClick = { game ->
-                                launchGame(game)
-                                uiActivePath = activeGamePath
-                                uiActiveName = activeGameName
-                                uiActivePlatform = activeGamePlatform
-                                uiActiveCore = activeGameCorePath
-                                uiButtonProps = buttonProps
-                                navController.navigate(Screen.GAME.name)
-                            },
-                            onToggleFavorite = { game ->
-                                scope.launch(Dispatchers.IO) {
-                                    gameDao.updateGame(game.copy(isFavorite = !game.isFavorite))
-                                }
-                            },
-                            onGoToLibrary = { navController.navigate(Screen.LIBRARY.name) }
-                        )
+            val isFirstRun = remember { prefs.getBoolean(KEY_SETUP_COMPLETE, true) }
+            
+            // Background scraper that runs as soon as games appear and setup is in progress
+            LaunchedEffect(gameList, isScanning) {
+                if (isFirstRun && gameList.isNotEmpty()) {
+                    // This will start scraping games as they are scanned
+                    gameList.filter { it.coverUrl == null }.forEach { game ->
+                        ScraperService.scrapeGame(game, gameDao)
                     }
-                    composable(Screen.LIBRARY.name) {
-                        LibraryScreen(
-                            games = gameList,
-                            showExtensions = isExtensionsShown,
-                            isScanning = isScanning,
-                            onToggleFavorite = { game ->
-                                scope.launch(Dispatchers.IO) {
-                                    gameDao.updateGame(game.copy(isFavorite = !game.isFavorite))
-                                }
-                            },
-                            onGameSelected = { game ->
-                                launchGame(game)
-                                uiActivePath = activeGamePath
-                                uiActiveName = activeGameName
-                                uiActivePlatform = activeGamePlatform
-                                uiActiveCore = activeGameCorePath
-                                uiButtonProps = buttonProps
-                                navController.navigate(Screen.GAME.name)
-                            },
-                            onNavigateToImport = {
-                                navController.navigate(Screen.IMPORT.name)
-                            }
-                        )
-                    }
-                    composable(Screen.IMPORT.name) {
-                        ImportScreen(
-                            isScanning = isScanning,
-                            onScanGames = { performScan() },
-                            onScanCores = {
-                                val cores = scanCores()
-                                android.widget.Toast.makeText(context, "Found ${cores.size} cores", android.widget.Toast.LENGTH_SHORT).show()
-                            },
-                            onScanLayouts = {
-                                val layouts = scanLayouts()
-                                android.widget.Toast.makeText(context, "Found ${layouts.size} layouts", android.widget.Toast.LENGTH_SHORT).show()
-                            },
-                            onImportFiles = { romImporter.launch(arrayOf("*/*")) },
-                            coresCount = scanCores().size,
-                            layoutsCount = scanLayouts().size,
-                            onBack = { navController.popBackStack() }
-                        )
-                    }
-                    composable(Screen.SEARCH.name) {
-                        SearchScreen(
-                            games = gameList,
-                            showExtensions = isExtensionsShown,
-                            onToggleFavorite = { game ->
-                                scope.launch(Dispatchers.IO) {
-                                    gameDao.updateGame(game.copy(isFavorite = !game.isFavorite))
-                                }
-                            },
-                            onGameSelected = { game ->
-                                launchGame(game)
-                                uiActivePath = activeGamePath
-                                uiActiveName = activeGameName
-                                uiActivePlatform = activeGamePlatform
-                                uiActiveCore = activeGameCorePath
-                                uiButtonProps = buttonProps
-                                navController.navigate(Screen.GAME.name)
-                            }
-                        )
-                    }
-                    composable(Screen.SETTINGS.name) {
-                        SettingsScreen(
-                            prefs = prefs,
-                            rootStorageDir = storageDir,
-                            gameDao = gameDao,
-                            onReportBug = { android.widget.Toast.makeText(context, "Check logs in console", android.widget.Toast.LENGTH_SHORT).show() },
-                            onGoToAbout = { navController.navigate(Screen.ABOUT.name) },
-                            onGoToHelp = { navController.navigate(Screen.HELP.name) },
-                            onGoToBios = { navController.navigate(Screen.BIOS.name) },
-                            onGoToControllerMapping = { navController.navigate(Screen.CONTROLLER_MAPPING.name) }
-                        )
-                    }
-                    composable(Screen.BIOS.name) {
-                        BiosScreen(
-                            storageDir = storageDir,
-                            onBack = { navController.popBackStack() }
-                        )
-                    }
-                    composable(Screen.ABOUT.name) {
-                        AboutScreen(
-                            storageDir = storageDir,
-                            gameDao = gameDao,
-                            prefs = prefs,
-                            onBack = { navController.popBackStack() }
-                        )
-                    }
-                    composable(Screen.HELP.name) {
-                        HelpScreen(onBack = { navController.popBackStack() })
-                    }
-                    composable(Screen.CONTROLLER_MAPPING.name) {
-                        ControllerMappingScreen(
-                            inputDao = inputDao,
-                            inputManager = inputManager,
-                            currentPlatform = activeGamePlatform,
-                            currentGamePath = activeGamePath,
-                            onBack = { navController.popBackStack() },
-                            onTestControls = { navController.navigate(Screen.CONTROLLER_TEST.name) }
-                        )
-                    }
-                    composable(Screen.CONTROLLER_TEST.name) {
-                        ControllerTestScreen(
-                            inputManager = inputManager,
-                            onBack = { navController.popBackStack() }
-                        )
-                    }
-                    composable(
-                        route = Screen.GAME.name,
-                        enterTransition = { fadeIn(animationSpec = tween(150)) },
-                        exitTransition = { fadeOut(animationSpec = tween(150)) },
-                        popEnterTransition = { fadeIn(animationSpec = tween(150)) },
-                        popExitTransition = { fadeOut(animationSpec = tween(150)) }
+                }
+            }
+
+            Box(modifier = Modifier.fillMaxSize()) {
+                Box(modifier = Modifier.padding(innerPadding)) {
+                    NavHost(
+                        navController = navController, 
+                        startDestination = if (isFirstRun) Screen.SETUP_GUIDE.name else Screen.HOME.name
                     ) {
-                        val gameSafeName = remember(activeGameName) {
-                            activeGameName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                        composable(Screen.HOME.name) {
+                            ArcHomeScreen(
+                                games = gameList,
+                                recentGames = gameList.filter { it.lastPlayed > 0 }.sortedByDescending { it.lastPlayed }.take(6),
+                                storageDir = storageDir,
+                                gameDao = gameDao,
+                                showExtensions = isExtensionsShown,
+                                prefs = prefs,
+                                onGameClick = { game ->
+                                    launchGame(game)
+                                    uiActivePath = activeGamePath
+                                    uiActiveName = activeGameName
+                                    uiActivePlatform = activeGamePlatform
+                                    uiActiveCore = activeGameCorePath
+                                    uiButtonProps = buttonProps
+                                    navController.navigate(Screen.GAME.name)
+                                },
+                                onToggleFavorite = { game ->
+                                    scope.launch(Dispatchers.IO) {
+                                        gameDao.updateGame(game.copy(isFavorite = !game.isFavorite))
+                                    }
+                                },
+                                onGoToLibrary = { navController.navigate(Screen.LIBRARY.name) },
+                                onGoToAbout = { navController.navigate(Screen.ABOUT.name) }
+                            )
+
+                            // Handle initial scrape if requested from setup
+                            // Use Unit as key so it only runs once per app launch/navigation to Home
+                            LaunchedEffect(Unit) {
+                                if (prefs.getBoolean("pending_initial_scrape", false)) {
+                                    prefs.edit { putBoolean("pending_initial_scrape", false) }
+                                    scope.launch {
+                                        Toast.makeText(context, "Initial Scrape Started in background...", Toast.LENGTH_SHORT).show()
+                                        
+                                        // Keep scraping as long as there are unscraped games
+                                        // This handles games being added by the scanner in real-time
+                                        var hasUnscraped = true
+                                        while(hasUnscraped) {
+                                            val toScrape = gameList.filter { it.coverUrl == null }
+                                            if (toScrape.isEmpty()) {
+                                                if (!isScanning) {
+                                                    hasUnscraped = false // Truly done
+                                                } else {
+                                                    delay(2000) // Wait for scanner to find more
+                                                }
+                                            } else {
+                                                toScrape.forEach { game ->
+                                                    ScraperService.scrapeGame(game, gameDao)
+                                                }
+                                            }
+                                        }
+                                        Toast.makeText(context, "Initial Scrape Complete!", Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            }
                         }
-                        val gameSaveDir = remember(gameSafeName) {
-                            File(savesDir, gameSafeName).also { it.mkdirs() }
+                        composable(Screen.LIBRARY.name) {
+                            LibraryScreen(
+                                games = gameList,
+                                showExtensions = isExtensionsShown,
+                                isScanning = isScanning,
+                                prefs = prefs,
+                                onToggleFavorite = { game ->
+                                    scope.launch(Dispatchers.IO) {
+                                        gameDao.updateGame(game.copy(isFavorite = !game.isFavorite))
+                                    }
+                                },
+                                onGameSelected = { game ->
+                                    launchGame(game)
+                                    uiActivePath = activeGamePath
+                                    uiActiveName = activeGameName
+                                    uiActivePlatform = activeGamePlatform
+                                    uiActiveCore = activeGameCorePath
+                                    uiButtonProps = buttonProps
+                                    navController.navigate(Screen.GAME.name)
+                                },
+                                onNavigateToImport = {
+                                    navController.navigate(Screen.IMPORT.name)
+                                }
+                            )
                         }
-                        GameScreen(
-                            gameName = activeGameName,
-                            platform = activeGamePlatform,
-                            gamePath = activeGamePath,
-                            corePath = activeGameCorePath,
-                            storageDir = storageDir,
-                            savesDir = gameSaveDir,
-                            layoutsDir = layoutsDir,
-                            buttonProps = buttonProps,
-                            onUpdateProps = { id, props -> buttonProps = buttonProps + (id to props) },
-                            onResetControls = { buttonProps = emptyMap() },
-                            onBack = {
-                                saveLayout(activeGameName)
-                                navController.popBackStack()
-                            },
-                            onTogglePause = { if (it) pauseGame() else resumeGame() },
-                            onSaveState = { filePath ->
-                                Log.d("MainActivity", "Saving state to: $filePath")
-                                saveState(filePath)
-                            },
-                            onLoadState = { filePath ->
-                                Log.d("MainActivity", "Loading state from: $filePath")
-                                loadState(filePath)
-                            },
-                            onReset = { resetGame() },
-                            onFastForward = { setFastForward(it) },
-                            onControllerMapping = { navController.navigate(Screen.CONTROLLER_MAPPING.name) },
-                            onQuit = {
-                                quitGame()
-                                uiActivePath = ""
-                                uiActiveName = ""
-                                uiActivePlatform = Platform.UNKNOWN
-                                uiActiveCore = ""
-                                uiButtonProps = emptyMap()
-                                inputManager.setContext(Platform.UNKNOWN, "")
-                            },
-                            inputManager = inputManager
-                        )
+                        composable(Screen.IMPORT.name) {
+                            ImportScreen(
+                                isScanning = isScanning,
+                                onScanGames = { performScan() },
+                                onScanCores = {
+                                    val cores = scanCores()
+                                    Toast.makeText(context, "Found ${cores.size} cores", Toast.LENGTH_SHORT).show()
+                                },
+                                onScanLayouts = {
+                                    val layouts = scanLayouts()
+                                    Toast.makeText(context, "Found ${layouts.size} layouts", Toast.LENGTH_SHORT).show()
+                                },
+                                onImportFiles = { romImporter.launch(arrayOf("*/*")) },
+                                coresCount = scanCores().size,
+                                layoutsCount = scanLayouts().size,
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+                        composable(Screen.SEARCH.name) {
+                            SearchScreen(
+                                games = gameList,
+                                showExtensions = isExtensionsShown,
+                                prefs = prefs,
+                                onToggleFavorite = { game ->
+                                    scope.launch(Dispatchers.IO) {
+                                        gameDao.updateGame(game.copy(isFavorite = !game.isFavorite))
+                                    }
+                                },
+                                onGameSelected = { game ->
+                                    launchGame(game)
+                                    uiActivePath = activeGamePath
+                                    uiActiveName = activeGameName
+                                    uiActivePlatform = activeGamePlatform
+                                    uiActiveCore = activeGameCorePath
+                                    uiButtonProps = buttonProps
+                                    navController.navigate(Screen.GAME.name)
+                                }
+                            )
+                        }
+                        composable(Screen.SETTINGS.name) {
+                            SettingsScreen(
+                                prefs = prefs,
+                                rootStorageDir = storageDir,
+                                gameDao = gameDao,
+                                games = gameList,
+                                onReportBug = { Toast.makeText(context, "Check logs in console", Toast.LENGTH_SHORT).show() },
+                                onGoToAbout = { navController.navigate(Screen.ABOUT.name) },
+                                onGoToHelp = { navController.navigate(Screen.HELP.name) },
+                                onGoToBios = { navController.navigate(Screen.BIOS.name) },
+                                onGoToControllerMapping = { navController.navigate(Screen.CONTROLLER_MAPPING.name) }
+                            )
+                        }
+                        composable(Screen.BIOS.name) {
+                            BiosScreen(
+                                storageDir = storageDir,
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+                        composable(Screen.ABOUT.name) {
+                            AboutScreen(
+                                storageDir = storageDir,
+                                gameDao = gameDao,
+                                prefs = prefs,
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+                        composable(Screen.HELP.name) {
+                            HelpScreen(onBack = { navController.popBackStack() })
+                        }
+                        composable(Screen.CONTROLLER_MAPPING.name) {
+                            ControllerMappingScreen(
+                                inputDao = inputDao,
+                                inputManager = inputManager,
+                                currentPlatform = activeGamePlatform,
+                                currentGamePath = activeGamePath,
+                                onBack = { navController.popBackStack() },
+                                onTestControls = { navController.navigate(Screen.CONTROLLER_TEST.name) }
+                            )
+                        }
+                        composable(Screen.CONTROLLER_TEST.name) {
+                            ControllerTestScreen(
+                                inputManager = inputManager,
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+                        composable(Screen.SETUP_GUIDE.name) {
+                            SetupGuideScreen(
+                                onFinish = {
+                                    prefs.edit { putBoolean(KEY_SETUP_COMPLETE, false) }
+                                    // Manually trigger tour if simple setup was chosen
+                                    val mode = prefs.getString(KEY_SETUP_MODE, "advanced")
+                                    if (mode == "simple") {
+                                        tourStep = 1
+                                    }
+                                    navController.navigate(Screen.HOME.name) {
+                                        popUpTo(Screen.SETUP_GUIDE.name) { inclusive = true }
+                                    }
+                                },
+                                onImportBios = { navController.navigate(Screen.BIOS.name) },
+                                onScanLibrary = { performScan() },
+                                isScanning = isScanning,
+                                gameList = gameList,
+                                prefs = prefs,
+                                gameDao = gameDao
+                            )
+                        }
+                        composable(
+                            route = Screen.GAME.name,
+                            enterTransition = { fadeIn(animationSpec = tween(150)) },
+                            exitTransition = { fadeOut(animationSpec = tween(150)) },
+                            popEnterTransition = { fadeIn(animationSpec = tween(150)) },
+                            popExitTransition = { fadeOut(animationSpec = tween(150)) }
+                        ) {
+                            val gameSafeName = remember(activeGameName) {
+                                activeGameName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                            }
+                            val gameSaveDir = remember(gameSafeName) {
+                                File(savesDir, gameSafeName).also { it.mkdirs() }
+                            }
+                            GameScreen(
+                                gameName = activeGameName,
+                                platform = activeGamePlatform,
+                                gamePath = activeGamePath,
+                                corePath = activeGameCorePath,
+                                storageDir = storageDir,
+                                savesDir = gameSaveDir,
+                                layoutsDir = layoutsDir,
+                                buttonProps = buttonProps,
+                                onUpdateProps = { id, props -> buttonProps = buttonProps + (id to props) },
+                                onResetControls = { buttonProps = emptyMap() },
+                                onBack = {
+                                    saveLayout(activeGameName)
+                                    navController.popBackStack()
+                                },
+                                onTogglePause = { if (it) pauseGame() else resumeGame() },
+                                onSaveState = { filePath ->
+                                    Log.d("MainActivity", "Saving state to: $filePath")
+                                    saveState(filePath)
+                                },
+                                onLoadState = { filePath ->
+                                    Log.d("MainActivity", "Loading state from: $filePath")
+                                    loadState(filePath)
+                                },
+                                onReset = { resetGame() },
+                                onFastForward = { setFastForward(it) },
+                                onControllerMapping = { navController.navigate(Screen.CONTROLLER_MAPPING.name) },
+                                onQuit = {
+                                    quitGame()
+                                    uiActivePath = ""
+                                    uiActiveName = ""
+                                    uiActivePlatform = Platform.UNKNOWN
+                                    uiActiveCore = ""
+                                    uiButtonProps = emptyMap()
+                                    inputManager.setContext(Platform.UNKNOWN, "")
+                                },
+                                inputManager = inputManager
+                            )
+                        }
+                    }
+                }
+
+                // Global Tour Overlay
+                if (tourStep > 0) {
+                    Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)).clickable(enabled = false) {}) {
+                        when (tourStep) {
+                            1 -> GuidedTourTooltip(
+                                text = "Welcome to Arc! Your most recently played games will appear here for quick access.",
+                                onNext = { 
+                                    tourStep = 2
+                                    navController.navigate(Screen.LIBRARY.name)
+                                },
+                                onSkip = { 
+                                    tourStep = 0
+                                    prefs.edit { putBoolean(KEY_TOUR_COMPLETE, true) }
+                                },
+                                modifier = Modifier.align(Alignment.Center)
+                            )
+                            2 -> GuidedTourTooltip(
+                                text = "The Library tab holds your entire collection, beautifully organized by platform.",
+                                onNext = { 
+                                    tourStep = 3
+                                    navController.navigate(Screen.SEARCH.name)
+                                },
+                                onSkip = { 
+                                    tourStep = 0
+                                    prefs.edit { putBoolean(KEY_TOUR_COMPLETE, true) }
+                                },
+                                modifier = Modifier.align(Alignment.BottomStart).padding(bottom = 200.dp, start = 16.dp) // HIGHER
+                            )
+                            3 -> GuidedTourTooltip(
+                                text = "Looking for something specific? The Search tab helps you find games instantly.",
+                                onNext = { 
+                                    tourStep = 4
+                                    navController.navigate(Screen.SETTINGS.name)
+                                },
+                                onSkip = { 
+                                    tourStep = 0
+                                    prefs.edit { putBoolean(KEY_TOUR_COMPLETE, true) }
+                                },
+                                modifier = Modifier.align(Alignment.TopCenter).padding(top = 80.dp)
+                            )
+                            4 -> GuidedTourTooltip(
+                                text = "Finally, use Settings to customize your experience and manage cores.",
+                                isLast = true,
+                                onNext = { 
+                                    tourStep = 0
+                                    prefs.edit { putBoolean(KEY_TOUR_COMPLETE, true) }
+                                    navController.navigate(Screen.HOME.name)
+                                },
+                                onSkip = { 
+                                    tourStep = 0
+                                    prefs.edit { putBoolean(KEY_TOUR_COMPLETE, true) }
+                                },
+                                modifier = Modifier.align(Alignment.Center)
+                            )
+                        }
                     }
                 }
             }
