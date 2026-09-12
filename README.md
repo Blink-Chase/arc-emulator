@@ -1,3 +1,7 @@
+<p align="center">
+  <img src=".github/assets/Arc-retro.png" width="128">
+</p>
+
 # Arc Emulator
 
 An open-source Libretro emulator for Android focused on clean user experience, high compatibility, and deep customization.
@@ -9,26 +13,40 @@ An open-source Libretro emulator for Android focused on clean user experience, h
 **Arc Emulator** is a modern Android emulation platform powered by Libretro. Designed with a focus on simplicity and performance, it provides a seamless bridge between classic hardware and modern mobile devices.
 
 > [!NOTE]
-> **Pre-Release Beta:** Arc is currently in active development. As a pre-release version, you may encounter bugs or rough edges. Your feedback is incredibly important as we continue to improve the experience.
+> **Pre-Release Beta:** Arc is currently in active development. Since the project is still in its early stages, expect some bugs. Your feedback is incredibly important as we continue to improve the experience.
 
 ---
 
 ## 📸 Visual Showcase
 
-| Home Screen | Library Grid | Controller Mapping |
-| :--- | :--- | :--- |
-| ![Home](docs/screenshots/home.png) | ![Library](docs/screenshots/library.png) | ![Mapping](docs/screenshots/mapping.png) |
+| Home Screen | Game View | Controller Mapping |
+| :---: | :---: | :---: |
+| <img src=".github/assets/Arc%20Emulator%20Home.jpg" height="420"> | <img src=".github/assets/Arc%20Emulator%20GameView.jpg" height="420"> | <img src=".github/assets/Arc%20Emulator%20Controller%20Mapping.jpg" height="420"> |
+
+| Library Grid | Search View | App Settings |
+| :---: | :---: | :---: |
+| <img src=".github/assets/Arc%20Emulator%20Library.jpg" height="420"> | <img src=".github/assets/Arc%20Emulator%20Search.jpg" height="420"> | <img src=".github/assets/Arc%20Emulator%20Settings.jpg" height="420"> |
 
 ---
 
 ## ✨ Key Features
 
-*   **Modern Jetpack Compose UI:** A responsive, "Aero-inspired" interface with full Light/Dark/System theme options.
-*   **Physical Controller Support:** Full Bluetooth and USB gamepad compatibility with a step-by-step Mapping Wizard.
-*   **Pro Touch Engine:** Individually resizable and transparent buttons, high-performance Canvas joysticks, and 8-way directional hints.
-*   **Automatic Metadata & Art:** Background scraping for Box Art, game descriptions, and ratings via Libretro and ScreenScraper.
-*   **Safe Navigation:** High-reliability state preservation (No "Amnesia") and non-blocking engine parking for instant screen transitions.
-*   **Save States & Rewind:** Instant progress management with dedicated slots and visual previews.
+*   **Modern Jetpack Compose UI:** A responsive interface with full Light/Dark theme options and customizable home branding.
+*   **Physical Controller Support:** Full Bluetooth and USB gamepad compatibility with a dedicated button mapping tool and per-game profiles.
+*   **Pro Touch Engine:** Individually resizable and transparent buttons, high-performance Canvas joysticks, and support for both Modern and Classic controller themes.
+*   **Automated Box Art:** Background scraping for high-quality game covers via Libretro and ScreenScraper.
+*   **Stable Navigation:** Persistent game state management and "Non-blocking" transitions for a snappy feel.
+*   **Save States & Rewind:** Instant progress management with 5 visual slots and preview support.
+
+---
+
+## 🎨 Personalization & View Styles
+
+Arc gives you control over how your collection is displayed:
+*   **Library Styles:** Toggle between a **Detailed List** (with game info) and a **Poster Grid** (focused on box art).
+*   **Grid Scaling:** Adjust the sizing of game cards on the Home and Library screens to fit more games on your screen.
+*   **Show Extensions:** Toggle file extensions (`.sfc`, `.gba`) on or off for a cleaner library look.
+*   **Adaptive Branding:** Choose between the "Retro Icon", "Modern Icon", or "App Name" styles for the main app header.
 
 ---
 
@@ -62,7 +80,7 @@ Download the latest `Arc-Emulator-vX.X.X.apk` from the [Releases](../../releases
 
 ### 2. Initial Setup
 Upon first launch, the **Guided Setup** will walk you through:
-*   Granting the app permission to access your ROM folders.
+*   Configuring access to your game folders.
 *   Scanning your collection to build your library.
 *   Checking for necessary BIOS files for systems like PS1.
 
@@ -70,7 +88,6 @@ Upon first launch, the **Guided Setup** will walk you through:
 Arc organizes your data in a visible folder in your **Documents** directory:
 *   **`Documents/Arc/system/`**: Place your BIOS files here (e.g., `scph5501.bin`).
 *   **`Documents/Arc/saves/`**: Your game saves and state files.
-*   **`Documents/Arc/Covers/`**: Local box art storage.
 *   **`Documents/Arc/templates/`**: Your custom touch layout templates.
 *   **`Documents/Arc/cores/`**: Manually add extra `.so` cores here if they aren't bundled.
 
@@ -92,17 +109,25 @@ Every button in Arc is independent. In Edit Mode, tap a button to adjust its **S
 ## 🛠️ Troubleshooting & Tips
 
 ### Missing BIOS Files
-Systems like PS1 and GBA perform best with original BIOS files. Use the **BIOS Manager** in Settings to check your status; it will show a ✅ if the file is correctly placed in `Arc/system/`.
+Systems like PS1 and GBA perform best with original BIOS files. Use the **BIOS Manager** in Settings to check your status; it will show a ✅ if the file is correctly placed in `/Documents/Arc/system/`.
 
 ### Controller Stick Drift
-If your physical controller has stick drift, navigate to **Settings > Input Device** and adjust the **Analog Deadzone** slider to increase the "null zone" of your thumbsticks.
+If your physical controller has stick drift, navigate to **Settings > Input Device > Analog Deadzone** and adjust the slider to increase the "null zone" of your thumbsticks.
 
 ### Black Screen on Resume
 If the game screen remains black after returning from a menu:
 1.  Open the **In-Game Menu** and select **Resume**.
 2.  If the picture still doesn't appear, select **Reset Game**.
 3.  If the issue persists, restart the app and load the game again.
-*Please report it if you consistently encounter this issue! Providing details about the core and ROM helps us improve the rendering engine.*
+*If you consistently encounter this, please report it! Sharing details about the core and ROM helps us improve the engine.*
+
+---
+
+## 💎 Support the Project
+
+If you enjoy using Arc Emulator and want to support its development, consider buying me a coffee! Your support helps me dedicate more time to adding new features and improving the app.
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/blinkchase)
 
 ---
 

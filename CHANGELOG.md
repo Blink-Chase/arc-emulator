@@ -10,7 +10,7 @@ This major update focuses on expanding the app's core capabilities with a comple
 
 ### 🎮 Input & Controller Improvements
 - **Physical Controller Support**: Introduced a robust `InputManager` with hierarchical profile resolution (**Game > Platform > Global**).
-- **Mapping Wizard**: New interactive setup guide for calibrating Bluetooth and USB controllers with real-time feedback.
+- **Controller Mapping Tool**: New interactive setup guide for calibrating Bluetooth and USB controllers with real-time feedback.
 - **Analog Deadzone Control**: Customizable deadzone slider in Settings to eliminate stick drift and fine-tune sensitivity.
 - **Device Selection**: Toggle emulated device types per platform (e.g., standard Joypad vs. Analog DualShock).
 - **Pro Touch Customizer**: Buttons can now be individually scaled and opacified via new precision sliders in Edit Mode.
@@ -32,10 +32,10 @@ This major update focuses on expanding the app's core capabilities with a comple
 - **Non-Blocking Exit**: Re-engineered "Quit Game" logic to navigate instantly while native cleanup runs in the background.
 - **Engine Safety Lock**: Added a "Busy Guard" to prevent native crashes when rapidly switching between complex cores.
 - **"Touch Eater" Overlay**: Prevents Android system log spam (`ViewPostIme`) and resource starvation during transitions.
-- **Immortal State**: Centralized active game state in `ArcApp` (within `MainActivity`) to resolve the "Amnesia Bug" during heavy navigation.
+- **Persistent Game State**: Centralized active game state in `ArcApp` (within `MainActivity`) to resolve issues where the game path was lost during heavy navigation.
 
 ### 📂 Library & Metadata
-- **Automated Scraper**: Integrated a background service **(Libretro Thumbnails & ScreenScraper)** to fetch high-quality Box Art and metadata.
+- **Automated Box Art**: Integrated a background service **(Libretro Thumbnails & ScreenScraper)** to fetch high-quality game covers.
 - **Library View Styles**: Toggle between **Detailed** list and **Poster** grid views.
 - **Automatic Pruning**: Scanner now identifies and removes library entries for deleted or moved files.
 - **Optimized Scanning**: Removed artificial delays; libraries of 100s of games now process in seconds.
