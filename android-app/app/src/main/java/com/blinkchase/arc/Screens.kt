@@ -285,6 +285,8 @@ fun LibraryScreen(
     prefs: SharedPreferences,
     onToggleFavorite: (GameFile) -> Unit, 
     onGameSelected: (GameFile) -> Unit,
+    onRefresh: () -> Unit,
+    onRefreshMetadata: (GameFile) -> Unit,
     onNavigateToImport: () -> Unit
 ) {
     var sortMode by remember { mutableStateOf(SortMode.NAME) }
@@ -314,6 +316,13 @@ fun LibraryScreen(
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                     Spacer(modifier = Modifier.width(16.dp))
                 }
+                IconButton(onClick = { onRefresh() }) {
+                    Icon(
+                        Icons.Default.Sync,
+                        contentDescription = "Sync Library",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
                 IconButton(onClick = { isGridView = isGridView.not() }) {
                     Icon(
                         if (isGridView) Icons.AutoMirrored.Filled.List else Icons.Default.GridView,
@@ -321,7 +330,10 @@ fun LibraryScreen(
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
-                IconButton(onClick = onNavigateToImport) {
+                IconButton(onClick = {
+                    onRefresh()
+                    onNavigateToImport()
+                }) {
                     Icon(Icons.Default.Add, contentDescription = "Import", tint = MaterialTheme.colorScheme.primary)
                 }
             }
@@ -377,7 +389,13 @@ fun LibraryScreen(
                                 if (viewStyle == 1) {
                                     GamePosterItem(game, onGameSelected)
                                 } else {
-                                    GameGridItem(game, onToggleFavorite, onGameSelected, showExtensions)
+                                    GameGridItem(
+                                        game = game,
+                                        onToggleFavorite = onToggleFavorite,
+                                        onClick = onGameSelected,
+                                        onRefreshMetadata = onRefreshMetadata,
+                                        showExtensions = showExtensions
+                                    )
                                 }
                             }
                         }
@@ -398,7 +416,13 @@ fun LibraryScreen(
                                     Text("Favorites", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.primary)
                                 }
                                 items(favorites) { game ->
-                                    GameListItem(game, onToggleFavorite, onGameSelected, showExtensions)
+                                    GameListItem(
+                                        game = game,
+                                        onToggleFavorite = onToggleFavorite,
+                                        onClick = onGameSelected,
+                                        onRefreshMetadata = onRefreshMetadata,
+                                        showExtensions = showExtensions
+                                    )
                                 }
                             }
 
@@ -407,7 +431,13 @@ fun LibraryScreen(
                                     Text(if (favorites.isNotEmpty()) "All Games" else "", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.secondary)
                                 }
                                 items(others) { game ->
-                                    GameListItem(game, onToggleFavorite, onGameSelected, showExtensions)
+                                    GameListItem(
+                                        game = game,
+                                        onToggleFavorite = onToggleFavorite,
+                                        onClick = onGameSelected,
+                                        onRefreshMetadata = onRefreshMetadata,
+                                        showExtensions = showExtensions
+                                    )
                                 }
                             }
                         }
@@ -487,7 +517,8 @@ fun SettingsScreen(
     onGoToAbout: () -> Unit,
     onGoToHelp: () -> Unit,
     onGoToBios: () -> Unit,
-    onGoToControllerMapping: () -> Unit
+    onGoToControllerMapping: () -> Unit,
+    onRefresh: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
     var refreshKey by remember { mutableIntStateOf(0) }
@@ -521,6 +552,21 @@ fun SettingsScreen(
                     Toast.makeText(context, "Imported $fileName", Toast.LENGTH_SHORT).show()
                     refreshKey++
                 } catch (e: Exception) { Toast.makeText(context, "Import Failed: ${e.message}", Toast.LENGTH_LONG).show() }
+            }
+        }
+    }
+
+    val pathLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        uri?.let {
+            val path = it.path ?: ""
+            val split = path.split(":")
+            if (split.size > 1) {
+                val real = Environment.getExternalStorageDirectory().absolutePath + "/" + split[1]
+                val new = customPaths + real
+                customPaths = new
+                prefs.edit { putStringSet(MainActivity.KEY_CUSTOM_PATHS, new) }
+                refreshKey++
+                onRefresh()
             }
         }
     }
@@ -636,13 +682,44 @@ fun SettingsScreen(
                 }
             }
             SettingsItem(title = "Scan Mode", subtitle = if (scanMode == 0) "Auto (Documents)" else "Custom Folders") {
-                Switch(checked = scanMode == 1, onCheckedChange = { scanMode = if (it) 1 else 0; prefs.edit { putInt(MainActivity.KEY_SCAN_MODE, scanMode) } })
+                Switch(checked = scanMode == 1, onCheckedChange = { 
+                    scanMode = if (it) 1 else 0
+                    prefs.edit { putInt(MainActivity.KEY_SCAN_MODE, scanMode) } 
+                    onRefresh()
+                })
             }
             if (scanMode == 1) {
-                customPaths.forEach { path ->
-                    ListItem(headlineContent = { Text(path.split("/").last()) }, supportingContent = { Text(path, style = MaterialTheme.typography.bodySmall) }, trailingContent = {
-                        IconButton(onClick = { val new = customPaths - path; customPaths = new; prefs.edit { putStringSet(MainActivity.KEY_CUSTOM_PATHS, new) }; refreshKey++ }) { Icon(Icons.Default.Delete, null, tint = Color.Red) }
-                    })
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                ) {
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        customPaths.forEach { path ->
+                            ListItem(
+                                headlineContent = { Text(path.split("/").last(), style = MaterialTheme.typography.bodyMedium) },
+                                supportingContent = { Text(path, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                trailingContent = {
+                                    IconButton(onClick = { 
+                                        val new = customPaths - path
+                                        customPaths = new
+                                        prefs.edit { putStringSet(MainActivity.KEY_CUSTOM_PATHS, new) }
+                                        refreshKey++
+                                        onRefresh()
+                                    }) { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }
+                                },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                            )
+                        }
+                        
+                        TextButton(
+                            onClick = { pathLauncher.launch(null) },
+                            modifier = Modifier.align(Alignment.End)
+                        ) {
+                            Icon(Icons.Default.Add, null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Add Folder")
+                        }
+                    }
                 }
             }
             var isScraping by remember { mutableStateOf(false) }
@@ -652,7 +729,7 @@ fun SettingsScreen(
                 else { Button(onClick = {
                     scope.launch {
                         isScraping = true
-                        val missing = games.filter { it.coverUrl == null }
+                        val missing = games.filter { it.coverUrl.isNullOrBlank() }
                         var count = 0
                         missing.forEach { game ->
                             scrapeMessage = "Scraping: ${game.name.substringBeforeLast(".")}"
@@ -666,7 +743,12 @@ fun SettingsScreen(
             }
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), thickness = 0.5.dp, color = Color.Gray.copy(alpha = 0.3f))
             SettingsCategory("SYSTEM", Icons.Default.Dns)
-            SettingsItem(title = "Import Cores", subtitle = "Load Libretro .so files") { Button(onClick = { coreImporter.launch("*/*") }) { Text("Import") } }
+            SettingsItem(title = "Core Downloader", subtitle = "Download or update online emulator cores") { 
+                Button(onClick = onGoToControllerMapping) { 
+                    Text("Open")
+                } 
+            }
+            SettingsItem(title = "Import Cores Manually", subtitle = "Load Libretro .so files") { Button(onClick = { coreImporter.launch("*/*") }) { Text("Import") } }
             SettingsItem(title = "BIOS Manager", subtitle = "Manage system firmware files") { Button(onClick = onGoToBios) { Text("Open") } }
             SettingsItem(title = "Diagnostics", subtitle = "Troubleshoot emulator issues") { Button(onClick = { showDiagnostics = true }) { Text("Run") } }
             SettingsItem(title = "Logs", subtitle = "Report a bug or view logs") { Button(onClick = onReportBug) { Text("View") } }
@@ -875,7 +957,14 @@ fun SearchScreen(
             }
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(results) { game -> GameListItem(game, onToggleFavorite, onGameSelected, showExtensions) }
+                items(results) { game ->
+                    GameListItem(
+                        game = game,
+                        onToggleFavorite = onToggleFavorite,
+                        onClick = onGameSelected,
+                        showExtensions = showExtensions
+                    )
+                }
             }
         }
     }
@@ -886,21 +975,150 @@ fun BiosScreen(
     storageDir: File,
     onBack: () -> Unit
 ) {
-    val biosDir = remember { File(storageDir, "system").also { it.mkdirs() } }
-    val biosFiles = remember { biosDir.listFiles()?.toList() ?: emptyList() }
+    val context = LocalContext.current
+    var refreshKey by remember { mutableIntStateOf(0) }
+    val biosCheckResults = remember(refreshKey) { BiosManager.scanBiosFiles(storageDir) }
+    val systemDir = remember { File(storageDir, "system").also { it.mkdirs() } }
+
+    val biosPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let {
+            val fileName = Utils.getFileName(context, it)
+            if (fileName != null) {
+                try {
+                    context.contentResolver.openInputStream(it)?.use { input ->
+                        val importedFile = File(systemDir, fileName)
+                        importedFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                        if (fileName.lowercase().replace("-", "").contains("scph39001")) {
+                            val pcsx2BiosDir = File(systemDir, "pcsx2/bios").also { it.mkdirs() }
+                            val canonical = File(pcsx2BiosDir, "scph39001.bin")
+                            val rootCanonical = File(systemDir, "scph39001.bin")
+                            systemDir.walkTopDown()
+                                .filter { candidate ->
+                                    candidate.isFile &&
+                                        candidate.name.lowercase().replace("-", "").contains("scph39001") &&
+                                        candidate.absolutePath != importedFile.absolutePath &&
+                                        candidate.absolutePath != canonical.absolutePath &&
+                                        candidate.absolutePath != rootCanonical.absolutePath
+                                }
+                                .forEach { it.delete() }
+                            importedFile.inputStream().use { biosInput ->
+                                canonical.outputStream().use { biosOutput -> biosInput.copyTo(biosOutput) }
+                            }
+                            canonical.copyTo(rootCanonical, overwrite = true)
+                            if (importedFile.absolutePath != canonical.absolutePath) {
+                                importedFile.delete()
+                            }
+                            Toast.makeText(context, "Replaced PS2 BIOS at ${canonical.absolutePath}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                    Toast.makeText(context, "Imported $fileName", Toast.LENGTH_SHORT).show()
+                    refreshKey++
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Import Failed: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        ScreenHeader(title = "BIOS Manager", navigationIcon = Icons.AutoMirrored.Filled.ArrowBack, onNavigationClick = onBack)
+        ScreenHeader(
+            title = "BIOS Manager",
+            navigationIcon = Icons.AutoMirrored.Filled.ArrowBack,
+            onNavigationClick = onBack,
+            actions = {
+                IconButton(onClick = { biosPicker.launch("*/*") }) {
+                    Icon(Icons.Default.FileOpen, contentDescription = "Import BIOS", tint = MaterialTheme.colorScheme.primary)
+                }
+            }
+        )
+
         Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-            Text("Place BIOS files in /Documents/Arc/system/ for consoles like PS1, GBA, etc.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-            Spacer(Modifier.height(16.dp))
-            if (biosFiles.isEmpty()) { Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No BIOS files found", color = Color.Gray) } }
-            else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(biosFiles) { file ->
-                        Card(modifier = Modifier.fillMaxWidth()) {
-                            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Description, null, tint = MaterialTheme.colorScheme.primary)
-                                Spacer(Modifier.width(16.dp)); Text(file.name, style = MaterialTheme.typography.bodyMedium); Spacer(Modifier.weight(1f)); Text("${file.length() / 1024} KB", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            Text(
+                text = "Required firmware files for specific systems. Place them in /Documents/Arc/system/",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Gray,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                // Group by platform
+                val grouped = biosCheckResults.groupBy { it.requirement.platform }
+                
+                grouped.forEach { (platform, results) ->
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                            )
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(8.dp)
+                                            .clip(CircleShape)
+                                            .background(platform.getColor())
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = platform.name,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = platform.getColor()
+                                    )
+                                }
+                                
+                                Spacer(modifier = Modifier.height(8.dp))
+                                
+                                results.forEach { result ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = when (result.status) {
+                                                BiosManager.BiosStatus.VALID -> Icons.Default.CheckCircle
+                                                BiosManager.BiosStatus.CORRUPTED -> Icons.Default.Error
+                                                BiosManager.BiosStatus.MISSING -> Icons.Default.Description
+                                            },
+                                            contentDescription = null,
+                                            tint = when (result.status) {
+                                                BiosManager.BiosStatus.VALID -> Color(0xFF4CAF50)
+                                                BiosManager.BiosStatus.CORRUPTED -> MaterialTheme.colorScheme.error
+                                                BiosManager.BiosStatus.MISSING -> Color.Gray.copy(alpha = 0.5f)
+                                            },
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = result.requirement.fileName,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                            Text(
+                                                text = result.requirement.description,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = Color.Gray
+                                            )
+                                        }
+                                        
+                                        if (result.status == BiosManager.BiosStatus.CORRUPTED) {
+                                            Text(
+                                                text = "Invalid MD5",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.error
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

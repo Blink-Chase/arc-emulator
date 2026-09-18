@@ -5,10 +5,12 @@ import android.os.Environment
 import android.view.SurfaceView
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.*
@@ -41,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
 import java.io.File
 import kotlin.math.roundToInt
 
@@ -60,79 +63,103 @@ fun PlatformBadge(platform: Platform) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun GameListItem(
     game: GameFile,
     onToggleFavorite: (GameFile) -> Unit,
     onClick: (GameFile) -> Unit,
+    onRefreshMetadata: (GameFile) -> Unit = {},
     showExtensions: Boolean = false
 ) {
+    var showMenu by remember { mutableStateOf(false) }
+
     Card(
-        modifier = Modifier.fillMaxWidth().clickable { onClick(game) },
+        modifier = Modifier.fillMaxWidth().combinedClickable(
+            onClick = { onClick(game) },
+            onLongClick = { showMenu = true }
+        ),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
         border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.1f))
     ) {
-        Row(
-            modifier = Modifier.padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(modifier = Modifier.size(48.dp)) {
-                val coversDir = remember { 
-                    val documentsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
-                    File(File(documentsDir, "Arc"), "Covers")
-                }
-                val coverFile = remember(game.name) {
-                    val baseName = game.name.substringBeforeLast(".")
-                    val extensions = listOf(".png", ".jpg", ".jpeg")
-                    extensions.map { File(coversDir, "$baseName$it") }.find { it.exists() }
-                }
+        Box {
+            Row(
+                modifier = Modifier.padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // ... existing Row content ...
+                Box(modifier = Modifier.size(48.dp)) {
+                    val coversDir = remember { 
+                        val documentsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+                        File(File(documentsDir, "Arc"), "Covers")
+                    }
+                    val coverFile = remember(game.name) {
+                        val baseName = game.name.substringBeforeLast(".")
+                        val extensions = listOf(".png", ".jpg", ".jpeg")
+                        extensions.map { File(coversDir, "$baseName$it") }.find { it.exists() }
+                    }
 
-                if (game.coverUrl != null) {
-                    AsyncImage(
-                        model = game.coverUrl,
-                        contentDescription = game.name,
-                        modifier = Modifier.fillMaxSize().border(1.dp, Color.Gray,
-                            RoundedCornerShape(4.dp)
-                        ),
-                        contentScale = ContentScale.Crop
-                    )
-                } else if (coverFile != null) {
-                    AsyncImage(
-                        model = coverFile,
-                        contentDescription = game.name,
-                        modifier = Modifier.fillMaxSize().border(1.dp, Color.Gray, RoundedCornerShape(4.dp)),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        color = game.platform.getColor().copy(alpha = 0.2f),
-                        shape = RoundedCornerShape(4.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(game.platform.name.take(2), style = MaterialTheme.typography.labelSmall)
+                    if (game.coverUrl != null) {
+                        AsyncImage(
+                            model = game.coverUrl,
+                            contentDescription = game.name,
+                            modifier = Modifier.fillMaxSize().border(1.dp, Color.Gray,
+                                RoundedCornerShape(4.dp)
+                            ),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else if (coverFile != null) {
+                        AsyncImage(
+                            model = coverFile,
+                            contentDescription = game.name,
+                            modifier = Modifier.fillMaxSize().border(1.dp, Color.Gray, RoundedCornerShape(4.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Surface(
+                            modifier = Modifier.fillMaxSize(),
+                            color = game.platform.getColor().copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(game.platform.name.take(2), style = MaterialTheme.typography.labelSmall)
+                            }
                         }
                     }
                 }
+                
+                Spacer(modifier = Modifier.width(12.dp))
+                
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        if (showExtensions) game.name else game.name.substringBeforeLast("."), 
+                        style = MaterialTheme.typography.bodyMedium, 
+                        maxLines = 1, 
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(game.platform.name, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                }
+                
+                IconButton(onClick = { onToggleFavorite(game) }) {
+                    Icon(
+                        if (game.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = "Favorite",
+                        tint = if (game.isFavorite) Color.Red else Color.Gray
+                    )
+                }
             }
-            
-            Spacer(modifier = Modifier.width(12.dp))
-            
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    if (showExtensions) game.name else game.name.substringBeforeLast("."), 
-                    style = MaterialTheme.typography.bodyMedium, 
-                    maxLines = 1, 
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(game.platform.name, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-            }
-            
-            IconButton(onClick = { onToggleFavorite(game) }) {
-                Icon(
-                    if (game.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = "Favorite",
-                    tint = if (game.isFavorite) Color.Red else Color.Gray
+
+            DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Refresh Metadata/Cover") },
+                    onClick = {
+                        showMenu = false
+                        onRefreshMetadata(game)
+                    },
+                    leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) }
                 )
             }
         }
@@ -182,7 +209,7 @@ fun SaveManagerDialog(
     filesDir: File,
     surfaceView: SurfaceView?,
     onSave: (String) -> Boolean,
-    onLoad: (String) -> Boolean,
+    onLoad: suspend (String) -> Boolean,
     onResume: () -> Unit,
     onAfterLoad: () -> Unit,
     onDismiss: () -> Unit
@@ -192,6 +219,8 @@ fun SaveManagerDialog(
     val gameSavesDir = remember(filesDir) { filesDir }
     var refreshTrigger by remember { mutableIntStateOf(0) }
     var lastMessage by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    var loadInProgress by remember { mutableStateOf(false) }
 
     fun showMessage(msg: String) {
         lastMessage = msg
@@ -297,18 +326,23 @@ fun SaveManagerDialog(
                                     }
                                     
                                     Button(
-                                        onClick = { 
-                                            val success = onLoad(stateFile.absolutePath)
-                                            if (success) {
-                                                showMessage("Loaded slot ${slot + 1}")
-                                                onResume()
-                                                onAfterLoad()
-                                            } else {
-                                                showMessage("Load failed")
+                                        onClick = {
+                                            if (loadInProgress) return@Button
+                                            loadInProgress = true
+                                            scope.launch {
+                                                val success = onLoad(stateFile.absolutePath)
+                                                loadInProgress = false
+                                                if (success) {
+                                                    showMessage("Loaded slot ${slot + 1}")
+                                                    onResume()
+                                                    onAfterLoad()
+                                                } else {
+                                                    showMessage("Load failed")
+                                                }
+                                                onDismiss()
                                             }
-                                            onDismiss()
                                         },
-                                        enabled = exists,
+                                        enabled = exists && !loadInProgress,
                                         modifier = Modifier.weight(1f).height(36.dp),
                                         contentPadding = PaddingValues(4.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
@@ -372,92 +406,132 @@ fun GameThumbnailItem(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun GameGridItem(
     game: GameFile,
     onToggleFavorite: (GameFile) -> Unit,
     onClick: (GameFile) -> Unit,
+    onRefreshMetadata: (GameFile) -> Unit,
     showExtensions: Boolean = false
 ) {
+    var showMenu by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick(game) },
+            .combinedClickable(
+                onClick = { onClick(game) },
+                onLongClick = { showMenu = true }
+            ),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
         border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.1f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column {
-            Box(modifier = Modifier.aspectRatio(0.66f).fillMaxWidth()) {
-                val coversDir = remember { 
-                    val documentsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
-                    File(File(documentsDir, "Arc"), "Covers")
-                }
-                val coverFile = remember(game.name) {
-                    val baseName = game.name.substringBeforeLast(".")
-                    val extensions = listOf(".png", ".jpg", ".jpeg")
-                    extensions.map { File(coversDir, "$baseName$it") }.find { it.exists() }
-                }
+        Box {
+            Column {
+                Box(modifier = Modifier.aspectRatio(0.66f).fillMaxWidth()) {
+                    // ... existing image loading ...
+                    val coversDir = remember { 
+                        val documentsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+                        File(File(documentsDir, "Arc"), "Covers")
+                    }
+                    val coverFile = remember(game.name) {
+                        val baseName = game.name.substringBeforeLast(".")
+                        val extensions = listOf(".png", ".jpg", ".jpeg")
+                        extensions.map { File(coversDir, "$baseName$it") }.find { it.exists() }
+                    }
 
-                val imageSource = game.coverUrl ?: coverFile
+                    val imageSource = game.coverUrl ?: coverFile
 
-                if (imageSource != null) {
-                    AsyncImage(
-                        model = imageSource,
-                        contentDescription = game.name,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
+                    if (imageSource != null) {
+                        AsyncImage(
+                            model = imageSource,
+                            contentDescription = game.name,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier.fillMaxSize().background(game.platform.getColor().copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(game.platform.name, style = MaterialTheme.typography.labelLarge, color = game.platform.getColor())
+                        }
+                    }
+                }
+                
+                Column(modifier = Modifier.padding(8.dp)) {
+                    Text(
+                        if (showExtensions) game.name else game.name.substringBeforeLast("."),
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        fontWeight = FontWeight.Bold
                     )
-                } else {
-                    Box(
-                        modifier = Modifier.fillMaxSize().background(game.platform.getColor().copy(alpha = 0.2f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(game.platform.name, style = MaterialTheme.typography.labelLarge, color = game.platform.getColor())
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(game.platform.name, style = TextStyle(fontSize = 10.sp), color = Color.Gray, modifier = Modifier.weight(1f))
+                        IconButton(onClick = { onToggleFavorite(game) }, modifier = Modifier.size(24.dp)) {
+                            Icon(
+                                if (game.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                contentDescription = null,
+                                tint = if (game.isFavorite) Color.Red else Color.Gray,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
                 }
             }
-            
-            Column(modifier = Modifier.padding(8.dp)) {
-                Text(
-                    if (showExtensions) game.name else game.name.substringBeforeLast("."),
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    fontWeight = FontWeight.Bold
+
+            DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Refresh Metadata/Cover") },
+                    onClick = {
+                        showMenu = false
+                        onRefreshMetadata(game)
+                    },
+                    leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) }
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(game.platform.name, style = TextStyle(fontSize = 10.sp), color = Color.Gray, modifier = Modifier.weight(1f))
-                    IconButton(onClick = { onToggleFavorite(game) }, modifier = Modifier.size(24.dp)) {
-                        Icon(
-                            if (game.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            contentDescription = null,
-                            tint = if (game.isFavorite) Color.Red else Color.Gray,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
+                DropdownMenuItem(
+                    text = { Text(if (game.isFavorite) "Remove from Favorites" else "Add to Favorites") },
+                    onClick = {
+                        showMenu = false
+                        onToggleFavorite(game)
+                    },
+                    leadingIcon = { Icon(if (game.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, contentDescription = null) }
+                )
             }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun GamePosterItem(
     game: GameFile,
-    onClick: (GameFile) -> Unit
+    onClick: (GameFile) -> Unit,
+    onRefreshMetadata: (GameFile) -> Unit = {}
 ) {
+    var showMenu by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(0.66f) // Standard 2:3 poster ratio
-            .clickable { onClick(game) },
+            .combinedClickable(
+                onClick = { onClick(game) },
+                onLongClick = { showMenu = true }
+            ),
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
+            // ... existing image loading ...
             val coversDir = remember { 
                 val documentsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
                 File(File(documentsDir, "Arc"), "Covers")
@@ -493,6 +567,20 @@ fun GamePosterItem(
             // Subtle overlay for platform badge
             Box(modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)) {
                 PlatformBadge(game.platform)
+            }
+
+            DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Refresh Metadata/Cover") },
+                    onClick = {
+                        showMenu = false
+                        onRefreshMetadata(game)
+                    },
+                    leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) }
+                )
             }
         }
     }

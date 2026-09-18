@@ -94,6 +94,7 @@ class MainActivity : ComponentActivity() {
         const val BTN_A = 8; const val BTN_X = 9; const val BTN_L = 10; const val BTN_R = 11
         const val BTN_L2 = 12; const val BTN_R2 = 13; const val BTN_L3 = 14; const val BTN_R3 = 15
         const val BTN_Z = 12 // Z usually maps to L2 in modern retro mapping
+        const val BTN_SCREEN_SWAP = 16 // DS specialized button
         const val KEY_LAST_CRASHED_CORE = "last_crashed_core"
         const val KEY_LAST_CRASHED_LAYOUT = "last_crashed_layout"
 
@@ -106,7 +107,10 @@ class MainActivity : ComponentActivity() {
             Platform.N64 to listOf("parallel_n64_libretro_android", "mupen64plus_next_gles3", "mupen64plus_next_gles2", "mupen64plus_next_libretro", "mupen64plus_next_libretro_android", "mupen64plus_next"),
             Platform.PS1 to listOf("pcsx_rearmed_libretro_android", "swanstation_libretro_android", "pcsx_rearmed"),
             Platform.GAMECUBE to listOf("dolphin_libretro_android", "dolphin"),
-            Platform.WII to listOf("dolphin_libretro_android", "dolphin")
+            Platform.WII to listOf("dolphin_libretro_android", "dolphin"),
+            Platform.DS to listOf("melonds_libretro_android", "desmume_libretro_android"),
+            Platform.PS2 to listOf("pcsx2_libretro_android"),
+            Platform.SATURN to listOf("yabause_libretro_android", "beetle_saturn_libretro_android")
         )
     }
 
@@ -169,6 +173,7 @@ class MainActivity : ComponentActivity() {
     external fun getAudioSamples(buffer: ShortArray, maxSamples: Int): Int
     external fun getNativeFps(): Int
     external fun getGameSampleRate(): Double
+    external fun getGameFrameRate(): Double
     external fun getAudioBufferOccupancy(): Int
 
     private val surfaceLock = Any()
@@ -206,8 +211,6 @@ class MainActivity : ComponentActivity() {
         val success = nativeLoadGame(romPath)
         if (success) {
             isEngineReady = true
-            // Apply controller type safely after core is loaded and game is initialized
-            setControllerType(0, currentRetroType)
             
             // PROACTIVE NUDGE: Kick the renderer once immediately
             if (isSurfaceActive) {
@@ -226,8 +229,8 @@ class MainActivity : ComponentActivity() {
         isAudioRunning = true
 
         audioThread = Thread {
-            val buffer = ShortArray(2048) // Small buffer for low latency
-            var currentSpeed = 1.0f
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_AUDIO)
+            val buffer = ShortArray(4096)
             var lastLogTime = System.currentTimeMillis()
             var totalSamplesRead = 0L
             while (isAudioRunning) {
@@ -237,8 +240,14 @@ class MainActivity : ComponentActivity() {
                     val track = audioTrack
                     if (track != null && track.playState == android.media.AudioTrack.PLAYSTATE_PLAYING) {
                         try {
-                            val written = track.write(buffer, 0, samplesRead)
-                            if (written > 0) {
+                            var offset = 0
+                            while (offset < samplesRead && isAudioRunning) {
+                                val written = track.write(buffer, offset, samplesRead - offset)
+                                if (written <= 0) {
+                                    audioErrorCount++
+                                    break
+                                }
+                                offset += written
                                 samplesWritten.addAndGet(written.toLong())
                                 totalSamplesRead += written
                             }
@@ -248,29 +257,9 @@ class MainActivity : ComponentActivity() {
                     }
                 } else {
                     // If buffer is empty, sleep briefly to save CPU
-                    try { Thread.sleep(2) } catch (e: Exception) {}
-                }
-
-                // DYNAMIC AUDIO SYNC: Adjust playback speed to match emulation speed
-                // This eliminates crackling when FPS drops below 60 (e.g. 48 FPS)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    val occupancy = getAudioBufferOccupancy()
-                    // Buffer size is 12288 samples. Target is ~50% (6000).
-                    // Tuned for real device performance (S23 FE)
-
-                    var targetSpeed = 1.0f
-
-                    if (occupancy < 2000) targetSpeed = 0.95f       // Buffer low, slow down slightly
-                    else if (occupancy > 10000) targetSpeed = 1.05f // Buffer high, speed up slightly
-
-                    // Only apply if changed significantly to avoid overhead
-                    if (kotlin.math.abs(targetSpeed - currentSpeed) > 0.02f) {
-                        try {
-                            val params = audioTrack?.playbackParams ?: android.media.PlaybackParams()
-                            audioTrack?.playbackParams = params.setSpeed(targetSpeed)
-                            currentSpeed = targetSpeed
-                            Utils.Logger.d("ArcAudio", "Sync: Adjusting audio speed to $targetSpeed (Buffer: $occupancy)")
-                        } catch (e: Exception) {}
+                    try { Thread.sleep(1) } catch (e: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        break
                     }
                 }
 
@@ -288,6 +277,12 @@ class MainActivity : ComponentActivity() {
     }
 
     fun resetAudio() {
+        isAudioRunning = false
+        val thread = audioThread
+        audioThread = null
+        try { thread?.join(500) } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
         synchronized(audioLock) {
             try {
                 audioTrack?.release()
@@ -298,16 +293,30 @@ class MainActivity : ComponentActivity() {
         wasPlaying = false
         lastPositionFrames = 0
 
-        // Stop thread
-        isAudioRunning = false
-        try { audioThread?.join(100) } catch (e: Exception) {}
-        audioThread = null
+    }
+
+    private fun loadStateAndResetAudio(path: String): Boolean {
+        val success = loadState(path)
+        if (success) {
+            synchronized(audioLock) {
+                try {
+                    audioTrack?.flush()
+                } catch (e: Exception) {
+                    audioErrorCount++
+                }
+            }
+        }
+        return success
     }
 
     fun pauseGame() {
         Log.d("Arc", "Requesting Game Pause...")
         isAudioRunning = false
+        val thread = audioThread
         audioThread = null
+        try { thread?.join(500) } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
 
         synchronized(audioLock) {
             try { audioTrack?.pause() } catch (e: Exception) {}
@@ -540,6 +549,9 @@ class MainActivity : ComponentActivity() {
 
                         val fileName = Utils.getFileName(context, uri) ?: "Unknown Game"
                         val path = uri.toString()
+                        
+                        // Aggressive duplicate check for manual import
+                        if (fileName.contains(Regex("(Track|Part|Data|Audio|Disc|Disk|Side)\\s*([2-9]|0[2-9]|\\d{2,})", RegexOption.IGNORE_CASE))) return@forEach
 
                         // Platform detection logic based on filename
                         val platform = when {
@@ -549,9 +561,25 @@ class MainActivity : ComponentActivity() {
                             fileName.endsWith(".gbc", true) -> Platform.GBC
                             fileName.endsWith(".md", true) || fileName.endsWith(".gen", true) || fileName.endsWith(".smd", true) -> Platform.GENESIS
                             fileName.endsWith(".n64", true) || fileName.endsWith(".z64", true) || fileName.endsWith(".v64", true) -> Platform.N64
-                            fileName.endsWith(".chd", true) || fileName.endsWith(".cue", true) || fileName.endsWith(".m3u", true) || fileName.endsWith(".pbp", true) -> Platform.PS1
+                            fileName.endsWith(".nds", true) -> Platform.DS
+                            fileName.endsWith(".chd", true) || fileName.endsWith(".cue", true) || fileName.endsWith(".m3u", true) || fileName.endsWith(".pbp", true) -> {
+                                when {
+                                    fileName.contains("PS2", true) || fileName.contains("PlayStation 2", true) -> Platform.PS2
+                                    fileName.contains("Saturn", true) -> Platform.SATURN
+                                    else -> Platform.PS1
+                                }
+                            }
                             fileName.endsWith(".gcm", true) || fileName.endsWith(".rvz", true) || fileName.endsWith(".gc", true) -> Platform.GAMECUBE
                             fileName.endsWith(".wbfs", true) || fileName.endsWith(".wii", true) -> Platform.WII
+                            fileName.endsWith(".iso", true) -> {
+                                when {
+                                    fileName.contains("GC", true) || fileName.contains("GameCube", true) -> Platform.GAMECUBE
+                                    fileName.contains("Wii", true) -> Platform.WII
+                                    fileName.contains("Saturn", true) -> Platform.SATURN
+                                    else -> Platform.PS2 // Default .iso to PS2 for manual import
+                                }
+                            }
+                            fileName.endsWith(".ss", true) || (fileName.endsWith(".bin", true) && fileName.contains("Saturn", true)) -> Platform.SATURN
                             else -> Platform.UNKNOWN
                         }
                         
@@ -584,15 +612,18 @@ class MainActivity : ComponentActivity() {
             scope.launch(Dispatchers.IO) {
                 Log.d("Arc", "SCAN: Starting ROM scan...")
                 
-                // 1. Passive Cleanup: Prune missing files from database
+                // 1. Passive Cleanup: Prune missing or filtered files from database
                 Log.d("Arc", "SCAN: Validating existing library entries...")
+                val trackRegex = Regex("(Track|Part|Data|Audio|Disc|Disk|Side)\\s*([2-9]|0[2-9]|\\d{2,})", RegexOption.IGNORE_CASE)
                 gameList.forEach { game ->
-                    // Skip SAF URIs (content://) as File(path).exists() won't work correctly for them
-                    // and we already copy them to Arc/Roms/ now.
                     if (!game.path.startsWith("content://")) {
                         val file = File(game.path)
-                        if (!file.exists()) {
-                            Log.d("Arc", "SCAN: Pruning missing game: ${game.name}")
+                        val shouldPrune = !file.exists() || 
+                                          file.name.contains(trackRegex) ||
+                                          (file.extension.lowercase() == "bin" && File(file.parentFile, "${file.nameWithoutExtension}.cue").exists())
+                        
+                        if (shouldPrune) {
+                            Log.d("Arc", "SCAN: Pruning invalid/duplicate game: ${game.name}")
                             gameDao.deleteGame(game)
                         }
                     }
@@ -630,7 +661,20 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 Log.d("Arc", "SCAN: Total games found: ${allGames.size}")
-                gameDao.insertGames(allGames)
+
+                // A scan is authoritative for file name and platform. IGNORE inserts
+                // would leave stale PS1/PS2 assignments in Room after detection changes.
+                allGames.forEach { scannedGame ->
+                    val existingGame = gameDao.getGameByPath(scannedGame.path)
+                    if (existingGame == null) {
+                        gameDao.insertGames(listOf(scannedGame))
+                    } else if (existingGame.name != scannedGame.name || existingGame.platform != scannedGame.platform) {
+                        gameDao.updateGame(existingGame.copy(
+                            name = scannedGame.name,
+                            platform = scannedGame.platform
+                        ))
+                    }
+                }
                 
                 withContext(Dispatchers.Main) {
                     isScanning = false
@@ -816,6 +860,8 @@ class MainActivity : ComponentActivity() {
             Platform.N64 -> listOf("n64", "mupen", "parallel", "gles3")
                     Platform.PS1 -> listOf("pcsx", "swan", "duck")
                     Platform.GAMECUBE, Platform.WII -> listOf("dolphin")
+                    Platform.PS2 -> listOf("pcsx2", "play!")
+                    Platform.SATURN -> listOf("yabause", "beetle", "saturn")
                     else -> emptyList()
                 }
                 
@@ -890,14 +936,17 @@ class MainActivity : ComponentActivity() {
                 }
             }
         ) { innerPadding ->
-            val isFirstRun = remember { prefs.getBoolean(KEY_SETUP_COMPLETE, true) }
-            
-            // Background scraper that runs as soon as games appear and setup is in progress
+            // Background scraper retries all entries without artwork, including games
+            // added after setup and entries whose platform was corrected by a rescan.
             LaunchedEffect(gameList, isScanning) {
-                if (isFirstRun && gameList.isNotEmpty()) {
-                    // This will start scraping games as they are scanned
-                    gameList.filter { it.coverUrl == null }.forEach { game ->
-                        ScraperService.scrapeGame(game, gameDao)
+                if (gameList.isNotEmpty()) {
+                    gameList.filter { it.coverUrl.isNullOrBlank() }.forEach { game ->
+                        ScraperService.scrapeGame(
+                            game,
+                            gameDao,
+                            prefs.getString(KEY_SCREENSCRAPER_KEY, null)
+                        )
+                        delay(250)
                     }
                 }
             }
@@ -906,7 +955,7 @@ class MainActivity : ComponentActivity() {
                 Box(modifier = Modifier.padding(innerPadding)) {
                     NavHost(
                         navController = navController, 
-                        startDestination = if (isFirstRun) Screen.SETUP_GUIDE.name else Screen.HOME.name
+                        startDestination = if (prefs.getBoolean(KEY_SETUP_COMPLETE, true)) Screen.SETUP_GUIDE.name else Screen.HOME.name
                     ) {
                         composable(Screen.HOME.name) {
                             ArcHomeScreen(
@@ -984,6 +1033,17 @@ class MainActivity : ComponentActivity() {
                                     uiButtonProps = buttonProps
                                     navController.navigate(Screen.GAME.name)
                                 },
+                                onRefreshMetadata = { game ->
+                                    scope.launch(Dispatchers.IO) {
+                                        ScraperService.scrapeGame(
+                                            game,
+                                            gameDao,
+                                            prefs.getString(KEY_SCREENSCRAPER_KEY, null),
+                                            force = true
+                                        )
+                                    }
+                                },
+                                onRefresh = { performScan() },
                                 onNavigateToImport = {
                                     navController.navigate(Screen.IMPORT.name)
                                 }
@@ -1038,7 +1098,13 @@ class MainActivity : ComponentActivity() {
                                 onGoToAbout = { navController.navigate(Screen.ABOUT.name) },
                                 onGoToHelp = { navController.navigate(Screen.HELP.name) },
                                 onGoToBios = { navController.navigate(Screen.BIOS.name) },
-                                onGoToControllerMapping = { navController.navigate(Screen.CONTROLLER_MAPPING.name) }
+                                onGoToControllerMapping = { navController.navigate(Screen.CORE_MANAGEMENT.name) }, // Swap routing over safely
+                                onRefresh = { performScan() }
+                            )
+                        }
+                        composable(Screen.CORE_MANAGEMENT.name) {
+                            CoreManagementScreen(
+                                onBack = { navController.popBackStack() }
                             )
                         }
                         composable(Screen.BIOS.name) {
@@ -1130,7 +1196,9 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onLoadState = { filePath ->
                                     Log.d("MainActivity", "Loading state from: $filePath")
-                                    loadState(filePath)
+                                    withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                        loadStateAndResetAudio(filePath)
+                                    }
                                 },
                                 onReset = { resetGame() },
                                 onFastForward = { setFastForward(it) },

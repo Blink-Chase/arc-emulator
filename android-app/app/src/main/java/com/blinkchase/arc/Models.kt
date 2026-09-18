@@ -62,7 +62,7 @@ enum class VerticalAlignment {
 }
 
 enum class Platform {
-    SNES, GBA, GB, GBC, GENESIS, N64, PS1, GAMECUBE, WII, UNKNOWN;
+    SNES, GBA, GB, GBC, GENESIS, N64, PS1, GAMECUBE, WII, DS, PS2, SATURN, DREAMCAST, UNKNOWN;
 
     fun getColor(): Color = when (this) {
         SNES -> Color(0xFF9575CD) // Purple
@@ -73,6 +73,10 @@ enum class Platform {
         PS1 -> Color(0xFFE57373) // Red
         GAMECUBE -> Color(0xFFBA68C8) // Lavender
         WII -> Color(0xFF90A4AE) // Blue Grey
+        DS -> Color(0xFF42A5F5) // Light Blue
+        PS2 -> Color(0xFF3F51B5) // Indigo
+        SATURN -> Color(0xFFFFB74D) // Orange
+        DREAMCAST -> Color(0xFFFFCC80) // Light Orange
         UNKNOWN -> Color(0xFFBDBDBD) // Grey
     }
 }
@@ -111,7 +115,7 @@ enum class SearchGrouping { UNIFIED, BY_PLATFORM }
 
 enum class HomeIdentity { ICON, TEXT }
 
-enum class Screen { HOME, LIBRARY, IMPORT, SEARCH, SETTINGS, GAME, ABOUT, HELP, BIOS, CONTROLLER_MAPPING, CONTROLLER_TEST, SETUP_GUIDE }
+enum class Screen { HOME, LIBRARY, IMPORT, SEARCH, SETTINGS, GAME, ABOUT, HELP, BIOS, CONTROLLER_MAPPING, CONTROLLER_TEST, SETUP_GUIDE, CORE_MANAGEMENT }
 
 // Data class to hold individual button properties for touch layouts
 data class ButtonProps(
