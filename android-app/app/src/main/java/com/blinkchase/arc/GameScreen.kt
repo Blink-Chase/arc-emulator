@@ -56,7 +56,7 @@ fun GameScreen(
     onBack: () -> Unit,
     onTogglePause: (Boolean) -> Unit,
     onSaveState: (String) -> Boolean,
-    onLoadState: (String) -> Boolean,
+    onLoadState: suspend (String) -> Boolean,
     onReset: () -> Unit,
     onFastForward: (Boolean) -> Unit,
     onControllerMapping: () -> Unit = {},
@@ -127,6 +127,7 @@ fun GameScreen(
             var lastSamples = mainActivity?.samplesWritten?.get() ?: 0L
             var lastTime = System.nanoTime()
             var zeroSpeedCount = 0
+            var startupChecks = 0
 
             while (true) {
                 withFrameNanos { now ->
@@ -136,31 +137,25 @@ fun GameScreen(
                         val currentSamples = mainActivity?.samplesWritten?.get() ?: 0L
                         val diff = currentSamples - lastSamples
                         val rate = mainActivity?.targetSampleRate ?: 44100
-                        speed = (diff.toFloat() / rate * 100).toInt()
+                        val audioSpeed = if (rate > 0) diff.toFloat() / rate * 100f else 0f
+                        val targetFps = mainActivity?.getGameFrameRate() ?: 60.0
+                        val frameSpeed = if (targetFps > 0.0) fps.toFloat() / targetFps * 100f else 0f
+                        // Audio can be delayed or unavailable while Dolphin is booting.
+                        // Prefer the emulation rate so the overlay reflects actual core progress.
+                        speed = if (fps > 0) frameSpeed.toInt() else audioSpeed.toInt()
                         lastSamples = currentSamples
                         lastTime = now
 
-                        // Watchdog (Multi-stage recovery)
+                        // Dolphin can spend several seconds booting shaders and the
+                        // GameCube IPL before its first retro_run(). Do not pause or
+                        // destroy its surface based only on missing early audio/video.
                         if (speed == 0 && fps == 0 && !isPaused && !showMenu && !isNavigatingToMapper) {
                             zeroSpeedCount++
-                            if (zeroSpeedCount == 3) {
-                                // Stage 1: Soft Nudge (at 1.5s)
+                            startupChecks++
+                            if (startupChecks == 6) {
                                 Utils.Logger.w("GameScreen", "WATCHDOG: Engine idle detected. Sending soft nudge...")
                                 mainActivity?.nativeForceNextFrame()
                                 mainActivity?.updateNativeActivity()
-                            } else if (zeroSpeedCount >= 6) {
-                                // Stage 2: Hard Flush (at 3.0s)
-                                gameSurfaceView?.let { view ->
-                                    mainActivity?.lifecycleScope?.launch(Dispatchers.Main) {
-                                        mainActivity?.pauseGame()
-                                        mainActivity?.setSurface(null)
-                                        delay(100) 
-                                        mainActivity?.setSurface(view.holder.surface, view.width, view.height)
-                                        mainActivity?.resumeGame()
-                                        mainActivity?.nativeForceNextFrame()
-                                    }
-                                }
-                                zeroSpeedCount = 0
                             }
                         } else { zeroSpeedCount = 0 }
                     }
@@ -301,14 +296,14 @@ fun GameScreen(
                     Box(modifier = Modifier.align(if (controlConfig.style != InputStyle.HIDDEN) Alignment.Center else Alignment.TopCenter)
                         .then(if (controlConfig.style != InputStyle.HIDDEN) {
                             Modifier.fillMaxHeight().then(when (screenScale) {
-                                ScreenScale.RATIO_4_3 -> Modifier.aspectRatio(4f / 3f)
+                                ScreenScale.RATIO_4_3 -> Modifier.aspectRatio(if (platform == Platform.DS) 3f / 4f else 4f / 3f)
                                 ScreenScale.RATIO_16_9 -> Modifier.aspectRatio(16f / 9f)
                                 ScreenScale.STRETCH -> Modifier.fillMaxWidth()
                             })
-                        } else { Modifier.fillMaxWidth().aspectRatio(4f / 3f) }),
+                        } else { Modifier.fillMaxWidth().aspectRatio(if (platform == Platform.DS) 3f / 4f else 4f / 3f) }),
                         contentAlignment = Alignment.Center
                     ) {
-                        GameViewSurface(surfaceKey, mainActivity, isGameLoaded, wasPlayingBeforeNavigation, { gameSurfaceView = it }, { isNavigatingToMapper = it }, { startGameLoading() }, onTogglePause, { wasPlayingBeforeNavigation = it }, screenScale)
+                        GameViewSurface(surfaceKey, mainActivity, isGameLoaded, isPaused, wasPlayingBeforeNavigation, { gameSurfaceView = it }, { isNavigatingToMapper = it }, { startGameLoading() }, onTogglePause, { wasPlayingBeforeNavigation = it }, screenScale, platform)
                     }
 
                     val shouldShowTouch = (controlConfig.style != InputStyle.HIDDEN) && controlConfig.showInLandscape && !(hideOnController && (inputManager?.hasActiveController() == true))
@@ -327,8 +322,8 @@ fun GameScreen(
                             VerticalAlignment.BOTTOM -> Alignment.BottomCenter
                         }
                     ) {
-                        Box(modifier = Modifier.aspectRatio(4f / 3f)) {
-                            GameViewSurface(surfaceKey, mainActivity, isGameLoaded, wasPlayingBeforeNavigation, { gameSurfaceView = it }, { isNavigatingToMapper = it }, { startGameLoading() }, onTogglePause, { wasPlayingBeforeNavigation = it }, screenScale)
+                        Box(modifier = Modifier.aspectRatio(if (platform == Platform.DS) 3f / 4f else 4f / 3f)) {
+                            GameViewSurface(surfaceKey, mainActivity, isGameLoaded, isPaused, wasPlayingBeforeNavigation, { gameSurfaceView = it }, { isNavigatingToMapper = it }, { startGameLoading() }, onTogglePause, { wasPlayingBeforeNavigation = it }, screenScale, platform)
                         }
                     }
                     val shouldShowTouch = (controlConfig.style != InputStyle.HIDDEN) && controlConfig.showInPortrait && !(hideOnController && (inputManager?.hasActiveController() == true))
@@ -535,13 +530,15 @@ private fun GameViewSurface(
     surfaceKey: Int,
     mainActivity: MainActivity?,
     isGameLoaded: Boolean,
+    isPaused: Boolean,
     wasPlayingBeforeNavigation: Boolean,
     onSurfaceViewAvailable: (SurfaceView?) -> Unit,
     onNavigatingToMapper: (Boolean) -> Unit,
     onStartGameLoading: () -> Unit,
     onTogglePause: (Boolean) -> Unit,
     onWasPlayingBeforeNavigation: (Boolean) -> Unit,
-    screenScale: ScreenScale
+    screenScale: ScreenScale,
+    platform: Platform
 ) {
     key(surfaceKey) {
         AndroidView(
@@ -557,7 +554,7 @@ private fun GameViewSurface(
                             if (isGameLoaded) {
                                 mainActivity?.setSurface(holder.surface, width, height)
                                 mainActivity?.updateNativeActivity()
-                                if (wasPlayingBeforeNavigation) {
+                                if (wasPlayingBeforeNavigation || !isPaused) {
                                     onTogglePause(false)
                                     mainActivity?.resumeGame()
                                     onWasPlayingBeforeNavigation(false)
@@ -573,7 +570,7 @@ private fun GameViewSurface(
             },
             modifier = Modifier.fillMaxSize().then(
                 when (screenScale) {
-                    ScreenScale.RATIO_4_3 -> Modifier.aspectRatio(4f / 3f)
+                    ScreenScale.RATIO_4_3 -> Modifier.aspectRatio(if (platform == Platform.DS) 3f / 4f else 4f / 3f)
                     ScreenScale.RATIO_16_9 -> Modifier.aspectRatio(16f / 9f)
                     ScreenScale.STRETCH -> Modifier
                 }

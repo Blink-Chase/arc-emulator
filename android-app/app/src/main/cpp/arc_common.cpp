@@ -29,6 +29,8 @@ std::atomic<int16_t> g_analogX{0};
 std::atomic<int16_t> g_analogY{0};
 std::atomic<int16_t> g_analogRightX{0};
 std::atomic<int16_t> g_analogRightY{0};
+std::atomic<int> g_pendingControllerType{1};
+std::atomic<bool> g_isDolphinCore{false};
 std::atomic<int> g_pixelFormat{RETRO_PIXEL_FORMAT_RGB565};
 
 std::thread g_emuThread;
@@ -69,11 +71,16 @@ std::atomic<int> g_videoRefreshCount{0};
 
 std::string g_romPath;
 std::atomic<bool> g_loadRequested{false};
+std::atomic<bool> g_gameLoadComplete{false};
+std::atomic<bool> g_gameLoadResult{false};
 std::atomic<bool> g_forceOneRun{false};
+std::atomic<bool> g_resetRequested{false};
+std::atomic<bool> g_surfaceInvalidated{false};
 std::atomic<bool> g_saveStateRequested{false};
 std::atomic<bool> g_loadStateRequested{false};
 std::atomic<bool> g_stateOperationSuccess{false};
-std::vector<uint8_t> g_stateBuffer(32 * 1024 * 1024); // 32MB Shared Buffer
+// Dolphin states can contain a sizeable emulated-memory snapshot.
+std::vector<uint8_t> g_stateBuffer(128 * 1024 * 1024);
 size_t g_stateBufferSize = 0;
 std::mutex g_stateMutex;
 std::thread::id g_emuThreadId;

@@ -60,11 +60,32 @@ object GameLoader {
         // Step 4: Set optimal sample rate for platform
         mainActivity.targetSampleRate = when (platform) {
             Platform.SNES -> 32000
-            Platform.PS1 -> 44100
-            Platform.N64 -> 44100
+            Platform.PS1, Platform.N64, Platform.DS -> 44100
+            Platform.GAMECUBE, Platform.WII, Platform.PS2 -> 48000
             else -> 48000
         }
         Log.d(TAG, "Sample rate set to: ${mainActivity.targetSampleRate}")
+
+        // Step 4.5: Specialized System Directory Setup for high-end cores
+        setupSystemDirectories(context, platform, storageDir)
+
+        if (platform == Platform.PS2) {
+            val missingBios = checkForMissingBios(platform, storageDir)
+            if (missingBios.isNotEmpty()) {
+                return@withContext LoadResult(
+                    false,
+                    "Missing BIOS files: ${missingBios.joinToString(", ")}. Import a PS2 BIOS in BIOS Manager first."
+                )
+            }
+            val ps2Bios = File(storageDir, "system/pcsx2/bios/scph39001.bin")
+            if (!ps2Bios.isFile || ps2Bios.length() != 4L * 1024L * 1024L) {
+                return@withContext LoadResult(
+                    false,
+                    "Invalid PS2 BIOS: expected a 4 MiB SCPH-39001 dump at ${ps2Bios.absolutePath}."
+                )
+            }
+            Log.d(TAG, "PCSX2 BIOS preflight passed: ${ps2Bios.absolutePath} (${ps2Bios.length()} bytes)")
+        }
         
         // Step 5: Prepare cores list
         val internalCoresDir = File(context.filesDir, "cores")
@@ -281,7 +302,11 @@ object GameLoader {
                         path = preferredFile.absolutePath,
                         requiresLibCpp = preferredFile.name.contains("mupen") || 
                                        preferredFile.name.contains("parallel") ||
-                                       preferredFile.name.contains("swanstation"),
+                                       preferredFile.name.contains("swanstation") ||
+                                       preferredFile.name.contains("dolphin") ||
+                                       preferredFile.name.contains("pcsx2") ||
+                                       preferredFile.name.contains("melonds") ||
+                                       preferredFile.name.contains("beetle"),
                         archCheck = LibraryDiagnostics.checkLibraryArchitecture(preferredFile)
                     )
                 )
@@ -301,7 +326,11 @@ object GameLoader {
                             requiresLibCpp = coreName.contains("mupen") ||
                                            coreName.contains("parallel") ||
                                            coreName.contains("swanstation") ||
-                                           coreName.contains("duckstation"),
+                                           coreName.contains("duckstation") ||
+                                           coreName.contains("dolphin") ||
+                                           coreName.contains("pcsx2") ||
+                                           coreName.contains("melonds") ||
+                                           coreName.contains("beetle"),
                             archCheck = LibraryDiagnostics.checkLibraryArchitecture(coreFile)
                         )
                     )
@@ -312,9 +341,91 @@ object GameLoader {
         return coresList
     }
 
+    private fun setupSystemDirectories(context: Context, platform: Platform, storageDir: File) {
+        val systemDir = File(storageDir, "system")
+        if (!systemDir.exists()) systemDir.mkdirs()
+
+        when (platform) {
+            Platform.GAMECUBE, Platform.WII -> {
+                // Dolphin needs a specific data directory
+                val dolphinDir = File(systemDir, "dolphin-emu")
+                if (!dolphinDir.exists()) dolphinDir.mkdirs()
+                
+                // Create subdirectories Dolphin often expects
+                File(dolphinDir, "Sys").mkdirs()
+                File(dolphinDir, "Config").mkdirs()
+                installDolphinShader(context, dolphinDir)
+            }
+            Platform.PS2 -> {
+                // PCSX2 needs a specific config/bios folder structure
+                val pcsx2Dir = File(systemDir, "pcsx2")
+                if (!pcsx2Dir.exists()) pcsx2Dir.mkdirs()
+                
+                val biosDir = File(pcsx2Dir, "bios").also { it.mkdirs() }
+                val target = File(biosDir, "scph39001.bin")
+                val source = systemDir.walkTopDown().maxByOrNull { it.lastModified() }?.takeIf {
+                    it.isFile &&
+                        it.extension.equals("bin", true) &&
+                        it.name.lowercase().replace("-", "").contains("scph39001") &&
+                        it.absolutePath != target.absolutePath
+                }
+                if (source != null && !target.isFile) {
+                    try {
+                        source.inputStream().use { input ->
+                            target.outputStream().use { output -> input.copyTo(output) }
+                        }
+                        val rootTarget = File(systemDir, "scph39001.bin")
+                        if (rootTarget.absolutePath != target.absolutePath) {
+                            target.inputStream().use { input ->
+                                rootTarget.outputStream().use { output -> input.copyTo(output) }
+                            }
+                        }
+                    } catch (e: java.io.IOException) {
+                        Log.e(TAG, "Unable to install PS2 BIOS: ${source.absolutePath}", e)
+                    }
+                    Log.d(TAG, "Installed PS2 BIOS for PCSX2: ${source.name} -> ${target.absolutePath} (${target.length()} bytes)")
+                } else if (target.exists()) {
+                    Log.d(TAG, "PS2 BIOS already installed for PCSX2: ${target.absolutePath} (${target.length()} bytes)")
+                    val rootTarget = File(systemDir, "scph39001.bin")
+                    if (!rootTarget.exists() || rootTarget.length() != target.length())
+                        target.copyTo(rootTarget, overwrite = true)
+                } else {
+                    Log.w(TAG, "No SCPH-39001 BIOS found below ${systemDir.absolutePath}")
+                }
+                if (!target.isFile || target.length() == 0L) {
+                    Log.e(TAG, "PCSX2 BIOS path is missing or empty: ${target.absolutePath}")
+                }
+                File(pcsx2Dir, "inis").mkdirs()
+            }
+            Platform.DS -> {
+                // MelonDS sometimes needs firmware in a specific spot or just 'system'
+                val dsDir = File(systemDir, "melonds")
+                if (!dsDir.exists()) dsDir.mkdirs()
+            }
+            else -> {}
+        }
+    }
+
+    private fun installDolphinShader(context: Context, dolphinDir: File) {
+        val shader = File(dolphinDir, "Sys/Shaders/default_pre_post_process.glsl")
+        if (shader.exists()) return
+
+        shader.parentFile?.mkdirs()
+        context.assets.open("dolphin/Sys/Shaders/default_pre_post_process.glsl").use { input ->
+            shader.outputStream().use { output -> input.copyTo(output) }
+        }
+        Log.d(TAG, "Installed Dolphin default post-processing shader")
+    }
+
     private fun checkForMissingBios(platform: Platform, storageDir: File): List<String> {
         val systemDir = File(storageDir, "system")
-        if (!systemDir.exists()) return emptyList()
+        if (!systemDir.exists()) {
+            return if (platform == Platform.PS2) {
+                listOf("scph39001.bin (PS2 BIOS)")
+            } else {
+                emptyList()
+            }
+        }
 
         val detectedFiles = systemDir.listFiles()?.map { it.name.lowercase() } ?: emptyList()
         val missing = mutableListOf<String>()
@@ -329,6 +440,24 @@ object GameLoader {
             Platform.GBA -> {
                 if (!detectedFiles.contains("gba_bios.bin")) {
                     missing.add("gba_bios.bin (GBA BIOS)")
+                }
+            }
+            Platform.PS2 -> {
+                val pcsx2BiosDir = File(File(systemDir, "pcsx2"), "bios")
+                val ps2Bios = sequenceOf(systemDir, pcsx2BiosDir)
+                    .flatMap { it.walkTopDown() }
+                    .firstOrNull {
+                        it.isFile &&
+                            it.extension.equals("bin", true) &&
+                            it.name.lowercase().replace("-", "").contains("scph39001")
+                    }
+                if (ps2Bios == null) {
+                    missing.add("scph39001.bin (PS2 BIOS)")
+                }
+            }
+            Platform.SATURN -> {
+                if (!detectedFiles.contains("saturn_bios.bin")) {
+                    missing.add("saturn_bios.bin (Saturn BIOS)")
                 }
             }
             else -> {}

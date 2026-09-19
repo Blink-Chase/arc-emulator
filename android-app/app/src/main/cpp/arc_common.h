@@ -32,8 +32,9 @@
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
 #define LOGW(...) __android_log_print(ANDROID_LOG_WARN, TAG, __VA_ARGS__)
 
-// Ring buffer size - enough for ~100ms of audio at 44100Hz stereo
-#define AUDIO_BUFFER_SIZE 12288
+// Interleaved stereo samples. This provides over 600 ms at 48 kHz, absorbing
+// Android scheduler and surface-transition jitter without dropping samples.
+#define AUDIO_BUFFER_SIZE 32768
 
 // Shared Global Variables (extern)
 extern int16_t g_audioRingBuffer[AUDIO_BUFFER_SIZE];
@@ -64,6 +65,8 @@ extern std::atomic<int16_t> g_analogX;
 extern std::atomic<int16_t> g_analogY;
 extern std::atomic<int16_t> g_analogRightX;
 extern std::atomic<int16_t> g_analogRightY;
+extern std::atomic<int> g_pendingControllerType;
+extern std::atomic<bool> g_isDolphinCore;
 extern std::atomic<int> g_pixelFormat;
 
 extern std::thread g_emuThread;
@@ -124,7 +127,11 @@ extern std::atomic<int> g_videoRefreshCount;
 
 extern std::string g_romPath;
 extern std::atomic<bool> g_loadRequested;
+extern std::atomic<bool> g_gameLoadComplete;
+extern std::atomic<bool> g_gameLoadResult;
 extern std::atomic<bool> g_forceOneRun;
+extern std::atomic<bool> g_resetRequested;
+extern std::atomic<bool> g_surfaceInvalidated;
 extern std::atomic<bool> g_saveStateRequested;
 extern std::atomic<bool> g_loadStateRequested;
 extern std::atomic<bool> g_stateOperationSuccess; // New: Tell UI if it worked

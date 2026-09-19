@@ -27,6 +27,8 @@ size_t AudioSampleBatchCallback(const int16_t *data, size_t frames) {
     int nextWrite = (writePos + 1) % AUDIO_BUFFER_SIZE;
     if (nextWrite == readPos) {
       g_audioOverflows++;
+      // The consumer owns readPos; stop this batch rather than corrupting the
+      // single-producer/single-consumer ring during a sustained burst.
       break;
     }
     g_audioRingBuffer[writePos] = data[i];

@@ -5,27 +5,27 @@
 #include "video.h"
 #include <dlfcn.h>
 #include <fstream>
+#include <string>
+
+namespace {
+bool g_coreGameLoaded = false;
+}
 
 bool LoadCore(const char *libPath) {
   UnloadCore();
 
   g_useHwRender = false;
+  g_coreVariables.clear();
   g_coreHandle = dlopen(libPath, RTLD_NOW | RTLD_LOCAL);
   if (!g_coreHandle) {
     LOGE("Failed to load core: %s", dlerror());
     return false;
   }
+  g_isDolphinCore.store(std::string(libPath).find("dolphin") != std::string::npos);
 
-  typedef jint (*jni_onload_t)(JavaVM *, void *);
-  jni_onload_t core_jni_onload = (jni_onload_t)dlsym(g_coreHandle, "JNI_OnLoad");
-  if (core_jni_onload) {
-    LOGI("Found JNI_OnLoad in core, calling it...");
-    core_jni_onload(g_vm, nullptr);
-    JNIEnv *env = GetJNIEnv();
-    if (env && env->ExceptionCheck()) {
-      env->ExceptionClear();
-    }
-  }
+  // Android invokes JNI_OnLoad automatically as part of dlopen. Calling it
+  // again here double-initializes Dolphin and can crash during game startup.
+  LOGI("Core opened; relying on Android JNI_OnLoad handling");
 
   core_init = (retro_init_t)dlsym(g_coreHandle, "retro_init");
   core_load_game = (retro_load_game_t)dlsym(g_coreHandle, "retro_load_game");
@@ -59,11 +59,16 @@ bool LoadCore(const char *libPath) {
 
 void UnloadCore() {
   if (g_coreHandle) {
-    if (core_unload_game) core_unload_game();
+    // Some cores, including PCSX2, do not make retro_unload_game safe after
+    // retro_load_game failed during BIOS initialization.
+    if (g_coreGameLoaded && core_unload_game)
+      core_unload_game();
     if (core_deinit) core_deinit();
     dlclose(g_coreHandle);
     g_coreHandle = nullptr;
   }
+  g_coreGameLoaded = false;
+  g_isDolphinCore.store(false);
 }
 
 void EmuThreadFunc() {
@@ -75,6 +80,9 @@ void EmuThreadFunc() {
   auto lastFrameTime = std::chrono::steady_clock::now();
   auto lastFpsUpdate = lastFrameTime;
   int frameCount = 0;
+  bool loggedFirstRun = false;
+  bool dolphinStarted = false;
+  bool dolphinControllerConfigured = false;
   bool eglInitialized = false;
   bool gameLoaded = false;
 
@@ -85,18 +93,24 @@ void EmuThreadFunc() {
       if (core_serialize && core_serialize_size) {
         size_t size = core_serialize_size();
         if (size > 0 && size <= g_stateBuffer.size()) {
+          std::lock_guard<std::recursive_mutex> coreLock(g_emuMutex);
           if (core_serialize(g_stateBuffer.data(), size)) {
-            std::lock_guard<std::mutex> lock(g_stateMutex);
-            g_stateBufferSize = size;
+            {
+              std::lock_guard<std::mutex> lock(g_stateMutex);
+              g_stateBufferSize = size;
+            }
             success = true;
 
-            // Ensure GPU is finished before reporting success (CRITICAL for screenshots)
-            if (g_useHwRender) {
-                glFinish();
-            }
+            // Ensure GPU work is complete before the state is reported ready.
+            if (g_useHwRender)
+              glFinish();
           }
+        } else {
+          LOGE("STATE: invalid serialize size: %zu (buffer=%zu)", size,
+               g_stateBuffer.size());
         }
       }
+      LOGI("STATE: save %s", success ? "completed" : "failed");
       g_stateOperationSuccess.store(success);
       g_saveStateRequested.store(false);
     }
@@ -110,15 +124,42 @@ void EmuThreadFunc() {
           std::lock_guard<std::mutex> lock(g_stateMutex);
           actualSize = g_stateBufferSize;
         }
-        if (actualSize >= expectedSize) {
-          if (g_useHwRender) glFinish();
+        if (expectedSize > 0 && actualSize >= expectedSize) {
+          std::lock_guard<std::recursive_mutex> coreLock(g_emuMutex);
+          if (g_useHwRender)
+            glFinish();
           if (core_unserialize(g_stateBuffer.data(), expectedSize)) {
             success = true;
+            // A restored timeline must not be mixed with samples generated
+            // before the restore. Start the frontend audio queue empty.
+            g_audioReadPos.store(0);
+            g_audioWritePos.store(0);
+            g_audioSamplesTotal.store(0);
+            g_audioStartTime.store(0);
+            g_videoRefreshCount.store(0);
+            // Dolphin may not submit a frame until its next run after
+            // unserialization; force one so the restored image is presented.
+            g_forceOneRun.store(true);
           }
+        } else {
+          LOGE("STATE: incompatible state size: file=%zu expected=%zu",
+               actualSize, expectedSize);
         }
       }
+      LOGI("STATE: load %s", success ? "completed" : "failed");
       g_stateOperationSuccess.store(success);
       g_loadStateRequested.store(false);
+    }
+
+    if (g_resetRequested.exchange(false)) {
+      if (core_reset) {
+        LOGI("CORE: executing reset on emulation thread");
+        std::lock_guard<std::recursive_mutex> lock(g_emuMutex);
+        core_reset();
+        LOGI("CORE: reset returned");
+      }
+      g_isPaused.store(false);
+      g_forceOneRun.store(true);
     }
 
     // 2. GAME LOADING
@@ -145,8 +186,23 @@ void EmuThreadFunc() {
         }
       }
 
+      LOGI("CORE: calling retro_load_game");
+      g_coreGameLoaded = false;
       if (core_load_game && core_load_game(&game_info)) {
+        LOGI("CORE: retro_load_game returned successfully");
+        g_coreGameLoaded = true;
         gameLoaded = true;
+        // A lifecycle callback can leave the shared pause flag set while the
+        // core is still completing its asynchronous boot. Dolphin must reach
+        // its first retro_run before pause can be honored.
+        if (g_isDolphinCore.load())
+          g_isPaused.store(false);
+        // Dolphin's libretro controller setter is not safe during its
+        // asynchronous boot sequence. Its default port is already a
+        // standard controller, so leave it untouched for Dolphin.
+        if (core_set_controller_port_device && !g_isDolphinCore.load()) {
+          core_set_controller_port_device(0, (unsigned)g_pendingControllerType.load());
+        }
         if (core_get_system_av_info) {
           core_get_system_av_info(&g_avInfo);
           if (g_avInfo.timing.fps > 0.0)
@@ -155,6 +211,8 @@ void EmuThreadFunc() {
       } else {
         g_isRunning.store(false);
       }
+      g_gameLoadResult.store(gameLoaded);
+      g_gameLoadComplete.store(true);
       g_loadRequested.store(false);
       continue;
     }
@@ -164,21 +222,28 @@ void EmuThreadFunc() {
       continue;
     }
 
+    if (g_surfaceInvalidated.exchange(false)) {
+      if (eglInitialized && g_useHwRender) {
+        LOGI("CORE: retiring EGL window surface after surface destruction");
+        cleanupSurfaceEGL();
+        eglInitialized = false;
+      }
+    }
+
     // 3. WINDOW & EGL SETUP (PRIORITY)
     // We do this BEFORE the pause check so that if a new surface is bound while the
     // engine is paused, we pick it up and initialize the EGL context immediately.
     if (!g_nativeWindow) {
-      if (eglInitialized) {
-        if (g_useHwRender) deinitEGL();
-        eglInitialized = false;
-      }
       std::this_thread::sleep_for(std::chrono::milliseconds(16));
       lastFrameTime = std::chrono::steady_clock::now();
       continue;
     }
 
     if (g_useHwRender && !eglInitialized) {
-      if (setupEGL()) eglInitialized = true;
+      if (setupEGL()) {
+        eglInitialized = true;
+        LOGI("CORE: EGL ready after game load");
+      }
       else {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
         continue;
@@ -187,7 +252,8 @@ void EmuThreadFunc() {
 
     // 4. PAUSE HANDLING
     // If g_forceOneRun is true, we bypass the pause check ONCE to refresh the screen.
-    if (g_isPaused.load() && !g_forceOneRun.load()) {
+    if (g_isPaused.load() && !g_forceOneRun.load() &&
+        (!g_isDolphinCore.load() || dolphinStarted)) {
       std::this_thread::sleep_for(std::chrono::milliseconds(16));
       lastFrameTime = std::chrono::steady_clock::now();
       continue;
@@ -195,8 +261,37 @@ void EmuThreadFunc() {
 
     // 5. CORE EXECUTION
     if (core_run) {
+      if (!dolphinStarted) {
+        LOGI("CORE: about to call first retro_run (paused=%d, surface=%p, egl=%d)",
+             g_isPaused.load() ? 1 : 0, g_nativeWindow,
+             eglInitialized ? 1 : 0);
+      }
+      if (!loggedFirstRun) {
+        LOGI("CORE: entering first retro_run");
+        loggedFirstRun = true;
+      }
       std::lock_guard<std::recursive_mutex> lock(g_emuMutex);
+      const auto runStarted = std::chrono::steady_clock::now();
       core_run();
+      const auto runDurationMs =
+          std::chrono::duration_cast<std::chrono::milliseconds>(
+              std::chrono::steady_clock::now() - runStarted)
+              .count();
+      if (runDurationMs > 250) {
+        LOGW("CORE: retro_run took %lld ms", static_cast<long long>(runDurationMs));
+      }
+      if (!dolphinStarted) {
+        LOGI("CORE: first retro_run returned");
+        dolphinStarted = true;
+      }
+      if (dolphinStarted && !dolphinControllerConfigured &&
+          g_isDolphinCore.load() && core_set_controller_port_device) {
+        // Dolphin's controller port must be configured after its asynchronous
+        // boot. Doing this during retro_load_game races Dolphin's input setup.
+        core_set_controller_port_device(0, RETRO_DEVICE_JOYPAD);
+        dolphinControllerConfigured = true;
+        LOGI("INPUT: Dolphin port 0 configured as RetroPad");
+      }
     }
     frameCount++;
 
@@ -218,8 +313,10 @@ void EmuThreadFunc() {
     }
     lastFrameTime = std::chrono::steady_clock::now();
 
-    if (std::chrono::duration_cast<std::chrono::milliseconds>(now - lastFpsUpdate).count() >= 500) {
-      g_currentFps.store(frameCount * 2);
+    const double fpsWindowSeconds =
+        std::chrono::duration<double>(now - lastFpsUpdate).count();
+    if (fpsWindowSeconds >= 0.5) {
+      g_currentFps.store(static_cast<int>(frameCount / fpsWindowSeconds + 0.5));
       frameCount = 0;
       lastFpsUpdate = now;
     }

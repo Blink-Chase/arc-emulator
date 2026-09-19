@@ -6,6 +6,7 @@ static GLuint g_glVBO = 0;
 static GLint g_glPositionLoc = -1;
 static GLint g_glTexCoordLoc = -1;
 static GLint g_glSamplerLoc = -1;
+static EGLConfig g_eglConfig = nullptr;
 
 static const float g_quadVertices[] = {
     // Pos      // Tex
@@ -63,12 +64,23 @@ void InitBlitter() {
 }
 
 bool setupEGL() {
-  std::lock_guard<std::mutex> lock(g_windowMutex);
+  std::unique_lock<std::mutex> lock(g_windowMutex);
   if (!g_nativeWindow)
     return false;
 
-  if (g_eglDisplay != EGL_NO_DISPLAY) {
-    return true; // Already initialized
+  if (g_eglDisplay != EGL_NO_DISPLAY && g_eglContext != EGL_NO_CONTEXT) {
+    if (g_eglSurface == EGL_NO_SURFACE) {
+      g_eglSurface =
+          eglCreateWindowSurface(g_eglDisplay, g_eglConfig, g_nativeWindow, nullptr);
+      if (g_eglSurface == EGL_NO_SURFACE)
+        return false;
+      if (!eglMakeCurrent(g_eglDisplay, g_eglSurface, g_eglSurface,
+                          g_eglContext))
+        return false;
+      eglSwapInterval(g_eglDisplay, 0);
+      LOGI("EGL window surface recreated without destroying Dolphin context");
+    }
+    return true;
   }
 
   g_eglDisplay = eglGetDisplay(EGL_DEFAULT_DISPLAY);
@@ -110,6 +122,7 @@ bool setupEGL() {
     LOGE("eglChooseConfig failed");
     return false;
   }
+  g_eglConfig = config;
 
   EGLint contextAttribs[] = {EGL_CONTEXT_CLIENT_VERSION,
                              (EGLint)(useGLES3 ? 3 : 2), EGL_NONE};
@@ -125,6 +138,9 @@ bool setupEGL() {
 
   if (!eglMakeCurrent(g_eglDisplay, g_eglSurface, g_eglSurface, g_eglContext))
     return false;
+  // Do not let the UI compositor's vsync stall retro_run. The emulation loop
+  // performs its own frame pacing.
+  eglSwapInterval(g_eglDisplay, 0);
 
   LOGI("EGL Initialized successfully (GLES %d)", useGLES3 ? 3 : 2);
 
@@ -133,8 +149,13 @@ bool setupEGL() {
       InitBlitter();
     }
     if (g_hwRender.context_reset) {
+      // Dolphin may submit its first frame from context_reset(). Do not hold
+      // g_windowMutex while entering a core callback because VideoRefreshCallback
+      // acquires the same mutex.
+      lock.unlock();
       LOGI("VIDEO: Calling core context_reset");
       g_hwRender.context_reset();
+      LOGI("VIDEO: Core context_reset returned");
     }
   }
 
@@ -166,12 +187,17 @@ void deinitEGL() {
   g_eglDisplay = EGL_NO_DISPLAY;
   g_eglContext = EGL_NO_CONTEXT;
   g_eglSurface = EGL_NO_SURFACE;
+  g_eglConfig = nullptr;
   g_glProgram = 0;
 }
 
 void VideoRefreshCallback(const void *data, unsigned width, unsigned height,
                           size_t pitch) {
-  g_videoRefreshCount++;
+  const uint64_t frameNumber = ++g_videoRefreshCount;
+  if (frameNumber == 1) {
+    LOGI("VIDEO: first refresh data=%p size=%ux%u pitch=%zu hw=%d surface=%p",
+         data, width, height, pitch, g_useHwRender ? 1 : 0, g_eglSurface);
+  }
 
   if (g_useHwRender) {
     std::lock_guard<std::mutex> lock(g_windowMutex);
