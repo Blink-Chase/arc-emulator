@@ -157,6 +157,66 @@ fun ArcHomeScreen(
     // Crash Recovery Check
     val lastCrashedCore = remember { prefs.getString(MainActivity.KEY_LAST_CRASHED_CORE, null) }
     var showCrashRecovery by remember { mutableStateOf(lastCrashedCore != null) }
+    
+    // Smart Crash Recovery Logic
+    val hasPendingCrash = remember { prefs.getBoolean(MainActivity.KEY_CRASH_PENDING, false) }
+    var showSmartCrashDialog by remember { mutableStateOf(hasPendingCrash) }
+    val crashSnippet = remember { prefs.getString(MainActivity.KEY_LAST_CRASH_SNIPPET, "") ?: "" }
+
+    if (showSmartCrashDialog) {
+        AlertDialog(
+            onDismissRequest = { 
+                showSmartCrashDialog = false
+                prefs.edit { remove(MainActivity.KEY_CRASH_PENDING) }
+            },
+            title = { Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Error, null, tint = MaterialTheme.colorScheme.error)
+                Spacer(Modifier.width(8.dp))
+                Text("Crash Detected", color = MaterialTheme.colorScheme.error)
+            }},
+            text = {
+                Column {
+                    Text("It looks like Arc closed unexpectedly. Here is a snippet of the error:", style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(8.dp))
+                    Box(modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.Black.copy(alpha = 0.1f))
+                        .padding(8.dp)
+                    ) {
+                        Text(
+                            text = crashSnippet + "\n...",
+                            style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                            maxLines = 8,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text("The full logs have been saved. Would you like to export them to report this issue?", style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    val path = LogManager.exportLogs(context)
+                    if (path != null) {
+                        Toast.makeText(context, "Logs exported to Documents/Arc/logs/", Toast.LENGTH_LONG).show()
+                    }
+                    showSmartCrashDialog = false
+                    prefs.edit { remove(MainActivity.KEY_CRASH_PENDING) }
+                }) {
+                    Text("Export & Close")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showSmartCrashDialog = false
+                    prefs.edit { remove(MainActivity.KEY_CRASH_PENDING) }
+                }) {
+                    Text("Dismiss")
+                }
+            }
+        )
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -513,7 +573,6 @@ fun SettingsScreen(
     rootStorageDir: File,
     gameDao: GameDao,
     games: List<GameFile>,
-    onReportBug: () -> Unit,
     onGoToAbout: () -> Unit,
     onGoToHelp: () -> Unit,
     onGoToBios: () -> Unit,
@@ -527,6 +586,7 @@ fun SettingsScreen(
         mutableStateOf(try { prefs.getStringSet(MainActivity.KEY_CUSTOM_PATHS, emptySet()) ?: emptySet() } catch (_: Exception) { emptySet<String>() })
     }
     var audioLatency by remember { mutableIntStateOf(prefs.getInt(MainActivity.KEY_AUDIO_LATENCY, 1)) }
+    var nuclearLogging by remember { mutableStateOf(prefs.getBoolean(MainActivity.KEY_NUCLEAR_LOGGING, true)) }
     var showFF by remember { mutableStateOf(prefs.getBoolean(MainActivity.KEY_SHOW_FF, true)) }
     var showExtensions by remember { mutableStateOf(prefs.getBoolean(MainActivity.KEY_SHOW_EXTENSIONS, false)) }
     var autoPauseMenu by remember { mutableStateOf(prefs.getBoolean(MainActivity.KEY_AUTO_PAUSE_MENU, true)) }
@@ -743,6 +803,16 @@ fun SettingsScreen(
             }
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), thickness = 0.5.dp, color = Color.Gray.copy(alpha = 0.3f))
             SettingsCategory("SYSTEM", Icons.Default.Dns)
+            SettingsItem(title = "Nuclear Log Filtering", subtitle = "Collapse and hide system noise logs") {
+                Switch(
+                    checked = nuclearLogging, 
+                    onCheckedChange = { 
+                        nuclearLogging = it
+                        prefs.edit { putBoolean(MainActivity.KEY_NUCLEAR_LOGGING, it) }
+                        LogManager.setNuclearMode(it)
+                    }
+                )
+            }
             SettingsItem(title = "Core Downloader", subtitle = "Download or update online emulator cores") { 
                 Button(onClick = onGoToControllerMapping) { 
                     Text("Open")
@@ -751,7 +821,18 @@ fun SettingsScreen(
             SettingsItem(title = "Import Cores Manually", subtitle = "Load Libretro .so files") { Button(onClick = { coreImporter.launch("*/*") }) { Text("Import") } }
             SettingsItem(title = "BIOS Manager", subtitle = "Manage system firmware files") { Button(onClick = onGoToBios) { Text("Open") } }
             SettingsItem(title = "Diagnostics", subtitle = "Troubleshoot emulator issues") { Button(onClick = { showDiagnostics = true }) { Text("Run") } }
-            SettingsItem(title = "Logs", subtitle = "Report a bug or view logs") { Button(onClick = onReportBug) { Text("View") } }
+            SettingsItem(title = "Logs", subtitle = "Export session logs for debugging") { 
+                Button(onClick = {
+                    val path = LogManager.exportLogs(context)
+                    if (path != null) {
+                        Toast.makeText(context, "Logs exported to Documents/Arc/logs/", Toast.LENGTH_LONG).show()
+                    } else {
+                        Toast.makeText(context, "Export Failed", Toast.LENGTH_SHORT).show()
+                    }
+                }) { 
+                    Text("Export") 
+                } 
+            }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = onGoToAbout, modifier = Modifier.weight(1f)) { Text("About") }
                 OutlinedButton(onClick = onGoToHelp, modifier = Modifier.weight(1f)) { Text("Help") }

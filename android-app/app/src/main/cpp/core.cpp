@@ -3,13 +3,84 @@
 #include "environment.h"
 #include "input.h"
 #include "video.h"
+#include "vulkan_bridge.h"
 #include <dlfcn.h>
 #include <fstream>
 #include <string>
+#include <malloc.h>
+#include <csignal>
+#include <cerrno>
+#include <cstdint>
+#include <sys/mman.h>
+#include <unistd.h>
 
 namespace {
 bool g_coreGameLoaded = false;
+
+// ---------------------------------------------------------------------------
+// Scoped SIGSEGV "page fix-up" guard.
+//
+// Some cores (notably PCSX2 with fastmem enabled) write-protect guest RAM
+// pages so their JIT can trap and backpatch stores. retro_unserialize() then
+// restores main RAM with one large memmove, which hits a protected page and
+// dies with SIGSEGV (SEGV_ACCERR) - exactly the crash we can see in tombstone
+// #01 (core) <- #02 (EmuThreadFunc). While this guard is active, a SEGV_ACCERR
+// on a mapped-but-read-only page is resolved by making the page writable and
+// returning, so the core's memmove *resumes and completes*. Any other fault
+// (or a fix-up failure) is chained to the previously installed handler so real
+// crashes still surface normally.
+// ---------------------------------------------------------------------------
+struct sigaction g_prevSegvAction;
+bool g_segvGuardActive = false;
+bool g_segvGuardFaulted = false;
+
+void SegvFixupHandler(int sig, siginfo_t *info, void *ucontext) {
+  (void)ucontext;
+  if (sig == SIGSEGV && info != nullptr &&
+      (info->si_code == SEGV_ACCERR || info->si_code == SEGV_MAPERR)) {
+    uintptr_t page = reinterpret_cast<uintptr_t>(info->si_addr);
+    const uintptr_t pageSize = static_cast<uintptr_t>(sysconf(_SC_PAGESIZE));
+    page &= ~(pageSize - 1);
+    if (mprotect(reinterpret_cast<void *>(page), pageSize,
+                 PROT_READ | PROT_WRITE | PROT_EXEC) == 0) {
+      g_segvGuardFaulted = true;
+      LOGW("STATE: fixed up protected page %p (SEGV_ACCERR) during state op",
+           info->si_addr);
+      return; // Resume the faulting instruction (the core's memmove).
+    }
+    LOGE("STATE: mprotect fix-up failed for %p (errno=%d)", info->si_addr,
+         errno);
+  }
+  // Not fixable here: restore the previous handler and re-raise so the fault
+  // is handled (or reported) exactly as it would have been without the guard.
+  sigaction(SIGSEGV, &g_prevSegvAction, nullptr);
+  raise(sig);
 }
+
+class ScopedSigsegvFixup {
+public:
+  ScopedSigsegvFixup() {
+    if (g_segvGuardActive)
+      return; // already armed (non-nested); leave previous guard in place
+    struct sigaction action;
+    memset(&action, 0, sizeof(action));
+    action.sa_sigaction = SegvFixupHandler;
+    action.sa_flags = SA_SIGINFO | SA_NODEFER;
+    sigemptyset(&action.sa_mask);
+    if (sigaction(SIGSEGV, &action, &g_prevSegvAction) == 0) {
+      g_segvGuardActive = true;
+      armed = true;
+    }
+  }
+  ~ScopedSigsegvFixup() {
+    if (armed && g_segvGuardActive) {
+      sigaction(SIGSEGV, &g_prevSegvAction, nullptr);
+      g_segvGuardActive = false;
+    }
+  }
+  bool armed = false;
+};
+} // namespace
 
 bool LoadCore(const char *libPath) {
   UnloadCore();
@@ -22,6 +93,7 @@ bool LoadCore(const char *libPath) {
     return false;
   }
   g_isDolphinCore.store(std::string(libPath).find("dolphin") != std::string::npos);
+  g_isPcsx2Core.store(std::string(libPath).find("pcsx2") != std::string::npos);
 
   // Android invokes JNI_OnLoad automatically as part of dlopen. Calling it
   // again here double-initializes Dolphin and can crash during game startup.
@@ -59,16 +131,41 @@ bool LoadCore(const char *libPath) {
 
 void UnloadCore() {
   if (g_coreHandle) {
-    // Some cores, including PCSX2, do not make retro_unload_game safe after
-    // retro_load_game failed during BIOS initialization.
-    if (g_coreGameLoaded && core_unload_game)
-      core_unload_game();
-    if (core_deinit) core_deinit();
+    LOGI("UNLOAD: starting core deinit");
+    // Explicit hard pause before unloading to prevent background thread access
+    g_isRunning.store(false);
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    if (g_coreGameLoaded && core_unload_game) {
+        LOGI("UNLOAD: calling retro_unload_game");
+        core_unload_game();
+    }
+    if (core_deinit) {
+        LOGI("UNLOAD: calling retro_deinit");
+        core_deinit();
+    }
+    LOGI("UNLOAD: dlclose core");
     dlclose(g_coreHandle);
     g_coreHandle = nullptr;
   }
   g_coreGameLoaded = false;
   g_isDolphinCore.store(false);
+  g_isPcsx2Core.store(false);
+
+  if (g_vulkanInitialized) {
+      deinitVulkan();
+  }
+
+  // Free state buffer only after core is fully gone
+  std::lock_guard<std::mutex> lock(g_stateMutex);
+  if (g_stateBuffer) {
+    LOGI("UNLOAD: freeing state buffer");
+    free(g_stateBuffer);
+    g_stateBuffer = nullptr;
+    g_stateBufferCapacity = 0;
+    g_stateBufferSize = 0;
+  }
+  LOGI("UNLOAD: complete");
 }
 
 void EmuThreadFunc() {
@@ -91,59 +188,82 @@ void EmuThreadFunc() {
     if (g_saveStateRequested.load()) {
       bool success = false;
       if (core_serialize && core_serialize_size) {
-        size_t size = core_serialize_size();
-        if (size > 0 && size <= g_stateBuffer.size()) {
-          std::lock_guard<std::recursive_mutex> coreLock(g_emuMutex);
-          if (core_serialize(g_stateBuffer.data(), size)) {
-            {
-              std::lock_guard<std::mutex> lock(g_stateMutex);
-              g_stateBufferSize = size;
-            }
-            success = true;
+        // Deep safety sync to ensure all core threads (VU, EE, GPU) are idle
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-            // Ensure GPU work is complete before the state is reported ready.
-            if (g_useHwRender)
-              glFinish();
+        std::lock_guard<std::recursive_mutex> coreLock(g_emuMutex);
+        size_t size = core_serialize_size();
+        if (size > 0) {
+          if (size > g_stateBufferCapacity) {
+             ResizeStateBuffer(size + (16 * 1024 * 1024)); // 16MB safety padding
           }
-        } else {
-          LOGE("STATE: invalid serialize size: %zu (buffer=%zu)", size,
-               g_stateBuffer.size());
+
+          std::lock_guard<std::mutex> stateLock(g_stateMutex);
+          if (g_stateBuffer && core_serialize(g_stateBuffer, size)) {
+            // Write to disk immediately on this thread
+            FILE *f = fopen(g_stateFilePath.c_str(), "wb");
+            if (f) {
+                size_t written = fwrite(g_stateBuffer, 1, size, f);
+                fclose(f);
+                if (written == size) success = true;
+            }
+          }
         }
       }
-      LOGI("STATE: save %s", success ? "completed" : "failed");
+      LOGI("STATE: save %s (size=%zu)", success ? "completed" : "failed", g_stateBufferSize);
       g_stateOperationSuccess.store(success);
       g_saveStateRequested.store(false);
     }
 
     if (g_loadStateRequested.load()) {
       bool success = false;
-      if (core_unserialize && core_serialize_size) {
-        size_t expectedSize = core_serialize_size();
-        size_t actualSize = 0;
-        {
-          std::lock_guard<std::mutex> lock(g_stateMutex);
-          actualSize = g_stateBufferSize;
-        }
-        if (expectedSize > 0 && actualSize >= expectedSize) {
-          std::lock_guard<std::recursive_mutex> coreLock(g_emuMutex);
-          if (g_useHwRender)
-            glFinish();
-          if (core_unserialize(g_stateBuffer.data(), expectedSize)) {
-            success = true;
-            // A restored timeline must not be mixed with samples generated
-            // before the restore. Start the frontend audio queue empty.
-            g_audioReadPos.store(0);
-            g_audioWritePos.store(0);
-            g_audioSamplesTotal.store(0);
-            g_audioStartTime.store(0);
-            g_videoRefreshCount.store(0);
-            // Dolphin may not submit a frame until its next run after
-            // unserialization; force one so the restored image is presented.
-            g_forceOneRun.store(true);
-          }
-        } else {
-          LOGE("STATE: incompatible state size: file=%zu expected=%zu",
-               actualSize, expectedSize);
+      if (core_unserialize) {
+        // Deep safety sync to ensure all core threads (VU, EE, GPU) are idle
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+        std::lock_guard<std::recursive_mutex> coreLock(g_emuMutex);
+
+        // Read file on this thread
+        FILE *f = fopen(g_stateFilePath.c_str(), "rb");
+        if (f) {
+            // Ask the core how many bytes it expects for its state (ignore any file padding/chunks)
+            if (core_serialize_size) {
+                size_t expectedSize = core_serialize_size();
+                if (expectedSize > 0) {
+                    if (expectedSize > g_stateBufferCapacity) {
+                        ResizeStateBuffer(expectedSize);
+                    }
+
+                    std::lock_guard<std::mutex> stateLock(g_stateMutex);
+                    if (g_stateBuffer) {
+                        // Read *at most* expectedSize bytes from the file (ignore extra file padding)
+                        size_t bytesRead = fread(g_stateBuffer, 1, expectedSize, f);
+                        if (bytesRead == expectedSize) {
+                            // Update shared size so other subsystems know the valid buffer length
+                            g_stateBufferSize = bytesRead;
+                            // Pass exactly what we read to the core. Wrap the call
+                            // in a page fix-up guard so fastmem's write-protected
+                            // guest RAM pages (SEGV_ACCERR) get made writable
+                            // mid-restore instead of killing the process.
+                            g_segvGuardFaulted = false;
+                            ScopedSigsegvFixup segvGuard;
+                            bool restored = core_unserialize(g_stateBuffer, bytesRead);
+                            if (g_segvGuardFaulted) {
+                                LOGW("STATE: load required %s page fix-up(s)",
+                                     "one or more");
+                            }
+                            if (restored) {
+                                success = true;
+                                g_audioReadPos.store(0);
+                                g_audioWritePos.store(0);
+                                g_videoRefreshCount.store(0);
+                                g_forceOneRun.store(true);
+                            }
+                        }
+                    }
+                }
+            }
+            fclose(f);
         }
       }
       LOGI("STATE: load %s", success ? "completed" : "failed");
@@ -209,6 +329,7 @@ void EmuThreadFunc() {
             targetFrameMs = 1000.0 / g_avInfo.timing.fps;
         }
       } else {
+        LOGE("CORE: retro_load_game failed");
         g_isRunning.store(false);
       }
       g_gameLoadResult.store(gameLoaded);

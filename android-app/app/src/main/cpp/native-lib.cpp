@@ -188,38 +188,19 @@ JNIEXPORT jint JNICALL Java_com_blinkchase_arc_MainActivity_getAudioSamples(
 JNIEXPORT jboolean JNICALL Java_com_blinkchase_arc_MainActivity_saveState(
     JNIEnv *env, jobject thiz, jstring filePath) {
   const char *path = env->GetStringUTFChars(filePath, 0);
-  std::string savePath = path;
+  {
+      std::lock_guard<std::mutex> lock(g_stateMutex);
+      g_stateFilePath = path;
+  }
   env->ReleaseStringUTFChars(filePath, path);
 
-  // Signal emulation thread to serialize into g_stateBuffer
   g_stateOperationSuccess.store(false);
   g_saveStateRequested.store(true);
 
-  // Dolphin serialization may briefly pause emulation while copying its state.
-  // Allow enough time for large states on slower devices.
+  // Wait for emu thread to handle it
   for (int i = 0; i < 5000; i++) {
       if (!g_saveStateRequested.load()) {
-          if (g_stateOperationSuccess.load()) {
-              // Write the serialized buffer to disk
-              FILE *f = fopen(savePath.c_str(), "wb");
-              if (!f) return JNI_FALSE;
-
-              size_t stateSize = 0;
-              size_t written = 0;
-              {
-                  std::lock_guard<std::mutex> lock(g_stateMutex);
-                  stateSize = g_stateBufferSize;
-                  written = fwrite(g_stateBuffer.data(), 1, stateSize, f);
-              }
-              fclose(f);
-              if (written != stateSize) {
-                  LOGE("STATE: failed to write complete state (%zu/%zu bytes)",
-                       written, stateSize);
-                  return JNI_FALSE;
-              }
-              return JNI_TRUE;
-          }
-          return JNI_FALSE;
+          return g_stateOperationSuccess.load() ? JNI_TRUE : JNI_FALSE;
       }
       std::this_thread::sleep_for(std::chrono::milliseconds(2));
   }
@@ -229,41 +210,16 @@ JNIEXPORT jboolean JNICALL Java_com_blinkchase_arc_MainActivity_saveState(
 JNIEXPORT jboolean JNICALL Java_com_blinkchase_arc_MainActivity_loadState(
     JNIEnv *env, jobject thiz, jstring filePath) {
   const char *path = env->GetStringUTFChars(filePath, 0);
-  std::string loadPath = path;
-  env->ReleaseStringUTFChars(filePath, path);
-
-  // Read file into buffer in this thread first (Very fast)
-  FILE *f = fopen(loadPath.c_str(), "rb");
-  if (!f) return JNI_FALSE;
-
-  fseek(f, 0, SEEK_END);
-  long fileSize = ftell(f);
-  fseek(f, 0, SEEK_SET);
-
-  if (fileSize <= 0 || fileSize > g_stateBuffer.size()) {
-      fclose(f);
-      return JNI_FALSE;
-  }
-
-  size_t bytesRead = 0;
   {
       std::lock_guard<std::mutex> lock(g_stateMutex);
-      bytesRead = fread(g_stateBuffer.data(), 1, fileSize, f);
-      if (bytesRead == static_cast<size_t>(fileSize))
-        g_stateBufferSize = bytesRead;
+      g_stateFilePath = path;
   }
-  fclose(f);
-  if (bytesRead != static_cast<size_t>(fileSize)) {
-      LOGE("STATE: failed to read complete state (%zu/%ld bytes)", bytesRead,
-           fileSize);
-      return JNI_FALSE;
-  }
+  env->ReleaseStringUTFChars(filePath, path);
 
-  // Signal emulation thread to pick up the buffer
   g_stateOperationSuccess.store(false);
   g_loadStateRequested.store(true);
 
-  // Allow Dolphin time to restore a large state on the emulation thread.
+  // Wait for emu thread to handle it
   for (int i = 0; i < 5000; i++) {
       if (!g_loadStateRequested.load()) {
           return g_stateOperationSuccess.load() ? JNI_TRUE : JNI_FALSE;

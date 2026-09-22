@@ -1,4 +1,7 @@
 #include "arc_common.h"
+#include <cstdlib>
+#include <sys/mman.h>
+#include <unistd.h>
 
 // Global variable instances
 int16_t g_audioRingBuffer[AUDIO_BUFFER_SIZE];
@@ -31,7 +34,12 @@ std::atomic<int16_t> g_analogRightX{0};
 std::atomic<int16_t> g_analogRightY{0};
 std::atomic<int> g_pendingControllerType{1};
 std::atomic<bool> g_isDolphinCore{false};
+std::atomic<bool> g_isPcsx2Core{false};
 std::atomic<int> g_pixelFormat{RETRO_PIXEL_FORMAT_RGB565};
+
+// Vulkan Globals
+struct retro_hw_render_interface_vulkan g_vulkanInterface = {};
+bool g_vulkanInitialized = false;
 
 std::thread g_emuThread;
 std::mutex g_activityMutex;
@@ -79,8 +87,11 @@ std::atomic<bool> g_surfaceInvalidated{false};
 std::atomic<bool> g_saveStateRequested{false};
 std::atomic<bool> g_loadStateRequested{false};
 std::atomic<bool> g_stateOperationSuccess{false};
-// Dolphin states can contain a sizeable emulated-memory snapshot.
-std::vector<uint8_t> g_stateBuffer(128 * 1024 * 1024);
+std::string g_stateFilePath; // New: Path to read/write from emu thread
+bool g_useVulkan = false;
+
+uint8_t* g_stateBuffer = nullptr;
+size_t g_stateBufferCapacity = 0;
 size_t g_stateBufferSize = 0;
 std::mutex g_stateMutex;
 std::thread::id g_emuThreadId;
@@ -94,38 +105,35 @@ void LogCallback(enum retro_log_level level, const char *fmt, ...) {
   vsnprintf(buf, sizeof(buf), fmt, va);
   va_end(va);
 
-  // Deduplication to prevent log spam
+  // Deduplication logic: Suppress repeats until the message changes
   static char lastLog[4012] = {0};
   static int dupCount = 0;
+  static int lastLevel = -1;
+  static auto lastFlushTime = std::chrono::steady_clock::now();
 
-  if (strncmp(buf, lastLog, sizeof(lastLog)) == 0) {
-    dupCount++;
-    if (dupCount == 10) {
-      LOGI("... (previous message repeating)");
+  auto now = std::chrono::steady_clock::now();
+  bool isRepeat = (strncmp(buf, lastLog, sizeof(lastLog)) == 0 && (int)level == lastLevel);
+  bool shouldFlush = !isRepeat || std::chrono::duration_cast<std::chrono::seconds>(now - lastFlushTime).count() >= 5;
+
+  if (shouldFlush) {
+    if (dupCount > 1) {
+      LOGI("!!! CORE REPEAT x%d: %s", dupCount, lastLog);
     }
-    if (dupCount >= 10)
-      return;
-  } else {
-    dupCount = 0;
+    dupCount = 1;
+    lastLevel = (int)level;
     strncpy(lastLog, buf, sizeof(lastLog) - 1);
-  }
+    lastFlushTime = now;
 
-  switch (level) {
-  case RETRO_LOG_DEBUG:
-    LOGI("CORE DEBUG: %s", buf);
-    break;
-  case RETRO_LOG_INFO:
-    LOGI("CORE INFO: %s", buf);
-    break;
-  case RETRO_LOG_WARN:
-    LOGI("CORE WARN: %s", buf);
-    break;
-  case RETRO_LOG_ERROR:
-    LOGE("CORE ERROR: %s", buf);
-    break;
-  default:
-    LOGI("CORE: %s", buf);
-    break;
+    // Print the first instance immediately
+    switch (level) {
+    case RETRO_LOG_DEBUG: LOGI("CORE DEBUG: %s", buf); break;
+    case RETRO_LOG_INFO:  LOGI("CORE INFO: %s", buf);  break;
+    case RETRO_LOG_WARN:  LOGI("CORE WARN: %s", buf);  break;
+    case RETRO_LOG_ERROR: LOGE("CORE ERROR: %s", buf); break;
+    default:              LOGI("CORE: %s", buf);       break;
+    }
+  } else {
+    dupCount++;
   }
 }
 
@@ -141,4 +149,45 @@ JNIEnv *GetJNIEnv() {
     return nullptr;
   }
   return env;
+}
+
+void ResizeStateBuffer(size_t newCapacity) {
+  std::lock_guard<std::mutex> lock(g_stateMutex);
+  if (newCapacity <= g_stateBufferCapacity && g_stateBuffer != nullptr)
+    return;
+
+  // SYSTEM LEVEL FIX: Use aligned allocation for ALL state buffers.
+  // Android 11+ uses "tagged" heap memory which breaks PCSX2/Dolphin's
+  // bit-masking on pointers, causing SIGSEGV (ACCERR). Aligned allocation
+  // provides untagged memory that works universally with libretro cores.
+  //
+  // NOTE: aligned_alloc() is only declared in bionic headers for API 28+,
+  // but this project targets minSdk = 24. posix_memalign() is available
+  // since API 17 and provides equivalent alignment guarantees without
+  // raising the minSdk requirement.
+  size_t alignment = 16;
+  void *ptr = nullptr;
+  if (posix_memalign(&ptr, alignment, newCapacity) != 0) {
+    ptr = nullptr;
+  }
+
+  if (ptr == nullptr) {
+    LOGE("STATE: Failed to allocate memory of size %zu", newCapacity);
+    return;
+  }
+
+  // Ensure fresh memory is clean
+  memset(ptr, 0, newCapacity);
+
+  if (g_stateBuffer) {
+    if (g_stateBufferSize > 0 && g_stateBufferSize <= newCapacity) {
+      memcpy(ptr, g_stateBuffer, g_stateBufferSize);
+    }
+    free(g_stateBuffer);
+  }
+
+  g_stateBuffer = static_cast<uint8_t *>(ptr);
+  g_stateBufferCapacity = newCapacity;
+  g_stateBufferSize = 0; // Reset to actual written size
+  LOGI("STATE: Aligned allocation resized to %zu bytes", newCapacity);
 }

@@ -337,7 +337,7 @@ fun SaveManagerDialog(
                                                     onResume()
                                                     onAfterLoad()
                                                 } else {
-                                                    showMessage("Load failed")
+                                                    showMessage("Load failed: the state is incompatible with the current core configuration or was rejected by the core")
                                                 }
                                                 onDismiss()
                                             }
@@ -377,7 +377,7 @@ fun GameThumbnailItem(
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            val imageSource = game.thumbnailUrl ?: game.coverUrl
+            val imageSource = if (!game.coverUrl.isNullOrBlank()) game.coverUrl else game.thumbnailUrl
 
             if (imageSource != null) {
                 AsyncImage(

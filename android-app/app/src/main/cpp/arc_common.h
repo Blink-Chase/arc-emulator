@@ -19,8 +19,10 @@
 #include <sys/resource.h>
 #include <thread>
 #include <unordered_map>
-
+#include <vector>
+#include <vulkan/vulkan.h>
 #include "libretro.h"
+#include "libretro_vulkan.h"
 
 #ifndef EGL_OPENGL_ES3_BIT
 #define EGL_OPENGL_ES3_BIT 0x00000040
@@ -67,12 +69,18 @@ extern std::atomic<int16_t> g_analogRightX;
 extern std::atomic<int16_t> g_analogRightY;
 extern std::atomic<int> g_pendingControllerType;
 extern std::atomic<bool> g_isDolphinCore;
+extern std::atomic<bool> g_isPcsx2Core;
 extern std::atomic<int> g_pixelFormat;
+
+// Vulkan Globals
+extern struct retro_hw_render_interface_vulkan g_vulkanInterface;
+extern bool g_vulkanInitialized;
+extern bool g_useVulkan;
 
 extern std::thread g_emuThread;
 extern std::mutex g_activityMutex;
 extern std::mutex g_windowMutex;
-extern std::recursive_mutex g_emuMutex; // New mutex for thread-safe core access
+extern std::recursive_mutex g_emuMutex;
 
 // Function pointer types for dynamically loaded core functions
 typedef void (*retro_init_t)(void);
@@ -134,10 +142,14 @@ extern std::atomic<bool> g_resetRequested;
 extern std::atomic<bool> g_surfaceInvalidated;
 extern std::atomic<bool> g_saveStateRequested;
 extern std::atomic<bool> g_loadStateRequested;
-extern std::atomic<bool> g_stateOperationSuccess; // New: Tell UI if it worked
-extern std::vector<uint8_t> g_stateBuffer;
+extern std::atomic<bool> g_stateOperationSuccess;
+extern std::string g_stateFilePath; // New: Path to read/write from emu thread
+
+extern uint8_t* g_stateBuffer;
+extern size_t g_stateBufferCapacity;
 extern size_t g_stateBufferSize;
 extern std::mutex g_stateMutex;
+
 extern std::thread::id g_emuThreadId;
 extern std::atomic<bool> g_variablesUpdated;
 extern std::unordered_map<std::string, std::string> g_coreVariables;
@@ -145,6 +157,7 @@ extern std::unordered_map<std::string, std::string> g_coreVariables;
 // Shared Utility Functions
 void LogCallback(enum retro_log_level level, const char *fmt, ...);
 JNIEnv *GetJNIEnv();
+void ResizeStateBuffer(size_t newCapacity);
 
 // Shared Forward Declarations (Implemented in specific modules)
 bool setupEGL();

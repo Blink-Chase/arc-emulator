@@ -14,12 +14,17 @@ object RomScanner {
                 .onEnter { 
                     val name = it.name
                     if (name.startsWith(".")) return@onEnter false
-                    if (name.equals("node_modules", true)) return@onEnter false
-                    if (name.equals("Android", true)) return@onEnter false
+                    val blockedFolders = listOf("node_modules", "Android", "replit", "debug", "tmp", "temp", "cache")
+                    if (blockedFolders.any { b -> name.equals(b, true) }) return@onEnter false
+                    
                     if (name.equals("Roms", true) && it.parentFile?.name?.equals("Arc", true) == true) return@onEnter false
                     true
                 }
-                .filter { it.isFile }
+                .filter { file ->
+                    val name = file.name
+                    val blockedKeywords = listOf("replit", "license", "readme", "install", "debug", ".nomedia", "changelog", "credits", "config", "cache")
+                    file.isFile && !name.startsWith(".") && blockedKeywords.none { b -> name.contains(b, true) }
+                }
                 .groupBy { it.parentFile?.absolutePath ?: "root" }
                 .forEach { (_, folderFiles) ->
                     val folderGames = mutableListOf<File>()
@@ -34,21 +39,21 @@ object RomScanner {
                         // If we have master files, only add those. Skip all .bin/.iso "noise" in the same folder.
                         folderGames.addAll(masterFiles)
                     } else {
-                        // 2. Priority #2: .iso files (if no .cue exists)
+                        // 2. NO MASTER FILES: Pick ONE primary entry from the folder to prevent duplication
                         val isos = folderFiles.filter { f -> f.extension.lowercase() == "iso" }
-                        if (isos.isNotEmpty()) {
-                            // Filter out "Track 2", "Part 2" etc if someone named their iso like that
-                            val primaryIsos = isos.filter { !it.name.contains(Regex("(Track|Part|Data|Audio)\\s*([2-9]|0[2-9]|\\d{2,})", RegexOption.IGNORE_CASE)) }
-                            folderGames.addAll(primaryIsos)
-                        } else {
-                            // 3. Priority #3: .bin files (if no .cue or .iso exists)
-                            val bins = folderFiles.filter { f -> f.extension.lowercase() == "bin" }
-                            if (bins.isNotEmpty()) {
-                                // Take only "Track 1" or files without track tags
-                                val primaryBins = bins.filter { !it.name.contains(Regex("(Track|Part|Data|Audio)\\s*([2-9]|0[2-9]|\\d{2,})", RegexOption.IGNORE_CASE)) }
-                                // If multiple bins, just take the first one as a last resort
-                                if (primaryBins.isNotEmpty()) folderGames.add(primaryBins.first())
-                            }
+                        val bins = folderFiles.filter { f -> f.extension.lowercase() == "bin" }
+                        val others = folderFiles.filter { f -> !listOf("iso", "bin").contains(f.extension.lowercase()) }
+                        
+                        // Try to find a primary file (Track 1 or no track tag)
+                        val primaryCandidates = (isos + bins + others).filter { 
+                            !it.name.contains(Regex("(Track|Part|Data|Audio|Disc|Disk|Side)\\s*([2-9]|0[2-9]|\\d{2,})", RegexOption.IGNORE_CASE)) 
+                        }
+                        
+                        if (primaryCandidates.isNotEmpty()) {
+                            folderGames.add(primaryCandidates.sortedBy { it.name }.first())
+                        } else if (folderFiles.isNotEmpty()) {
+                            // Last resort: Just take the first file alphabetic
+                            folderGames.add(folderFiles.sortedBy { it.name }.first())
                         }
                     }
 

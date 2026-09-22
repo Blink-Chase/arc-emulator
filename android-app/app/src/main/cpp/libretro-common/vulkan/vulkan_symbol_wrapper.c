@@ -175,12 +175,18 @@ PFN_vkGetInstanceProcAddr vulkan_symbol_wrapper_instance_proc_addr(void)
 
 VkBool32 vulkan_symbol_wrapper_load_instance_symbol(VkInstance instance, const char *name, PFN_vkVoidFunction *ppSymbol)
 {
+    if (!GetInstanceProcAddr || !name || !ppSymbol)
+        return VK_FALSE;
+
     *ppSymbol = GetInstanceProcAddr(instance, name);
     return *ppSymbol != NULL;
 }
 
 VkBool32 vulkan_symbol_wrapper_load_device_symbol(VkDevice device, const char *name, PFN_vkVoidFunction *ppSymbol)
 {
+    if (!name || !ppSymbol || !vkGetDeviceProcAddr)
+        return VK_FALSE;
+
     *ppSymbol = vkGetDeviceProcAddr(device, name);
     return *ppSymbol != NULL;
 }

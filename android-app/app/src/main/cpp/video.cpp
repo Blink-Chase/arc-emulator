@@ -194,9 +194,10 @@ void deinitEGL() {
 void VideoRefreshCallback(const void *data, unsigned width, unsigned height,
                           size_t pitch) {
   const uint64_t frameNumber = ++g_videoRefreshCount;
-  if (frameNumber == 1) {
-    LOGI("VIDEO: first refresh data=%p size=%ux%u pitch=%zu hw=%d surface=%p",
-         data, width, height, pitch, g_useHwRender ? 1 : 0, g_eglSurface);
+  if (frameNumber % 100 == 1) { // Log every 100 frames to avoid spam
+    LOGI("VIDEO: refresh #%llu data=%p size=%ux%u pitch=%zu hw=%d surface=%p",
+         (unsigned long long)frameNumber, data, width, height, pitch,
+         g_useHwRender ? 1 : 0, g_eglSurface);
   }
 
   if (g_useHwRender) {
@@ -304,8 +305,14 @@ void VideoRefreshCallback(const void *data, unsigned width, unsigned height,
   }
 
   ANativeWindow_Buffer buffer;
-  if (ANativeWindow_lock(window, &buffer, nullptr) != 0)
+  int lockRes = ANativeWindow_lock(window, &buffer, nullptr);
+  if (lockRes != 0) {
+    static int lockFailCount = 0;
+    if (++lockFailCount % 100 == 1) {
+        LOGE("VIDEO: ANativeWindow_lock failed: %d", lockRes);
+    }
     return;
+  }
 
   if (format == RETRO_PIXEL_FORMAT_XRGB8888) {
     for (unsigned y = 0; y < height; y++) {

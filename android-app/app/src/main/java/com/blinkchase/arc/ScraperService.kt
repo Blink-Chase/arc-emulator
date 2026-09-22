@@ -90,6 +90,11 @@ object ScraperService {
     private val SERIAL_REGEX = Regex("([A-Z]{3,4})[-_\\s.]?(\\d{3,5})", RegexOption.IGNORE_CASE)
 
     suspend fun scrapeGame(game: GameFile, gameDao: GameDao, apiKey: String? = null, force: Boolean = false): Boolean = withContext(Dispatchers.IO) {
+        // QUICK EXIT: If artwork already exists and we aren't forcing, skip to save resources
+        if (!force && !game.coverUrl.isNullOrBlank()) {
+            return@withContext true
+        }
+
         val baseName = game.name.substringBeforeLast(".")
             .replace(Regex("\\.nkit$", RegexOption.IGNORE_CASE), "")
         

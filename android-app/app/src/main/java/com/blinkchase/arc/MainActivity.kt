@@ -89,6 +89,7 @@ class MainActivity : ComponentActivity() {
         const val KEY_SEARCH_GROUPING = "search_grouping"
         const val KEY_SCREENSCRAPER_KEY = "screenscraper_key"
         const val KEY_SHOW_FPS = "show_fps"
+        const val KEY_NUCLEAR_LOGGING = "nuclear_logging"
         const val BTN_B = 0; const val BTN_Y = 1; const val BTN_SELECT = 2; const val BTN_START = 3
         const val BTN_UP = 4; const val BTN_DOWN = 5; const val BTN_LEFT = 6; const val BTN_RIGHT = 7
         const val BTN_A = 8; const val BTN_X = 9; const val BTN_L = 10; const val BTN_R = 11
@@ -97,6 +98,8 @@ class MainActivity : ComponentActivity() {
         const val BTN_SCREEN_SWAP = 16 // DS specialized button
         const val KEY_LAST_CRASHED_CORE = "last_crashed_core"
         const val KEY_LAST_CRASHED_LAYOUT = "last_crashed_layout"
+        const val KEY_CRASH_PENDING = "crash_pending"
+        const val KEY_LAST_CRASH_SNIPPET = "last_crash_snippet"
 
         val AVAILABLE_CORES = mapOf(
             Platform.SNES to listOf("snes9x_libretro_android", "snes9x2010_libretro_android", "snes9x"),
@@ -206,12 +209,12 @@ class MainActivity : ComponentActivity() {
             nativeQuitGame()
             isEngineReady = false
         }
-        
+
         resetAudio()
         val success = nativeLoadGame(romPath)
         if (success) {
             isEngineReady = true
-            
+
             // PROACTIVE NUDGE: Kick the renderer once immediately
             if (isSurfaceActive) {
                 nativeForceNextFrame()
@@ -406,6 +409,27 @@ class MainActivity : ComponentActivity() {
         val systemDir = File(storageDir, "system").also { it.mkdirs() }
         Log.d("Arc", "Initializing Native Paths: System=${systemDir.absolutePath} Save=${savesDir.absolutePath}")
         setSystemDirectories(systemDir.absolutePath, savesDir.absolutePath)
+
+        // Initialize Smart Log Management
+        LogManager.setNuclearMode(getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean(KEY_NUCLEAR_LOGGING, true))
+        LogManager.startObserving(this)
+        
+        // Setup Global Crash Recovery
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            LogManager.saveCrashLog(this, throwable)
+            val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            
+            // Get last few lines for the UI snippet
+            val logs = LogManager.getBufferedLogs().takeLast(10).joinToString("\n") { it.toString() }
+            
+            prefs.edit {
+                putBoolean(KEY_CRASH_PENDING, true)
+                putString(KEY_LAST_CRASH_SNIPPET, logs)
+            }
+            
+            defaultHandler?.uncaughtException(thread, throwable)
+        }
 
         updateNativeActivity()
         setContent {
@@ -606,24 +630,30 @@ class MainActivity : ComponentActivity() {
         fun scanLayouts(): List<String> = layoutsDir.listFiles()?.filter { it.extension == "layout" }?.map { it.nameWithoutExtension } ?: emptyList()
 
         var isScanning by remember { mutableStateOf(false) }
+        var scanSignal by remember { mutableIntStateOf(0) }
 
         fun performScan() {
             isScanning = true
             scope.launch(Dispatchers.IO) {
                 Log.d("Arc", "SCAN: Starting ROM scan...")
                 
-                // 1. Passive Cleanup: Prune missing or filtered files from database
+                // 1. Passive Cleanup: Prune missing, duplicate, or blocked files from database
                 Log.d("Arc", "SCAN: Validating existing library entries...")
                 val trackRegex = Regex("(Track|Part|Data|Audio|Disc|Disk|Side)\\s*([2-9]|0[2-9]|\\d{2,})", RegexOption.IGNORE_CASE)
+                val blockedKeywords = listOf("replit", "license", "readme", "install", "debug", ".nomedia", "changelog", "credits", "config", "cache")
+                
                 gameList.forEach { game ->
                     if (!game.path.startsWith("content://")) {
                         val file = File(game.path)
-                        val shouldPrune = !file.exists() || 
-                                          file.name.contains(trackRegex) ||
-                                          (file.extension.lowercase() == "bin" && File(file.parentFile, "${file.nameWithoutExtension}.cue").exists())
+                        val name = file.name
                         
-                        if (shouldPrune) {
-                            Log.d("Arc", "SCAN: Pruning invalid/duplicate game: ${game.name}")
+                        // Check if the file actually exists and isn't a junk file
+                        val exists = file.exists()
+                        val isJunk = blockedKeywords.any { name.contains(it, true) } || name.contains(trackRegex)
+                        val isBinWithoutCue = file.extension.lowercase() == "bin" && File(file.parentFile, "${file.nameWithoutExtension}.cue").exists()
+                        
+                        if (!exists || isJunk || isBinWithoutCue) {
+                            Log.d("Arc", "SCAN: Pruning invalid/duplicate/blocked game: ${game.name} (exists=$exists, junk=$isJunk)")
                             gameDao.deleteGame(game)
                         }
                     }
@@ -678,6 +708,7 @@ class MainActivity : ComponentActivity() {
                 
                 withContext(Dispatchers.Main) {
                     isScanning = false
+                    scanSignal++
                     android.widget.Toast.makeText(context, "Library Scan Complete: ${allGames.size} games found", android.widget.Toast.LENGTH_SHORT).show()
                 }
             }
@@ -936,17 +967,23 @@ class MainActivity : ComponentActivity() {
                 }
             }
         ) { innerPadding ->
-            // Background scraper retries all entries without artwork, including games
-            // added after setup and entries whose platform was corrected by a rescan.
-            LaunchedEffect(gameList, isScanning) {
+            // Background scraper triggers on scan completion and avoids games with art
+            LaunchedEffect(scanSignal) {
                 if (gameList.isNotEmpty()) {
-                    gameList.filter { it.coverUrl.isNullOrBlank() }.forEach { game ->
-                        ScraperService.scrapeGame(
-                            game,
-                            gameDao,
-                            prefs.getString(KEY_SCREENSCRAPER_KEY, null)
-                        )
-                        delay(250)
+                    val toScrape = gameList.filter { it.coverUrl.isNullOrBlank() }
+                    if (toScrape.isNotEmpty()) {
+                        Log.d("Arc", "SCRAPER: Starting background pass for ${toScrape.size} games")
+                        toScrape.forEach { game ->
+                            // Triple check to prevent redundant scraping during high-frequency UI updates
+                            if (game.coverUrl.isNullOrBlank()) {
+                                ScraperService.scrapeGame(
+                                    game,
+                                    gameDao,
+                                    prefs.getString(KEY_SCREENSCRAPER_KEY, null)
+                                )
+                                delay(2000) // Increase delay to respect rate limits and reduce CPU usage
+                            }
+                        }
                     }
                 }
             }
@@ -1094,7 +1131,6 @@ class MainActivity : ComponentActivity() {
                                 rootStorageDir = storageDir,
                                 gameDao = gameDao,
                                 games = gameList,
-                                onReportBug = { Toast.makeText(context, "Check logs in console", Toast.LENGTH_SHORT).show() },
                                 onGoToAbout = { navController.navigate(Screen.ABOUT.name) },
                                 onGoToHelp = { navController.navigate(Screen.HELP.name) },
                                 onGoToBios = { navController.navigate(Screen.BIOS.name) },

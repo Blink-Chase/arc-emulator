@@ -21,6 +21,8 @@
         android:hardwareAccelerated="true"
         android:pageSizeCompat="enabled"
         android:extractNativeLibs="true"
+        android:memtagMode="off"
+        android:allowNativeHeapPointerTagging="false"
         tools:ignore="UnusedAttribute">
         <activity
             android:name="com.blinkchase.arc.MainActivity"

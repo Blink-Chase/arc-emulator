@@ -11,6 +11,7 @@ import android.view.SurfaceView
 import android.view.View
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
 import java.io.RandomAccessFile
@@ -172,36 +173,50 @@ object Utils {
 
     /**
      * Helper to prevent log spam by grouping identical messages.
+     * This version is more aggressive: it suppresses repeats until they stop or the message changes.
      */
     object Logger {
-        private val counts = mutableMapOf<String, Int>()
-        private val lastTime = mutableMapOf<String, Long>()
-        private const val GROUP_INTERVAL_MS = 1000 // Log every 1 second for repeaters
+        private var lastMsg: String? = null
+        private var lastTag: String? = null
+        private var lastLevel: Int = 0
+        private var count = 0
+        private var firstTime = 0L
 
         fun i(tag: String, msg: String) = log(android.util.Log.INFO, tag, msg)
         fun d(tag: String, msg: String) = log(android.util.Log.DEBUG, tag, msg)
         fun w(tag: String, msg: String) = log(android.util.Log.WARN, tag, msg)
         fun e(tag: String, msg: String) = log(android.util.Log.ERROR, tag, msg)
 
+        @Synchronized
         private fun log(level: Int, tag: String, msg: String) {
-            // Strip common changing patterns like memory addresses (@0x...) to allow grouping
-            val sanitizedMsg = msg.replace(Regex("@0x[0-9a-fA-F]+"), "@0x...")
-            val key = "$tag:$sanitizedMsg"
-            val now = System.currentTimeMillis()
-            val last = lastTime[key] ?: 0L
-            val count = counts[key] ?: 0
+            // Normalize message: strip changing memory addresses/hex to allow grouping
+            val normalized = msg.replace(Regex("0x[0-9a-fA-F]{4,16}"), "0x...")
+                               .replace(Regex("\\{[0-9a-fA-F]{4,16}\\}"), "{...}")
 
-            if (now - last > GROUP_INTERVAL_MS) {
-                if (count > 0) {
-                    android.util.Log.println(level, tag, "[$tag x${count + 1}] $msg")
-                } else {
-                    android.util.Log.println(level, tag, "[$tag] $msg")
+            if (normalized == lastMsg && tag == lastTag && level == lastLevel) {
+                count++
+                // Periodically flush even if repeating (every 5 seconds) to show life
+                if (System.currentTimeMillis() - firstTime > 5000) {
+                    flush()
+                    firstTime = System.currentTimeMillis()
                 }
-                lastTime[key] = now
-                counts[key] = 0
             } else {
-                counts[key] = count + 1
+                flush()
+                lastMsg = normalized
+                lastTag = tag
+                lastLevel = level
+                count = 1
+                firstTime = System.currentTimeMillis()
+                // Print the first instance immediately
+                Log.println(level, tag, msg)
             }
+        }
+
+        private fun flush() {
+            if (count > 1 && lastMsg != null) {
+                Log.println(lastLevel, lastTag!!, "!!! REPEAT x$count: $lastMsg")
+            }
+            count = 0
         }
     }
 }

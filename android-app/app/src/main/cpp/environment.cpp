@@ -1,4 +1,7 @@
 #include "environment.h"
+#include "vulkan_bridge.h"
+#include <cctype>
+#include <cstring>
 
 uintptr_t GetCurrentFramebuffer() {
   return 0; // Default window framebuffer
@@ -7,6 +10,72 @@ uintptr_t GetCurrentFramebuffer() {
 retro_proc_address_t GetProcAddress(const char *sym) {
   return (retro_proc_address_t)eglGetProcAddress(sym);
 }
+
+namespace {
+
+// True if a value string is a boolean-style "off" spelling. Used to pick the
+// correct off value from the core's own option list rather than guessing.
+bool IsOffValue(const char *v) {
+  if (!v)
+    return false;
+  std::string s(v);
+  for (char &c : s)
+    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  return s == "disabled" || s == "off" || s == "false" || s == "no" ||
+         s == "0";
+}
+
+// Resolved "off" value for pcsx2_fastmem, discovered from the core's own
+// option value list so we never force a string the core does not recognise.
+// Empty until the core registers/describes its options.
+std::string g_pcsx2FastmemValue;
+
+// Scan a NULL-terminated retro_core_option_value[] for an "off" spelling.
+void ResolveFastmemFromValues(const struct retro_core_option_value *values,
+                              const char *key) {
+  if (!key || !values || std::string(key) != "pcsx2_fastmem")
+    return;
+  for (unsigned i = 0; i < RETRO_NUM_CORE_OPTION_VALUES_MAX; ++i) {
+    if (!values[i].value)
+      break;
+    if (IsOffValue(values[i].value)) {
+      g_pcsx2FastmemValue = values[i].value;
+      LOGI("PCSX2 fastmem: core offers off value '%s'", values[i].value);
+      return;
+    }
+  }
+}
+
+// Parse a legacy "Description; a|b|c" value string and find an off spelling.
+void ResolveFastmemFromLegacy(const char *rawValue) {
+  if (!rawValue)
+    return;
+  std::string v(rawValue);
+  auto semi = v.find(';');
+  std::string list = (semi == std::string::npos) ? std::string() : v.substr(semi + 1);
+  size_t start = 0;
+  while (!list.empty() && start <= list.size()) {
+    auto bar = list.find('|', start);
+    std::string token =
+        list.substr(start, bar == std::string::npos ? std::string::npos
+                                                    : bar - start);
+    while (!token.empty() && (token.front() == ' ' || token.front() == '\t'))
+      token.erase(token.begin());
+    while (!token.empty() && (token.back() == ' ' || token.back() == '\t' ||
+                              token.back() == '\r' || token.back() == '\n'))
+      token.pop_back();
+    if (IsOffValue(token.c_str())) {
+      g_pcsx2FastmemValue = token;
+      LOGI("PCSX2 fastmem: core offers off value '%s'", token.c_str());
+      return;
+    }
+    if (bar == std::string::npos)
+      break;
+    start = bar + 1;
+  }
+}
+
+} // namespace
 
 bool EnvironmentCallback(unsigned cmd, void *data) {
   // Move logging into switch to avoid spamming high-frequency commands (like
@@ -112,12 +181,13 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
       LOGI("SET_HW_RENDER rejected: PCSX2 software renderer uses framebuffer callbacks");
       return false;
     }
+
     struct retro_hw_render_callback *hw =
         (struct retro_hw_render_callback *)data;
     LOGI("SET_HW_RENDER called by core (cmd 14), type: %u", hw->context_type);
+
     if (hw->context_type == RETRO_HW_CONTEXT_VULKAN) {
-      LOGW("SET_HW_RENDER: Core requested Vulkan. Rejecting to force GLES "
-           "fallback.");
+      LOGW("SET_HW_RENDER: Core requested Vulkan. Rejecting to force GLES fallback.");
       return false;
     }
 
@@ -135,6 +205,31 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
     g_hwRender.context_destroy = hw->context_destroy;
     g_hwRender.debug_context = hw->debug_context;
 
+// If the core negotiated a Vulkan HW render context, also populate our
+     // Vulkan-specific interface so the core can call back into us for
+     // image/sync/queue management. We keep g_hwRender as-is for OpenGL/GLES
+     // path compatibility, but note the active API via g_useVulkan.
+     if (hw->context_type == RETRO_HW_CONTEXT_VULKAN) {
+       g_vulkanInterface.interface_type = RETRO_HW_RENDER_INTERFACE_VULKAN;
+       g_vulkanInterface.interface_version = RETRO_HW_RENDER_INTERFACE_VULKAN_VERSION;
+       g_vulkanInterface.handle = nullptr; // frontend manages this
+       g_vulkanInterface.instance = VK_NULL_HANDLE;
+       g_vulkanInterface.gpu = VK_NULL_HANDLE;
+       g_vulkanInterface.device = VK_NULL_HANDLE;
+       g_vulkanInterface.get_device_proc_addr = nullptr;
+       g_vulkanInterface.get_instance_proc_addr = VulkanGetInstanceProcAddr;
+       g_vulkanInterface.queue = VK_NULL_HANDLE;
+       g_vulkanInterface.queue_index = 0;
+       g_vulkanInterface.set_image = vulkan_set_image;
+       g_vulkanInterface.get_sync_index = vulkan_get_sync_index;
+       g_vulkanInterface.get_sync_index_mask = vulkan_get_sync_index_mask;
+       g_vulkanInterface.set_command_buffers = vulkan_set_command_buffers;
+       g_vulkanInterface.wait_sync_index = vulkan_wait_sync_index;
+       g_vulkanInterface.lock_queue = vulkan_lock_queue;
+       g_vulkanInterface.unlock_queue = vulkan_unlock_queue;
+       g_vulkanInterface.set_signal_semaphore = nullptr;
+       g_useVulkan = true;
+     }
     g_useHwRender = true;
 
     // Provide our frontend functions back to the core
@@ -161,9 +256,6 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
     return true;
   }
   case RETRO_ENVIRONMENT_SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE: {
-    // This interface is currently only defined for Vulkan. Dolphin still
-    // probes it while using GLES; acknowledge the probe so it can continue
-    // with the GLES callbacks supplied above.
     if (!data)
       return false;
     const auto *interfaceInfo =
@@ -171,6 +263,8 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
     LOGI("SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE: type=%d version=%u",
          static_cast<int>(interfaceInfo->interface_type),
          interfaceInfo->interface_version);
+    // This interface is currently only defined for Vulkan. Dolphin probes it
+    // while using GLES; acknowledge the probe without enabling Vulkan.
     return true;
   }
   case RETRO_ENVIRONMENT_SET_HW_SHARED_CONTEXT:
@@ -228,6 +322,7 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
           option->default_value != nullptr) {
         g_coreVariables.emplace(option->key, option->default_value);
       }
+      ResolveFastmemFromValues(option->values, option->key);
     }
     if (g_isDolphinCore.load()) {
       g_coreVariables["dolphin_shader_compilation_mode"] = "synchronous";
@@ -236,6 +331,22 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
     if (g_coreVariables.find("pcsx2_renderer") != g_coreVariables.end()) {
       g_coreVariables["pcsx2_renderer"] = "Software (SW)";
       LOGI("PCSX2 renderer forced to software framebuffer path");
+    }
+    // PCSX2's fastmem write-protects guest RAM pages so the recompiler can
+    // trap and backpatch guest stores. retro_unserialize() restores the 32MB
+    // EE main RAM with one large memmove from this thread, which faults on
+    // those protected pages (SEGV_ACCERR inside the core's memcpy) and kills
+    // the process mid state-load. Force the core's OWN "off" value (discovered
+    // from its option list) to route memory accesses through the software
+    // handlers: slightly slower, but savestate loads become safe.
+    if (g_coreVariables.find("pcsx2_fastmem") != g_coreVariables.end()) {
+      if (!g_pcsx2FastmemValue.empty()) {
+        g_coreVariables["pcsx2_fastmem"] = g_pcsx2FastmemValue;
+        LOGI("PCSX2 fastmem forced to '%s' for savestate-load safety",
+             g_pcsx2FastmemValue.c_str());
+      } else {
+        LOGW("PCSX2 fastmem: core has not exposed an off value yet");
+      }
     }
     return true;
   case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2: {
@@ -250,6 +361,7 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
             option->default_value != nullptr) {
           g_coreVariables.emplace(option->key, option->default_value);
         }
+        ResolveFastmemFromValues(option->values, option->key);
       }
     }
     if (g_isDolphinCore.load()) {
@@ -259,6 +371,17 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
     if (g_coreVariables.find("pcsx2_renderer") != g_coreVariables.end()) {
       g_coreVariables["pcsx2_renderer"] = "Software (SW)";
       LOGI("PCSX2 renderer forced to software framebuffer path");
+    }
+    // See the SET_CORE_OPTIONS note: fastmem's write-protected guest RAM
+    // faults the savestate-restore memmove. Force the core's own off value.
+    if (g_coreVariables.find("pcsx2_fastmem") != g_coreVariables.end()) {
+      if (!g_pcsx2FastmemValue.empty()) {
+        g_coreVariables["pcsx2_fastmem"] = g_pcsx2FastmemValue;
+        LOGI("PCSX2 fastmem forced to '%s' for savestate-load safety",
+             g_pcsx2FastmemValue.c_str());
+      } else {
+        LOGW("PCSX2 fastmem: core has not exposed an off value yet");
+      }
     }
     return true;
   }
@@ -306,6 +429,9 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
       if (g_coreVariables.find(key) == g_coreVariables.end()) {
         g_coreVariables[key] = value;
       }
+      if (key == "pcsx2_fastmem") {
+        ResolveFastmemFromLegacy(received[count].value);
+      }
 
       count++;
     }
@@ -352,11 +478,17 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
       g_coreVariables["pcsx2_renderer"] = "Software (SW)";
       LOGI("PCSX2 renderer forced to software framebuffer path");
     }
-    if (g_coreVariables.find("pcsx2_renderer") != g_coreVariables.end()) {
-      g_coreVariables["pcsx2_renderer"] = "Software (SW)";
-      LOGI("PCSX2 renderer forced to software framebuffer path");
+    // See the SET_CORE_OPTIONS note: fastmem's write-protected guest RAM
+    // faults the savestate-restore memmove. Force the core's own off value.
+    if (g_coreVariables.find("pcsx2_fastmem") != g_coreVariables.end()) {
+      if (!g_pcsx2FastmemValue.empty()) {
+        g_coreVariables["pcsx2_fastmem"] = g_pcsx2FastmemValue;
+        LOGI("PCSX2 fastmem forced to '%s' for savestate-load safety",
+             g_pcsx2FastmemValue.c_str());
+      } else {
+        LOGW("PCSX2 fastmem: core has not exposed an off value yet");
+      }
     }
-
     return true;
   }
   case RETRO_ENVIRONMENT_GET_VARIABLE: {
@@ -368,6 +500,20 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
         static const char *pcsx2RendererSoftware = "Software (SW)";
         LOGI("PCSX2 renderer option: %s", pcsx2RendererSoftware);
         var->value = pcsx2RendererSoftware;
+        return true;
+      }
+      if (std::string(var->key) == "pcsx2_fastmem") {
+        // The PCSX2 core's fastmem write-protects guest RAM pages so the EE
+        // JIT can trap and backpatch stores. retro_unserialize() restores the
+        // 32MB EE main RAM with one large memmove on this thread, which hits a
+        // protected page unclaimed and dies with SIGSEGV (SEGV_ACCERR) mid
+        // state-load. Return the core's OWN off value (discovered from its
+        // option list) so fastmem stays off and savestate loads are safe.
+        static const std::string fallback = "disabled";
+        const std::string &off =
+            g_pcsx2FastmemValue.empty() ? fallback : g_pcsx2FastmemValue;
+        var->value = off.c_str();
+        LOGI("PCSX2 fastmem option -> '%s'", var->value);
         return true;
       }
       static std::unordered_map<std::string, int> logCounts;
@@ -444,7 +590,7 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
     }
     return false;
   case RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE:
-    return false; // Not implemented yet
+    return false;
   default:
     // Do not log unsupported high-frequency probes on every frame. Dolphin
     // queries GET_FASTFORWARDING (65585) continuously while running.
