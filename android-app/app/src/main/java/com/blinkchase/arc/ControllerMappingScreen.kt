@@ -313,8 +313,8 @@ fun ControllerMappingScreen(
                                 val char = when(id) {
                                     MainActivity.BTN_A -> "A"
                                     MainActivity.BTN_B -> "B"
-                                    MainActivity.BTN_X -> "X"
-                                    MainActivity.BTN_Y -> "Y"
+                                    MainActivity.BTN_X -> if (selectedModel == ControllerModel.WII) "1" else "X"
+                                    MainActivity.BTN_Y -> if (selectedModel == ControllerModel.WII) "2" else "Y"
                                     else -> ""
                                 }
                                 Box(

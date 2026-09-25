@@ -15,6 +15,7 @@
 #include <dlfcn.h>
 #include <jni.h>
 #include <mutex>
+#include <pthread.h>
 #include <string>
 #include <sys/resource.h>
 #include <thread>
@@ -67,17 +68,37 @@ extern std::atomic<int16_t> g_analogX;
 extern std::atomic<int16_t> g_analogY;
 extern std::atomic<int16_t> g_analogRightX;
 extern std::atomic<int16_t> g_analogRightY;
+extern std::atomic<int16_t> g_touchX;
+extern std::atomic<int16_t> g_touchY;
+extern std::atomic<bool> g_touchPressed;
 extern std::atomic<int> g_pendingControllerType;
 extern std::atomic<bool> g_isDolphinCore;
 extern std::atomic<bool> g_isPcsx2Core;
 extern std::atomic<int> g_pixelFormat;
+extern std::string g_dsScreenLayout;
+// True when the DS screens should be presented bottom-first ("Bottom/Top").
+// The frontend owns this flip in the blit path: melonDS's libretro core only
+// reads melonds_screen_layout at boot, so a runtime change is ignored there.
+extern std::atomic<bool> g_dsSwapScreens;
 
 // Vulkan Globals
 extern struct retro_hw_render_interface_vulkan g_vulkanInterface;
 extern bool g_vulkanInitialized;
 extern bool g_useVulkan;
 
-extern std::thread g_emuThread;
+// Emulation thread. It is created with a large stack (see nativeLoadGame) and
+// is the ONLY thread allowed to call into the core; it unloads the core itself
+// before it exits.
+extern pthread_t g_emuPthread;
+extern std::atomic<bool> g_emuThreadActive;
+// Set when the emulation thread will not stop: the core is wedged inside a call
+// of its own and must never be called into again in this process.
+extern std::atomic<bool> g_coreWedged;
+// Steady-clock ms touched by the emulation loop. A stale heartbeat means the
+// loop is blocked inside a core call (a hung game), which is the state that
+// used to crash the app when the user pressed Reset or Quit.
+extern std::atomic<int64_t> g_lastEmuHeartbeatMs;
+
 extern std::mutex g_activityMutex;
 extern std::mutex g_windowMutex;
 extern std::recursive_mutex g_emuMutex;
@@ -153,11 +174,19 @@ extern std::mutex g_stateMutex;
 extern std::thread::id g_emuThreadId;
 extern std::atomic<bool> g_variablesUpdated;
 extern std::unordered_map<std::string, std::string> g_coreVariables;
+// Steady-clock timestamps for the current core call. runStartedUs is stamped
+// immediately BEFORE retro_run()/retro_reset() and cleared right after it
+// returns; a stale (non-zero, old) value is unambiguous proof the thread is
+// *blocked inside that core call* - unlike the loop heartbeat, this cannot be
+// faked by a stale write from before the call. checked by resetGame/quit.
+extern std::atomic<int64_t> g_coreCallStartUs;
+extern std::atomic<int> g_coreCallKind; // 0 = none, 1 = run, 2 = reset
 
 // Shared Utility Functions
 void LogCallback(enum retro_log_level level, const char *fmt, ...);
 JNIEnv *GetJNIEnv();
 void ResizeStateBuffer(size_t newCapacity);
+int64_t ArcNowMs();
 
 // Shared Forward Declarations (Implemented in specific modules)
 bool setupEGL();

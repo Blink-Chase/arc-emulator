@@ -90,6 +90,9 @@ class MainActivity : ComponentActivity() {
         const val KEY_SCREENSCRAPER_KEY = "screenscraper_key"
         const val KEY_SHOW_FPS = "show_fps"
         const val KEY_NUCLEAR_LOGGING = "nuclear_logging"
+        const val KEY_PS2_VULKAN = "ps2_vulkan_renderer"
+        const val KEY_GC_CONTROLLER_STYLE = "gc_controller_style"
+        const val KEY_WII_CONTROLLER_STYLE = "wii_controller_style"
         const val BTN_B = 0; const val BTN_Y = 1; const val BTN_SELECT = 2; const val BTN_START = 3
         const val BTN_UP = 4; const val BTN_DOWN = 5; const val BTN_LEFT = 6; const val BTN_RIGHT = 7
         const val BTN_A = 8; const val BTN_X = 9; const val BTN_L = 10; const val BTN_R = 11
@@ -158,7 +161,7 @@ class MainActivity : ComponentActivity() {
     external fun nativePauseGame()
     external fun nativeResumeGame()
     external fun nativeForceNextFrame()
-    external fun resetGame()
+    external fun resetGame(): Int
     external fun nativeQuitGame()
     external fun nativeOnSurfaceCreated(surface: Surface)
     external fun nativeOnSurfaceChanged(surface: Surface, width: Int, height: Int)
@@ -178,6 +181,20 @@ class MainActivity : ComponentActivity() {
     external fun getGameSampleRate(): Double
     external fun getGameFrameRate(): Double
     external fun getAudioBufferOccupancy(): Int
+    external fun nativeSetVulkanRequested(enabled: Boolean)
+    external fun nativeIsVulkanRequested(): Boolean
+    external fun nativeIsVulkanActive(): Boolean
+    external fun nativeCoreSupportsVulkan(): Boolean
+    external fun setTouchInput(x: Int, y: Int, pressed: Boolean)
+    external fun nativeSetDsScreenLayout(layout: String)
+
+    /**
+     * Milliseconds since the emulation loop last made progress, or -1 when there
+     * is no running session to judge. Used by the in-game watchdog to notice a
+     * game that hung inside the core (the state that used to make Reset/Quit
+     * crash the process). Keep the threshold in sync with EmuThreadResponsive().
+     */
+    external fun nativeEmuHeartbeatAgeMs(): Int
 
     private val surfaceLock = Any()
 
@@ -211,6 +228,11 @@ class MainActivity : ComponentActivity() {
         }
 
         resetAudio()
+        if (activeGamePlatform == Platform.DS) {
+            val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            val dsLayout = prefs.getString("melonds_screen_layout", "Top/Bottom") ?: "Top/Bottom"
+            nativeSetDsScreenLayout(dsLayout)
+        }
         val success = nativeLoadGame(romPath)
         if (success) {
             isEngineReady = true
@@ -385,6 +407,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        nativeSetVulkanRequested(getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean(KEY_PS2_VULKAN, true))
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (!Environment.isExternalStorageManager()) {
                 val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
@@ -412,6 +435,7 @@ class MainActivity : ComponentActivity() {
 
         // Initialize Smart Log Management
         LogManager.setNuclearMode(getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean(KEY_NUCLEAR_LOGGING, true))
+        nativeSetVulkanRequested(getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean(KEY_PS2_VULKAN, true))
         LogManager.startObserving(this)
         
         // Setup Global Crash Recovery
@@ -596,11 +620,14 @@ class MainActivity : ComponentActivity() {
                             fileName.endsWith(".gcm", true) || fileName.endsWith(".rvz", true) || fileName.endsWith(".gc", true) -> Platform.GAMECUBE
                             fileName.endsWith(".wbfs", true) || fileName.endsWith(".wii", true) -> Platform.WII
                             fileName.endsWith(".iso", true) -> {
+                                val fileObj = File(path)
+                                val fileSize = if (fileObj.exists()) fileObj.length() else 0L
                                 when {
                                     fileName.contains("GC", true) || fileName.contains("GameCube", true) -> Platform.GAMECUBE
-                                    fileName.contains("Wii", true) -> Platform.WII
+                                    fileName.contains("Wii", true) || fileSize > 3_000_000_000L -> Platform.WII
+                                    fileSize in 1_300_000_000L..1_600_000_000L -> Platform.GAMECUBE
                                     fileName.contains("Saturn", true) -> Platform.SATURN
-                                    else -> Platform.PS2 // Default .iso to PS2 for manual import
+                                    else -> Platform.PS2
                                 }
                             }
                             fileName.endsWith(".ss", true) || (fileName.endsWith(".bin", true) && fileName.contains("Saturn", true)) -> Platform.SATURN
@@ -706,10 +733,12 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 
+                val totalGamesInLibrary = gameDao.getGameCount()
+
                 withContext(Dispatchers.Main) {
                     isScanning = false
                     scanSignal++
-                    android.widget.Toast.makeText(context, "Library Scan Complete: ${allGames.size} games found", android.widget.Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Library Scan Complete: $totalGamesInLibrary games found", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -804,17 +833,29 @@ class MainActivity : ComponentActivity() {
                 return
             }
 
-            val deviceKey = "device_pref_${game.platform.name}"
-            val deviceTypeString = prefs.getString(deviceKey, if (game.platform == Platform.N64 || game.platform == Platform.PS1) EmulatedDevice.ANALOG.name else EmulatedDevice.JOYPAD.name)
-            val retroType = when(deviceTypeString) {
-                EmulatedDevice.ANALOG.name -> 5
-                EmulatedDevice.MOUSE.name -> 2
-                EmulatedDevice.LIGHTGUN.name -> 4
-                else -> 1
+            val retroType = when (game.platform) {
+                Platform.WII -> {
+                    val wiiStyle = prefs.getInt(KEY_WII_CONTROLLER_STYLE, 0)
+                    when (wiiStyle) {
+                        1 -> 769 // Wiimote + Classic Controller
+                        2 -> 257 // Sideways Wiimote
+                        else -> 513 // Wiimote + Nunchuk
+                    }
+                }
+                Platform.GAMECUBE -> 1 // GameCube Controller
+                else -> {
+                    val deviceKey = "device_pref_${game.platform.name}"
+                    val deviceTypeString = prefs.getString(deviceKey, if (game.platform == Platform.N64 || game.platform == Platform.PS1) EmulatedDevice.ANALOG.name else EmulatedDevice.JOYPAD.name)
+                    when (deviceTypeString) {
+                        EmulatedDevice.ANALOG.name -> 5
+                        EmulatedDevice.MOUSE.name -> 2
+                        EmulatedDevice.LIGHTGUN.name -> 4
+                        else -> 1
+                    }
+                }
             }
             currentRetroType = retroType // Store for safe application in loadGame
-            // CRITICAL: setControllerType moved inside loadGame or called after loadCore to avoid SIGSEGV
-            // setControllerType(0, retroType) 
+            setControllerType(0, retroType) 
 
             scope.launch(Dispatchers.IO) {
                 gameDao.updateGame(game.copy(lastPlayed = System.currentTimeMillis()))
@@ -1134,7 +1175,8 @@ class MainActivity : ComponentActivity() {
                                 onGoToAbout = { navController.navigate(Screen.ABOUT.name) },
                                 onGoToHelp = { navController.navigate(Screen.HELP.name) },
                                 onGoToBios = { navController.navigate(Screen.BIOS.name) },
-                                onGoToControllerMapping = { navController.navigate(Screen.CORE_MANAGEMENT.name) }, // Swap routing over safely
+                                onGoToControllerMapping = { navController.navigate(Screen.CONTROLLER_MAPPING.name) },
+                                onGoToCoreManagement = { navController.navigate(Screen.CORE_MANAGEMENT.name) },
                                 onRefresh = { performScan() }
                             )
                         }
@@ -1236,7 +1278,18 @@ class MainActivity : ComponentActivity() {
                                         loadStateAndResetAudio(filePath)
                                     }
                                 },
-                                onReset = { resetGame() },
+                                onReset = {
+                                    // 1 = reset queued, 0 = the emulation thread is
+                                    // wedged inside the core (a reset would crash
+                                    // the process), -1 = nothing running.
+                                    if (resetGame() == 0) {
+                                        Toast.makeText(
+                                            this@MainActivity,
+                                            "The emulator core stopped responding, so the reset was cancelled. Use Quit Game to leave safely.",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                },
                                 onFastForward = { setFastForward(it) },
                                 onControllerMapping = { navController.navigate(Screen.CONTROLLER_MAPPING.name) },
                                 onQuit = {

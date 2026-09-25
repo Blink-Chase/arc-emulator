@@ -353,6 +353,59 @@ object LibraryDiagnostics {
     }
 }
 
+fun detectConsolePlatform(file: File): Platform {
+    val name = file.name.lowercase()
+    val ext = file.extension.lowercase()
+    val fileSize = file.length()
+    val path = file.absolutePath.lowercase()
+    
+    if (ext == "wbfs" || ext == "wii") return Platform.WII
+    if (ext == "gcm" || ext == "gc") return Platform.GAMECUBE
+    if (ext == "nds") return Platform.DS
+    if (ext == "gba") return Platform.GBA
+    if (ext == "gb") return Platform.GB
+    if (ext == "gbc") return Platform.GBC
+    if (ext == "sfc" || ext == "smc") return Platform.SNES
+    if (ext == "n64" || ext == "z64" || ext == "v64") return Platform.N64
+    if (ext == "md" || ext == "gen" || ext == "smd") return Platform.GENESIS
+    if (ext == "gdi" || ext == "cdi") return Platform.DREAMCAST
+    if (ext == "ss") return Platform.SATURN
+
+    return when {
+        name.contains("wii", true) -> Platform.WII
+        name.contains("saturn", true) || path.contains("saturn", true) -> Platform.SATURN
+        name.contains("dreamcast", true) || path.contains("dreamcast", true) -> Platform.DREAMCAST
+        name.contains("n64", true) || path.contains("n64", true) -> Platform.N64
+        name.contains("snes", true) || path.contains("snes", true) -> Platform.SNES
+        name.contains("ds", true) && !name.contains("ps2", true) && !name.contains("ps1", true) -> Platform.DS
+        name.contains(".nkit.iso", true) -> {
+            if (fileSize <= 1_500_000_000L && (path.contains("gamecube", true) || name.contains("gc", true) || name.contains("gamecube", true))) {
+                Platform.GAMECUBE
+            } else if (fileSize <= 1_500_000_000L && !path.contains("wii", true)) {
+                Platform.GAMECUBE
+            } else {
+                Platform.WII
+            }
+        }
+        name.contains("gc", true) || name.contains("gamecube", true) -> Platform.GAMECUBE
+        ext == "cue" || ext == "chd" || ext == "pbp" -> {
+            if (name.contains("ps2", true) || path.contains("ps2", true)) Platform.PS2
+            else if (name.contains("saturn", true) || path.contains("saturn", true)) Platform.SATURN
+            else Platform.PS1
+        }
+        ext == "bin" -> {
+            if (name.contains("ps2", true) || path.contains("ps2", true)) Platform.PS2
+            else if (name.contains("saturn", true) || path.contains("saturn", true)) Platform.SATURN
+            else Platform.PS1
+        }
+        name.contains(".iso", true) || ext == "iso" -> {
+            if (name.contains("gc", true) || name.contains("gamecube", true)) Platform.GAMECUBE
+            else Platform.PS2
+        }
+        else -> Platform.PS2
+    }
+}
+
 data class ArchitectureCheckResult(
     val status: String,  // "MATCH", "MISMATCH", "ERROR"
     val message: String,

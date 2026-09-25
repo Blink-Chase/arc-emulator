@@ -314,9 +314,21 @@ void VideoRefreshCallback(const void *data, unsigned width, unsigned height,
     return;
   }
 
+  // DS screen swap. melonDS's libretro core only reads melonds_screen_layout
+  // inside check_variables() at boot, so asking it to re-read the option (via
+  // GET_VARIABLE_UPDATE) changes nothing at runtime. The frontend therefore
+  // owns the flip: read straight from the core's framebuffer and swap which
+  // half of the output each DS half is copied to. Instant, frame-accurate and
+  // impossible for the core to ignore. Touch uses whole-frame normalized
+  // coordinates, so the stylus follows whichever half is on top.
+  const bool swapDs = g_dsSwapScreens.load() && height > 1;
+  auto srcRow = [&](unsigned y) -> unsigned {
+    return swapDs ? (y < height / 2 ? y + height / 2 : y - height / 2) : y;
+  };
+
   if (format == RETRO_PIXEL_FORMAT_XRGB8888) {
     for (unsigned y = 0; y < height; y++) {
-      const uint8_t *srcLine = (const uint8_t *)data + y * pitch;
+      const uint8_t *srcLine = (const uint8_t *)data + srcRow(y) * pitch;
       uint8_t *dstLine = (uint8_t *)buffer.bits + y * buffer.stride * 4;
       for (unsigned x = 0; x < width; x++) {
         dstLine[x * 4 + 0] = srcLine[x * 4 + 2]; // R
@@ -327,7 +339,7 @@ void VideoRefreshCallback(const void *data, unsigned width, unsigned height,
     }
   } else {
     for (unsigned y = 0; y < height; y++) {
-      const uint8_t *srcLine = (const uint8_t *)data + y * pitch;
+      const uint8_t *srcLine = (const uint8_t *)data + srcRow(y) * pitch;
       uint8_t *dstLine = (uint8_t *)buffer.bits + y * buffer.stride * 2;
       memcpy(dstLine, srcLine, width * 2);
     }

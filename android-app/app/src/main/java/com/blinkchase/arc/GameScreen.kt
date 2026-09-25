@@ -3,8 +3,10 @@ package com.blinkchase.arc
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.PixelFormat
+import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,7 +25,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -107,7 +113,7 @@ fun GameScreen(
                 buttonSize = prefs.getFloat("control_button_size", 1.0f),
                 hapticFeedback = prefs.getBoolean("control_haptic", true),
                 autoHideDelay = prefs.getInt("control_auto_hide", 0),
-                portraitGameRatio = prefs.getFloat("control_portrait_game_ratio", 0.45f),
+                portraitGameRatio = if (platform == Platform.DS) 0.57f else prefs.getFloat("control_portrait_game_ratio", 0.45f),
                 portraitAlignment = VerticalAlignment.entries[prefs.getInt("control_portrait_alignment", 1)]
             )
         )
@@ -289,6 +295,41 @@ fun GameScreen(
 
     val isAnyMenuOpen = showMenu || showControlSettings || showCheats || showSaveManager || showTemplateManager || showSaveTemplateDialog
 
+    // A dialog drawn over the surface swallows the ACTION_UP that would release
+    // the stylus, so a press can stay stuck for as long as the menu is open.
+    LaunchedEffect(isAnyMenuOpen) {
+        if (isAnyMenuOpen) mainActivity?.setTouchInput(0, 0, false)
+    }
+
+    // Core watchdog. melonDS can hang inside its own game-specific code - the DS
+    // wireless stack (Mario Kart DS's multiplayer menu) is one known trigger.
+    // Without this the only feedback is a frozen picture, and the Reset/Quit
+    // that follow crash the process inside the wedged core. The heartbeat only
+    // goes stale when the emulation thread is blocked inside a core call, so a
+    // paused or still-loading game never trips it.
+    var coreStuck by remember { mutableStateOf(false) }
+    val coreStallMs = 6000 // keep in sync with EmuThreadResponsive()
+    LaunchedEffect(isGameLoaded) {
+        coreStuck = false
+        if (!isGameLoaded) return@LaunchedEffect
+        while (true) {
+            delay(1000)
+            coreStuck = (mainActivity?.nativeEmuHeartbeatAgeMs() ?: -1) > coreStallMs
+        }
+    }
+
+    val restartGame = {
+        isGameLoaded = false
+        loadAttempted = false
+        loadingScope.launch(Dispatchers.IO) {
+            mainActivity?.quitGame()
+            withContext(Dispatchers.Main) {
+                startGameLoading()
+            }
+        }
+        Unit
+    }
+
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         if (!isLeaving) {
             if (isLandscape) {
@@ -388,6 +429,41 @@ fun GameScreen(
         if (isAnyMenuOpen || !isGameLoaded) {
             Box(modifier = Modifier.fillMaxSize().pointerInput(Unit) { awaitPointerEventScope { while (true) { awaitPointerEvent() } } })
         }
+
+        if (coreStuck) {
+            // The core is wedged inside a call of its own: say so, and offer the
+            // only safe way out. Quit abandons the stuck emulation thread instead
+            // of re-entering the core (which is what used to close the app).
+            Box(
+                modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Card(modifier = Modifier.padding(24.dp)) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            "The emulator core stopped responding",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "The game hung inside the core itself (melonDS's DS wireless code is a known trigger). Leaving now is safe - resetting or unloading a wedged core is what used to close the whole app.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        Button(onClick = {
+                            scope.launch(Dispatchers.IO) {
+                                onQuit()
+                                withContext(Dispatchers.Main) { isLeaving = true; onBack() }
+                            }
+                        }) { Text("Quit to Library") }
+                    }
+                }
+            }
+        }
     }
 
     if (showMenu) {
@@ -408,7 +484,18 @@ fun GameScreen(
             onSaveStates = { showSaveManager = true; showMenu = false },
             onSaveTemplate = { showSaveTemplateDialog = true; showMenu = false },
             onApplyTemplate = { showTemplateManager = true; showMenu = false },
-            onQuit = { showMenu = false; scope.launch(Dispatchers.IO) { onQuit(); withContext(Dispatchers.Main) { isLeaving = true; onBack() } } }
+            onQuit = { showMenu = false; scope.launch(Dispatchers.IO) { onQuit(); withContext(Dispatchers.Main) { isLeaving = true; onBack() } } },
+            onRestartGame = {
+                showMenu = false
+                isGameLoaded = false
+                loadAttempted = false
+                loadingScope.launch(Dispatchers.IO) {
+                    mainActivity?.quitGame()
+                    withContext(Dispatchers.Main) {
+                        startGameLoading()
+                    }
+                }
+            }
         )
     }
 
@@ -540,34 +627,15 @@ private fun GameViewSurface(
     screenScale: ScreenScale,
     platform: Platform
 ) {
+    var debugPx by remember { mutableStateOf(0f) }
+    var debugPy by remember { mutableStateOf(0f) }
+    var debugNx by remember { mutableStateOf(0) }
+    var debugNy by remember { mutableStateOf(0) }
+    var debugPressed by remember { mutableStateOf(false) }
+    var debugInfo by remember { mutableStateOf("") }
+
     key(surfaceKey) {
-        AndroidView(
-            factory = { ctx ->
-                SurfaceView(ctx).apply {
-                    onSurfaceViewAvailable(this)
-                    keepScreenOn = true
-                    holder.setFormat(PixelFormat.RGBX_8888)
-                    holder.addCallback(object : SurfaceHolder.Callback {
-                        override fun surfaceCreated(holder: SurfaceHolder) { onNavigatingToMapper(false) }
-                        override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-                            if (width <= 0 || height <= 0) return
-                            if (isGameLoaded) {
-                                mainActivity?.setSurface(holder.surface, width, height)
-                                mainActivity?.updateNativeActivity()
-                                if (wasPlayingBeforeNavigation || !isPaused) {
-                                    onTogglePause(false)
-                                    mainActivity?.resumeGame()
-                                    onWasPlayingBeforeNavigation(false)
-                                } else { mainActivity?.nativeForceNextFrame() }
-                            } else {
-                                mainActivity?.setSurface(holder.surface, width, height)
-                                onStartGameLoading()
-                            }
-                        }
-                        override fun surfaceDestroyed(holder: SurfaceHolder) { mainActivity?.setSurface(null) }
-                    })
-                }
-            },
+        Box(
             modifier = Modifier.fillMaxSize().then(
                 when (screenScale) {
                     ScreenScale.RATIO_4_3 -> Modifier.aspectRatio(if (platform == Platform.DS) 3f / 4f else 4f / 3f)
@@ -575,7 +643,117 @@ private fun GameViewSurface(
                     ScreenScale.STRETCH -> Modifier
                 }
             )
-        )
+        ) {
+            AndroidView(
+                factory = { ctx ->
+                    SurfaceView(ctx).apply {
+                        onSurfaceViewAvailable(this)
+                        keepScreenOn = true
+                        holder.setFormat(PixelFormat.RGBX_8888)
+                        if (platform == Platform.DS) {
+                            var lastNx = 0
+                            var lastNy = 0
+                            setOnTouchListener { v, event ->
+                                val vWidth = v.width.toFloat()
+                                val vHeight = v.height.toFloat()
+                                if (vWidth > 0f && vHeight > 0f) {
+                                    // Libretro pointer coordinates span the WHOLE video frame in
+                                    // [-32768, 32767]. The DS core maps them onto its own screen
+                                    // layout (Top/Bottom, Bottom/Top, Left/Right, Hybrid...) and
+                                    // decides which part of the frame is the touch screen, so no
+                                    // "bottom half" preselection happens here.
+                                    val action = event.actionMasked
+                                    
+                                    val isUpOrCancel = action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL
+                                    
+                                    var pointerDown = false
+                                    var rawPx = 0f
+                                    var rawPy = 0f
+                                    if (!isUpOrCancel) {
+                                        val pointerIndex = event.actionIndex
+                                        for (i in 0 until event.pointerCount) {
+                                            if (action == MotionEvent.ACTION_POINTER_UP && i == pointerIndex) continue
+                                            
+                                            rawPx = event.getX(i).coerceIn(0f, vWidth)
+                                            rawPy = event.getY(i).coerceIn(0f, vHeight)
+                                            pointerDown = true
+                                            
+                                            lastNx = ((rawPx / vWidth) * 65535f - 32768f).toInt().coerceIn(-32768, 32767)
+                                            lastNy = ((rawPy / vHeight) * 65535f - 32768f).toInt().coerceIn(-32768, 32767)
+                                            break
+                                        }
+                                    }
+                                    
+                                    debugPx = rawPx
+                                    debugPy = rawPy
+                                    debugNx = lastNx
+                                    debugNy = lastNy
+                                    debugPressed = pointerDown
+                                    debugInfo = "Ptrs:${event.pointerCount} Act:$action"
+                                    
+                                    // One call covers press, drag and release: pointerDown is
+                                    // false for ACTION_UP / ACTION_CANCEL / no usable pointer.
+                                    mainActivity?.setTouchInput(lastNx, lastNy, pointerDown)
+                                }
+                                true
+                            }
+                        }
+                        holder.addCallback(object : SurfaceHolder.Callback {
+                            override fun surfaceCreated(holder: SurfaceHolder) { onNavigatingToMapper(false) }
+                            override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+                                if (width <= 0 || height <= 0) return
+                                if (isGameLoaded) {
+                                    mainActivity?.setSurface(holder.surface, width, height)
+                                    mainActivity?.updateNativeActivity()
+                                    if (wasPlayingBeforeNavigation || !isPaused) {
+                                        onTogglePause(false)
+                                        mainActivity?.resumeGame()
+                                        onWasPlayingBeforeNavigation(false)
+                                    } else { mainActivity?.nativeForceNextFrame() }
+                                } else {
+                                    mainActivity?.setSurface(holder.surface, width, height)
+                                    onStartGameLoading()
+                                }
+                            }
+                            override fun surfaceDestroyed(holder: SurfaceHolder) { mainActivity?.setSurface(null) }
+                        })
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+
+            if (platform == Platform.DS) {
+                if (debugPressed) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        drawCircle(
+                            color = Color.Cyan.copy(alpha = 0.5f),
+                            radius = 32f,
+                            center = Offset(debugPx, debugPy)
+                        )
+                        drawCircle(
+                            color = Color.Red,
+                            radius = 10f,
+                            center = Offset(debugPx, debugPy)
+                        )
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(8.dp)
+                        .background(Color.Black.copy(alpha = 0.75f), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "DS Touch Debug:\nState: ${if (debugPressed) "DOWN" else "UP"}\nCore(N): X=$debugNx Y=$debugNy\nScreen: X=${debugPx.toInt()} Y=${debugPy.toInt()}\n$debugInfo",
+                        color = if (debugPressed) Color.Green else Color.Yellow,
+                        fontSize = 11.sp,
+                        lineHeight = 14.sp
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -597,8 +775,12 @@ fun GameMenuDialog(
     onSaveStates: () -> Unit,
     onSaveTemplate: () -> Unit,
     onApplyTemplate: () -> Unit,
-    onQuit: () -> Unit
+    onQuit: () -> Unit,
+    onRestartGame: () -> Unit
 ) {
+    val context = LocalContext.current
+    val mainActivity = context as? MainActivity
+    val prefs = remember { context.getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE) }
     val scrollState = rememberScrollState()
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -632,6 +814,30 @@ fun GameMenuDialog(
                 }
                 OutlinedButton(onClick = onControllerMapping, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Default.Gamepad, null); Spacer(Modifier.width(8.dp)); Text("Controller Mapping")
+                }
+                var vulkanRequested by remember { mutableStateOf(mainActivity?.nativeIsVulkanRequested() ?: true) }
+                var vulkanActive by remember { mutableStateOf(mainActivity?.nativeIsVulkanActive() ?: false) }
+                val coreSupportsVulkan = remember { mainActivity?.nativeCoreSupportsVulkan() ?: false }
+                OutlinedButton(
+                    onClick = {
+                        val newState = !vulkanRequested
+                        vulkanRequested = newState
+                        prefs.edit().putBoolean(MainActivity.KEY_PS2_VULKAN, newState).apply()
+                        mainActivity?.nativeSetVulkanRequested(newState)
+                        Toast.makeText(context, "Renderer updated to " + (if (newState) "Vulkan" else "Software") + ". Restarting game...", Toast.LENGTH_SHORT).show()
+                        onRestartGame()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Build, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(text = buildString {
+                        append("Renderer: ")
+                        append(if (vulkanRequested) "Vulkan" else "Software")
+                        if (vulkanActive) append(" [Active]")
+                        else if (!coreSupportsVulkan) append(" [Core: Software-Only]")
+                        else append(" [Inactive/SW]")
+                    })
                 }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 OutlinedButton(onClick = onReset, modifier = Modifier.fillMaxWidth()) {

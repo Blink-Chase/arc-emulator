@@ -577,6 +577,7 @@ fun SettingsScreen(
     onGoToHelp: () -> Unit,
     onGoToBios: () -> Unit,
     onGoToControllerMapping: () -> Unit,
+    onGoToCoreManagement: () -> Unit,
     onRefresh: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
@@ -640,7 +641,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
                         Text("Profile", style = MaterialTheme.typography.titleMedium)
-                        Text("Version 1.5.0 (Latest)", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        Text("Version 1.6.0 (Latest)", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                     }
                 }
             }
@@ -696,10 +697,48 @@ fun SettingsScreen(
             SettingsItem(title = "Audio Latency", subtitle = "Increase if sound crackles") {
                 Slider(value = audioLatency.toFloat(), onValueChange = { audioLatency = it.roundToInt() }, onValueChangeFinished = { prefs.edit { putInt(MainActivity.KEY_AUDIO_LATENCY, audioLatency) }; (context as? MainActivity)?.resetAudio() }, valueRange = 0f..2f, steps = 1, modifier = Modifier.width(120.dp))
             }
+            var ps2Vulkan by remember { mutableStateOf(prefs.getBoolean(MainActivity.KEY_PS2_VULKAN, true)) }
+            SettingsItem(title = "PS2 Vulkan Renderer", subtitle = if (ps2Vulkan) "Hardware rendering (auto-falls back to Software)" else "Software rendering (slower, safest)") {
+                Switch(checked = ps2Vulkan, onCheckedChange = {
+                    ps2Vulkan = it
+                    prefs.edit { putBoolean(MainActivity.KEY_PS2_VULKAN, it) }
+                    (context as? MainActivity)?.nativeSetVulkanRequested(it)
+                })
+            }
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), thickness = 0.5.dp, color = Color.Gray.copy(alpha = 0.3f))
             SettingsCategory("INPUT DEVICE", Icons.Default.Gamepad)
             Button(onClick = onGoToControllerMapping, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)) {
                 Icon(Icons.Default.SettingsInputComponent, null); Spacer(Modifier.width(8.dp)); Text("Setup Physical Controller")
+            }
+            var gcControlsStyle by remember { mutableIntStateOf(prefs.getInt(MainActivity.KEY_GC_CONTROLLER_STYLE, 0)) }
+            var gcMenuExpanded by remember { mutableStateOf(false) }
+            SettingsItem(title = "GameCube Controls", subtitle = when (gcControlsStyle) { 1 -> "Generic ABXY"; 2 -> "Xbox Layout"; else -> "Standard GameCube (A/B/X/Y/Z)" }) {
+                Box {
+                    OutlinedButton(onClick = { gcMenuExpanded = true }) {
+                        Text(when (gcControlsStyle) { 1 -> "Generic"; 2 -> "Xbox"; else -> "GameCube" })
+                        Icon(Icons.Default.ArrowDropDown, null)
+                    }
+                    DropdownMenu(expanded = gcMenuExpanded, onDismissRequest = { gcMenuExpanded = false }) {
+                        DropdownMenuItem(text = { Text("Standard GameCube (A/B/X/Y/Z)") }, onClick = { gcControlsStyle = 0; prefs.edit { putInt(MainActivity.KEY_GC_CONTROLLER_STYLE, 0) }; gcMenuExpanded = false })
+                        DropdownMenuItem(text = { Text("Generic ABXY") }, onClick = { gcControlsStyle = 1; prefs.edit { putInt(MainActivity.KEY_GC_CONTROLLER_STYLE, 1) }; gcMenuExpanded = false })
+                        DropdownMenuItem(text = { Text("Xbox Layout") }, onClick = { gcControlsStyle = 2; prefs.edit { putInt(MainActivity.KEY_GC_CONTROLLER_STYLE, 2) }; gcMenuExpanded = false })
+                    }
+                }
+            }
+            var wiiControlsStyle by remember { mutableIntStateOf(prefs.getInt(MainActivity.KEY_WII_CONTROLLER_STYLE, 0)) }
+            var wiiMenuExpanded by remember { mutableStateOf(false) }
+            SettingsItem(title = "Wii Controls", subtitle = when (wiiControlsStyle) { 1 -> "Classic Controller"; 2 -> "Sideways Wiimote"; else -> "Wiimote + Nunchuk" }) {
+                Box {
+                    OutlinedButton(onClick = { wiiMenuExpanded = true }) {
+                        Text(when (wiiControlsStyle) { 1 -> "Classic"; 2 -> "Sideways"; else -> "Nunchuk" })
+                        Icon(Icons.Default.ArrowDropDown, null)
+                    }
+                    DropdownMenu(expanded = wiiMenuExpanded, onDismissRequest = { wiiMenuExpanded = false }) {
+                        DropdownMenuItem(text = { Text("Wiimote + Nunchuk") }, onClick = { wiiControlsStyle = 0; prefs.edit { putInt(MainActivity.KEY_WII_CONTROLLER_STYLE, 0) }; wiiMenuExpanded = false })
+                        DropdownMenuItem(text = { Text("Classic Controller") }, onClick = { wiiControlsStyle = 1; prefs.edit { putInt(MainActivity.KEY_WII_CONTROLLER_STYLE, 1) }; wiiMenuExpanded = false })
+                        DropdownMenuItem(text = { Text("Sideways Wiimote") }, onClick = { wiiControlsStyle = 2; prefs.edit { putInt(MainActivity.KEY_WII_CONTROLLER_STYLE, 2) }; wiiMenuExpanded = false })
+                    }
+                }
             }
             SettingsItem(title = "Auto-Hide Touch Controls", subtitle = "Hide overlay when a controller is active") {
                 Switch(checked = hideTouchOnController, onCheckedChange = { hideTouchOnController = it; prefs.edit { putBoolean(MainActivity.KEY_HIDE_TOUCH_ON_CONTROLLER, it) } })
@@ -814,7 +853,7 @@ fun SettingsScreen(
                 )
             }
             SettingsItem(title = "Core Downloader", subtitle = "Download or update online emulator cores") { 
-                Button(onClick = onGoToControllerMapping) { 
+                Button(onClick = onGoToCoreManagement) { 
                     Text("Open")
                 } 
             }
@@ -889,7 +928,7 @@ fun AboutScreen(storageDir: File, gameDao: GameDao, prefs: SharedPreferences, on
             }
             Spacer(modifier = Modifier.height(24.dp))
             Text(text = "Arc Emulator", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-            Text(text = "Version 1.5.0", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+            Text(text = "Version 1.6.0", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.height(32.dp))
             Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))) {
                 Column(modifier = Modifier.padding(16.dp)) { Text(text = "A high-performance multi-platform emulator frontend built with Jetpack Compose and Libretro cores.", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }

@@ -9,10 +9,24 @@
 #include <string>
 #include <malloc.h>
 #include <csignal>
+#include <csetjmp>
 #include <cerrno>
 #include <cstdint>
 #include <sys/mman.h>
 #include <unistd.h>
+
+int64_t ArcSteadyUs() {
+  return std::chrono::duration_cast<std::chrono::microseconds>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
+}
+
+int64_t EmuCallBlockedMs() {
+  const int64_t start = g_coreCallStartUs.load();
+  if (start == 0)
+    return 0;
+  return (ArcSteadyUs() - start) / 1000;
+}
 
 namespace {
 bool g_coreGameLoaded = false;
@@ -55,6 +69,113 @@ void SegvFixupHandler(int sig, siginfo_t *info, void *ucontext) {
   // is handled (or reported) exactly as it would have been without the guard.
   sigaction(SIGSEGV, &g_prevSegvAction, nullptr);
   raise(sig);
+}
+
+// ---------------------------------------------------------------------------
+// Scoped per-core-call fault guard + "is the thread inside the core" tracker.
+//
+// Why this exists: Mario Kart DS -> Multiplayer corrupts melonDS's internal
+// state (its JIT<->wireless code). The corruption is latent: the NEXT call
+// into the core - even a plain retro_reset() - then dies with SIGSEGV inside
+// the core .so (tombstone: SEGV_ACCERR, #01/#02 = melonds, #03 = our emu
+// thread) and the whole app process dies with it. Your 00:29 log is exactly
+// this: "CORE: executing reset on emulation thread" followed 4ms later by
+// SIGSEGV in tid 11219 (the emulation thread).
+//
+// Two cooperating pieces live here:
+//
+//  1. Call timer: g_coreCallStartUs is stamped with a monotonic timestamp
+//     immediately BEFORE retro_run()/retro_reset() and cleared to 0
+//     immediately AFTER it returns. A stale non-zero value is UNAMBIGUOUS
+//     proof the thread is blocked inside that core call. The old heartbeat
+//     check (loop tick timestamps) had a real hole: the loop stamps the
+//     heartbeat, then blocks in retro_reset(), and a UI-thread check sees a
+//     "fresh" heartbeat - measured from before the call - and wrongly
+//     concludes the core is responsive, then lets the very call that crashes
+//     happen. resetGame/quit now consult the call timer instead.
+//
+//  2. ScopedCoreCallGuard: installs a SIGSEGV/SIGBUS handler for the duration
+//     of ONE core call. A fault inside that call siglongjmp()s back out
+//     instead of killing the process: the guard reports the fault, marks the
+//     session wedged (never call this core again in this process), unblocks
+//     the loop (g_isRunning = false so EmuThreadFunc exits cleanly), and the
+//     UI shows "core stopped responding" instead of the app vanishing.
+//     Faults OUTSIDE a guarded call (real app bugs) chain to the previous
+//     handler exactly as before, so genuine crashes still surface normally.
+//     The state-load page fix-up (ScopedSigsegvFixup) is untouched.
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+struct sigaction g_prevCoreFaultAction;
+struct sigaction g_prevCoreFaultBusAction;
+thread_local sigjmp_buf g_coreCallJmp;
+thread_local volatile bool g_coreCallGuardArmed = false;
+
+void CoreFaultHandler(int sig, siginfo_t *info, void *ucontext) {
+  (void)ucontext;
+  if ((sig == SIGSEGV || sig == SIGBUS) && g_coreCallGuardArmed) {
+    g_coreCallGuardArmed = false;
+    // Async-signal-safe: only plain arithmetic + siglongjmp here. The header
+    // comment explains the fault; the call site logs the details after the
+    // jump, because LOGE is NOT safe to run inside a signal handler.
+    siglongjmp(g_coreCallJmp, sig == SIGBUS ? 2 : 1);
+  }
+  // Not inside a guarded core call: behave exactly as without the guard.
+  if (sig == SIGBUS) {
+    sigaction(SIGBUS, &g_prevCoreFaultBusAction, nullptr);
+  } else {
+    sigaction(SIGSEGV, &g_prevCoreFaultAction, nullptr);
+  }
+  raise(sig);
+}
+
+template <typename Fn>
+bool InvokeGuardedCoreCall(int kind, Fn &&fn) {
+  if (g_isDolphinCore.load()) {
+    g_coreCallStartUs.store(ArcSteadyUs());
+    fn();
+    g_coreCallStartUs.store(0);
+    return true;
+  }
+  // The sigsetjmp() and the core call MUST live in the same stack frame.
+  // The previous RAII version setjmp'd inside the guard constructor, so a
+  // fault longjmp'd back into the constructor, which then returned to the
+  // caller - whose next statement re-ran core_reset()/core_run() with the
+  // guard flag already cleared. That second, now-unguarded fault killed the
+  // process, which is exactly the 00:29 log: "executing reset" -> SIGSEGV.
+  struct sigaction action;
+  memset(&action, 0, sizeof(action));
+  action.sa_sigaction = CoreFaultHandler;
+  action.sa_flags = SA_SIGINFO | SA_NODEFER;
+  sigemptyset(&action.sa_mask);
+  struct sigaction prevSegv, prevBus;
+  if (sigaction(SIGSEGV, &action, &prevSegv) != 0 ||
+      sigaction(SIGBUS, &action, &prevBus) != 0) {
+    fn(); // could not arm; call proceeds unguarded
+    return true;
+  }
+  g_prevCoreFaultAction = prevSegv; // chain target for unguarded faults
+  g_prevCoreFaultBusAction = prevBus;
+  if (sigsetjmp(g_coreCallJmp, 1) != 0) {
+    // Fault path: the core call never returned. Restore the previous
+    // handlers, clear the call timer, and report the fault. Do NOT touch
+    // the mutex or run the core again - the caller handles the wedge.
+    sigaction(SIGSEGV, &prevSegv, nullptr);
+    sigaction(SIGBUS, &prevBus, nullptr);
+    g_coreCallGuardArmed = false;
+    g_coreCallStartUs.store(0);
+    g_coreCallKind.store(0);
+    return false;
+  }
+  g_coreCallGuardArmed = true;
+  g_coreCallKind.store(kind);
+  g_coreCallStartUs.store(ArcSteadyUs());
+  fn();
+  g_coreCallGuardArmed = false;
+  g_coreCallStartUs.store(0);
+  g_coreCallKind.store(0);
+  sigaction(SIGSEGV, &prevSegv, nullptr);
+  sigaction(SIGBUS, &prevBus, nullptr);
+  return true;
 }
 
 class ScopedSigsegvFixup {
@@ -136,17 +257,43 @@ void UnloadCore() {
     g_isRunning.store(false);
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-    if (g_coreGameLoaded && core_unload_game) {
-        LOGI("UNLOAD: calling retro_unload_game");
-        core_unload_game();
+    // Never re-enter a core that a fault guard already condemned: its internal
+    // state is corrupt and retro_unload_game/retro_deinit/dlclose can SIGSEGV
+    // (the post-MKDS-multiplayer crash). Leak the handle for the rest of this
+    // process instead; the user restarts Arc for a clean session.
+    if (g_coreWedged.load()) {
+      LOGW("UNLOAD: core is wedged - skipping unload_game/deinit/dlclose to "
+           "avoid crashing the process");
+      g_coreHandle = nullptr;
+    } else {
+      if (g_coreGameLoaded && core_unload_game) {
+          LOGI("UNLOAD: calling retro_unload_game");
+          const bool unloadOk = InvokeGuardedCoreCall(3 /* unload */, [&]() {
+            core_unload_game();
+          });
+          if (!unloadOk) {
+            LOGE("COREFAULT: retro_unload_game() faulted - session is wedged");
+            g_coreWedged.store(true);
+            g_coreHandle = nullptr;
+          }
+      }
+      if (g_coreHandle && core_deinit) {
+          LOGI("UNLOAD: calling retro_deinit");
+          const bool deinitOk = InvokeGuardedCoreCall(4 /* deinit */, [&]() {
+            core_deinit();
+          });
+          if (!deinitOk) {
+            LOGE("COREFAULT: retro_deinit() faulted - session is wedged");
+            g_coreWedged.store(true);
+            g_coreHandle = nullptr;
+          }
+      }
+      if (g_coreHandle) {
+        LOGI("UNLOAD: dlclose core");
+        dlclose(g_coreHandle);
+        g_coreHandle = nullptr;
+      }
     }
-    if (core_deinit) {
-        LOGI("UNLOAD: calling retro_deinit");
-        core_deinit();
-    }
-    LOGI("UNLOAD: dlclose core");
-    dlclose(g_coreHandle);
-    g_coreHandle = nullptr;
   }
   g_coreGameLoaded = false;
   g_isDolphinCore.store(false);
@@ -184,6 +331,10 @@ void EmuThreadFunc() {
   bool gameLoaded = false;
 
   while (g_isRunning.load()) {
+    // Liveness heartbeat: reaching this point means the emulation thread is not
+    // blocked inside a core call, so reset/quit can safely talk to the core.
+    g_lastEmuHeartbeatMs.store(ArcNowMs());
+
     // 1. ASYNC STATE HANDLING (Works even when paused)
     if (g_saveStateRequested.load()) {
       bool success = false;
@@ -275,7 +426,22 @@ void EmuThreadFunc() {
       if (core_reset) {
         LOGI("CORE: executing reset on emulation thread");
         std::lock_guard<std::recursive_mutex> lock(g_emuMutex);
-        core_reset();
+        // Guarded: a corrupted core (MKDS multiplayer -> melonDS state) dies
+        // with SIGSEGV inside retro_reset(). Without this, that fault takes
+        // down the whole app process.
+        const bool resetOk = InvokeGuardedCoreCall(2 /* reset */, [&]() {
+          core_reset();
+        });
+        if (!resetOk) {
+          LOGE("COREFAULT: retro_reset() faulted - session is wedged, "
+               "stopping emulation instead of crashing");
+          g_coreWedged.store(true);
+          g_isRunning.store(false);
+          g_loadRequested.store(false);
+          g_saveStateRequested.store(false);
+          g_loadStateRequested.store(false);
+          break;
+        }
         LOGI("CORE: reset returned");
       }
       g_isPaused.store(false);
@@ -308,7 +474,24 @@ void EmuThreadFunc() {
 
       LOGI("CORE: calling retro_load_game");
       g_coreGameLoaded = false;
-      if (core_load_game && core_load_game(&game_info)) {
+      bool loaded = core_load_game && core_load_game(&game_info);
+      // Invariant 3 (automatic software fallback): if the Vulkan attempt did
+      // not load, retry exactly once with the software renderer so the game
+      // still runs instead of failing the session.
+      if (!loaded && vulkanRequested()) {
+        LOGW("CORE: Vulkan attempt failed to load; retrying with Software (SW)");
+        core_deinit();
+        if (g_vulkanInitialized)
+          deinitVulkan();
+        vulkanSetRequested(false);
+        g_useVulkan = false;
+        g_vulkanFailed.store(true);
+        g_coreVariables["pcsx2_renderer"] = "Software (SW)";
+        if (core_init)
+          core_init();
+        loaded = core_load_game && core_load_game(&game_info);
+      }
+      if (loaded) {
         LOGI("CORE: retro_load_game returned successfully");
         g_coreGameLoaded = true;
         gameLoaded = true;
@@ -344,7 +527,13 @@ void EmuThreadFunc() {
     }
 
     if (g_surfaceInvalidated.exchange(false)) {
-      if (eglInitialized && g_useHwRender) {
+      if (g_useVulkan) {
+        // Vulkan owns its surface: core context_destroy first (it retracts its
+        // image), then swapchain+surface. Device/instance survive; both are
+        // rebuilt when a window returns.
+        LOGI("CORE: surface destroyed - tearing down Vulkan swapchain");
+        vulkanContextDestroy();
+      } else if (eglInitialized && g_useHwRender) {
         LOGI("CORE: retiring EGL window surface after surface destruction");
         cleanupSurfaceEGL();
         eglInitialized = false;
@@ -360,7 +549,12 @@ void EmuThreadFunc() {
       continue;
     }
 
-    if (g_useHwRender && !eglInitialized) {
+    if (g_useVulkan) {
+      // Vulkan path: never touch EGL. (Re)create surface+swapchain and invoke
+      // the core's context_reset once a window exists; no-op when active.
+      if (!vulkanContextActive() && !vulkanFailed())
+        vulkanContextReset();
+    } else if (g_useHwRender && !eglInitialized) {
       if (setupEGL()) {
         eglInitialized = true;
         LOGI("CORE: EGL ready after game load");
@@ -393,7 +587,23 @@ void EmuThreadFunc() {
       }
       std::lock_guard<std::recursive_mutex> lock(g_emuMutex);
       const auto runStarted = std::chrono::steady_clock::now();
-      core_run();
+      // Stamp the start of the call. If retro_run() never returns (melonDS can
+      // wedge inside its DS wireless code, e.g. when Mario Kart DS opens the
+      // multiplayer menu) the heartbeat goes stale and the frontend then stops
+      // calling into the core instead of crashing inside it. The call is also
+      // fault-guarded: a corrupted core can SIGSEGV inside retro_run() (the
+      // MKDS crash family), which must not take the app process down.
+      g_lastEmuHeartbeatMs.store(ArcNowMs());
+      const bool runOk = InvokeGuardedCoreCall(1 /* run */, [&]() {
+        core_run();
+      });
+      if (!runOk) {
+        LOGE("COREFAULT: retro_run() faulted - session is wedged, stopping "
+             "emulation instead of crashing");
+        g_coreWedged.store(true);
+        g_isRunning.store(false);
+        break;
+      }
       const auto runDurationMs =
           std::chrono::duration_cast<std::chrono::milliseconds>(
               std::chrono::steady_clock::now() - runStarted)
@@ -409,9 +619,10 @@ void EmuThreadFunc() {
           g_isDolphinCore.load() && core_set_controller_port_device) {
         // Dolphin's controller port must be configured after its asynchronous
         // boot. Doing this during retro_load_game races Dolphin's input setup.
-        core_set_controller_port_device(0, RETRO_DEVICE_JOYPAD);
+        const unsigned devType = static_cast<unsigned>(g_pendingControllerType.load());
+        core_set_controller_port_device(0, devType);
         dolphinControllerConfigured = true;
-        LOGI("INPUT: Dolphin port 0 configured as RetroPad");
+        LOGI("INPUT: Dolphin port 0 configured as device type %u", devType);
       }
     }
     frameCount++;
@@ -446,4 +657,24 @@ void EmuThreadFunc() {
   if (g_useHwRender && eglInitialized) deinitEGL();
   UnloadCore();
   LOGI("Emulation thread exiting");
+}
+
+void *EmuThreadEntry(void *arg) {
+  (void)arg;
+  g_emuThreadActive.store(true);
+  EmuThreadFunc();
+  // Reaching here means the thread (and the core, which UnloadCore() has just
+  // closed on this thread) is completely finished, so the UI may join it.
+  g_emuThreadActive.store(false);
+  return nullptr;
+}
+
+bool EmuThreadResponsive() {
+  if (!g_emuThreadActive.load())
+    return true; // nothing is running that could be stuck
+  const int64_t last = g_lastEmuHeartbeatMs.load();
+  if (last == 0)
+    return true; // loop has not ticked yet; do not guess
+  // Keep this in sync with CORE_STALL_MS on the Kotlin watchdog side.
+  return (ArcNowMs() - last) <= 6000;
 }

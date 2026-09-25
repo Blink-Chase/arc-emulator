@@ -47,7 +47,9 @@ enum class ControllerModel {
     GENERIC_ABXY,   // A, B, X, Y (SNES/Android standard)
     XBOX,           // A, B, X, Y (Xbox layout)
     PLAYSTATION,    // Cross, Circle, Square, Triangle
-    N64             // N64 layout (A, B, C-Buttons, Z)
+    N64,            // N64 layout (A, B, C-Buttons, Z)
+    GAMECUBE,       // GameCube layout (A, B, X, Y, Z, L, R)
+    WII             // Wii Remote / Nunchuk layout (A, B, 1, 2, +, -, C, Z)
 }
 
 enum class VisualStyle {

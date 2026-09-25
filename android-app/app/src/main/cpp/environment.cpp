@@ -29,6 +29,45 @@ bool IsOffValue(const char *v) {
 // option value list so we never force a string the core does not recognise.
 // Empty until the core registers/describes its options.
 std::string g_pcsx2FastmemValue;
+// The exact Vulkan value string advertised by the core's renderer option,
+// discovered at option-registration time (it only exists with ENABLE_VULKAN).
+std::string g_pcsx2VulkanValue;
+
+// Scan a retro_core_option_value[] for the Vulkan renderer value. Doubles as
+// the ENABLE_VULKAN capability probe: no value => no Vulkan in this build.
+void ResolveRendererFromValues(const struct retro_core_option_value *values,
+                               const char *key) {
+  if (!key || !values || std::string(key) != "pcsx2_renderer")
+    return;
+  for (unsigned i = 0; i < RETRO_NUM_CORE_OPTION_VALUES_MAX; ++i) {
+    if (!values[i].value)
+      break;
+    std::string v(values[i].value);
+    if (v.find("Vulkan") != std::string::npos &&
+        v.find("paraLLEl") == std::string::npos) {
+      g_pcsx2VulkanValue = v;
+      vulkanSetCoreSupported(true);
+      LOGI("PCSX2 renderer option advertises '%s'", v.c_str());
+      return;
+    }
+  }
+}
+
+// Applies the renderer preference at option-registration time: Vulkan when
+// requested AND advertised, otherwise the safe software framebuffer path.
+void ApplyPcsx2Renderer() {
+  auto it = g_coreVariables.find("pcsx2_renderer");
+  if (it == g_coreVariables.end())
+    return;
+  if (vulkanRequested() && vulkanCoreSupportsVulkan() &&
+      !g_pcsx2VulkanValue.empty()) {
+    it->second = g_pcsx2VulkanValue;
+    LOGI("PCSX2 renderer -> '%s' (user preference)", it->second.c_str());
+  } else {
+    it->second = "Software (SW)";
+    LOGI("PCSX2 renderer forced to software framebuffer path");
+  }
+}
 
 // Scan a NULL-terminated retro_core_option_value[] for an "off" spelling.
 void ResolveFastmemFromValues(const struct retro_core_option_value *values,
@@ -186,8 +225,10 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
         (struct retro_hw_render_callback *)data;
     LOGI("SET_HW_RENDER called by core (cmd 14), type: %u", hw->context_type);
 
-    if (hw->context_type == RETRO_HW_CONTEXT_VULKAN) {
-      LOGW("SET_HW_RENDER: Core requested Vulkan. Rejecting to force GLES fallback.");
+    if (hw->context_type == RETRO_HW_CONTEXT_VULKAN &&
+        !vulkanAcceptHwRenderRequest()) {
+      LOGW("SET_HW_RENDER: Vulkan unavailable (preference/core/window); "
+           "core must fall back");
       return false;
     }
 
@@ -205,31 +246,12 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
     g_hwRender.context_destroy = hw->context_destroy;
     g_hwRender.debug_context = hw->debug_context;
 
-// If the core negotiated a Vulkan HW render context, also populate our
-     // Vulkan-specific interface so the core can call back into us for
-     // image/sync/queue management. We keep g_hwRender as-is for OpenGL/GLES
-     // path compatibility, but note the active API via g_useVulkan.
-     if (hw->context_type == RETRO_HW_CONTEXT_VULKAN) {
-       g_vulkanInterface.interface_type = RETRO_HW_RENDER_INTERFACE_VULKAN;
-       g_vulkanInterface.interface_version = RETRO_HW_RENDER_INTERFACE_VULKAN_VERSION;
-       g_vulkanInterface.handle = nullptr; // frontend manages this
-       g_vulkanInterface.instance = VK_NULL_HANDLE;
-       g_vulkanInterface.gpu = VK_NULL_HANDLE;
-       g_vulkanInterface.device = VK_NULL_HANDLE;
-       g_vulkanInterface.get_device_proc_addr = nullptr;
-       g_vulkanInterface.get_instance_proc_addr = VulkanGetInstanceProcAddr;
-       g_vulkanInterface.queue = VK_NULL_HANDLE;
-       g_vulkanInterface.queue_index = 0;
-       g_vulkanInterface.set_image = vulkan_set_image;
-       g_vulkanInterface.get_sync_index = vulkan_get_sync_index;
-       g_vulkanInterface.get_sync_index_mask = vulkan_get_sync_index_mask;
-       g_vulkanInterface.set_command_buffers = vulkan_set_command_buffers;
-       g_vulkanInterface.wait_sync_index = vulkan_wait_sync_index;
-       g_vulkanInterface.lock_queue = vulkan_lock_queue;
-       g_vulkanInterface.unlock_queue = vulkan_unlock_queue;
-       g_vulkanInterface.set_signal_semaphore = nullptr;
-       g_useVulkan = true;
-     }
+    // Vulkan: the full interface (instance/gpu/device/queue + callbacks) is
+    // populated later in vulkanBeginNegotiation() once the core registers its
+    // negotiation interface; GET_HW_RENDER_INTERFACE is answered only then.
+    if (hw->context_type == RETRO_HW_CONTEXT_VULKAN) {
+      g_useVulkan = true;
+    }
     g_useHwRender = true;
 
     // Provide our frontend functions back to the core
@@ -248,9 +270,11 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
 
     // Some cores (notably ParaLLEl N64) require a current context during
     // retro_load_game. Dolphin must not receive context_reset re-entrantly
-    // from SET_HW_RENDER while it is still booting.
-    if (!g_isDolphinCore.load() && std::this_thread::get_id() == g_emuThreadId &&
-        g_nativeWindow) {
+    // from SET_HW_RENDER while it is still booting. Vulkan negotiates its own
+    // context from the option handlers: EGL here would call context_reset
+    // before the negotiation interface exists.
+    if (!g_useVulkan && !g_isDolphinCore.load() &&
+        std::this_thread::get_id() == g_emuThreadId && g_nativeWindow) {
       setupEGL();
     }
     return true;
@@ -263,8 +287,16 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
     LOGI("SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE: type=%d version=%u",
          static_cast<int>(interfaceInfo->interface_type),
          interfaceInfo->interface_version);
-    // This interface is currently only defined for Vulkan. Dolphin probes it
-    // while using GLES; acknowledge the probe without enabling Vulkan.
+    if (g_useVulkan && interfaceInfo->interface_type ==
+                           RETRO_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_VULKAN) {
+      // Full bring-up: instance, Android surface, device (via the core's
+      // create_device2 + our wrapper), swapchain, present pipeline, and a
+      // fully populated g_vulkanInterface for GET_HW_RENDER_INTERFACE.
+      return vulkanBeginNegotiation(
+          reinterpret_cast<const retro_hw_render_context_negotiation_interface_vulkan *>(
+              interfaceInfo));
+    }
+    // Dolphin probes this while using GLES; acknowledge without enabling Vulkan.
     return true;
   }
   case RETRO_ENVIRONMENT_SET_HW_SHARED_CONTEXT:
@@ -277,8 +309,15 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
       return false;
     auto *interfaceInfo =
         static_cast<retro_hw_render_context_negotiation_interface *>(data);
-    // GLES has no context-negotiation interface. Returning true with version
-    // zero is the documented response for an unsupported interface type.
+    // Vulkan: support negotiation interface v2 (the version vendored in
+    // libretro_vulkan.h). Any other type (Dolphin's GLES probe) gets
+    // version zero = unsupported.
+    if (g_useVulkan && interfaceInfo->interface_type ==
+                           RETRO_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_VULKAN) {
+      interfaceInfo->interface_version =
+          RETRO_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_VULKAN_VERSION;
+      return true;
+    }
     interfaceInfo->interface_version = 0;
     return true;
   }
@@ -323,15 +362,13 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
         g_coreVariables.emplace(option->key, option->default_value);
       }
       ResolveFastmemFromValues(option->values, option->key);
+      ResolveRendererFromValues(option->values, option->key);
     }
     if (g_isDolphinCore.load()) {
       g_coreVariables["dolphin_shader_compilation_mode"] = "synchronous";
       g_coreVariables["dolphin_wait_for_shaders"] = "false";
     }
-    if (g_coreVariables.find("pcsx2_renderer") != g_coreVariables.end()) {
-      g_coreVariables["pcsx2_renderer"] = "Software (SW)";
-      LOGI("PCSX2 renderer forced to software framebuffer path");
-    }
+    ApplyPcsx2Renderer();
     // PCSX2's fastmem write-protects guest RAM pages so the recompiler can
     // trap and backpatch guest stores. retro_unserialize() restores the 32MB
     // EE main RAM with one large memmove from this thread, which faults on
@@ -362,16 +399,14 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
           g_coreVariables.emplace(option->key, option->default_value);
         }
         ResolveFastmemFromValues(option->values, option->key);
+        ResolveRendererFromValues(option->values, option->key);
       }
     }
     if (g_isDolphinCore.load()) {
       g_coreVariables["dolphin_shader_compilation_mode"] = "synchronous";
       g_coreVariables["dolphin_wait_for_shaders"] = "false";
     }
-    if (g_coreVariables.find("pcsx2_renderer") != g_coreVariables.end()) {
-      g_coreVariables["pcsx2_renderer"] = "Software (SW)";
-      LOGI("PCSX2 renderer forced to software framebuffer path");
-    }
+    ApplyPcsx2Renderer();
     // See the SET_CORE_OPTIONS note: fastmem's write-protected guest RAM
     // faults the savestate-restore memmove. Force the core's own off value.
     if (g_coreVariables.find("pcsx2_fastmem") != g_coreVariables.end()) {
@@ -413,6 +448,13 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
     while (received[count].key != nullptr) {
       std::string key(received[count].key);
       std::string value(received[count].value ? received[count].value : "");
+      // Capability probe for the legacy "Renderer; a|b|c" format: the token
+      // list contains "Vulkan" only when the core was built with ENABLE_VULKAN.
+      if (key == "pcsx2_renderer" && value.find("Vulkan") != std::string::npos) {
+        vulkanSetCoreSupported(true);
+        if (g_pcsx2VulkanValue.empty())
+          g_pcsx2VulkanValue = "Vulkan";
+      }
 
       // Value string is formatted like: "Description;
       // default_value|other_value|etc" We need to extract the default_value
@@ -473,11 +515,11 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
     if (g_isDolphinCore.load()) {
       g_coreVariables["dolphin_shader_compilation_mode"] = "synchronous";
       g_coreVariables["dolphin_wait_for_shaders"] = "false";
+      g_coreVariables["dolphin_main_cpu_thread"] = "False";
+      g_coreVariables["dolphin_fastmem"] = "Enabled";
+      g_coreVariables["dolphin_cpu_core"] = "JIT ARM64";
     }
-    if (g_coreVariables.find("pcsx2_renderer") != g_coreVariables.end()) {
-      g_coreVariables["pcsx2_renderer"] = "Software (SW)";
-      LOGI("PCSX2 renderer forced to software framebuffer path");
-    }
+    ApplyPcsx2Renderer();
     // See the SET_CORE_OPTIONS note: fastmem's write-protected guest RAM
     // faults the savestate-restore memmove. Force the core's own off value.
     if (g_coreVariables.find("pcsx2_fastmem") != g_coreVariables.end()) {
@@ -496,10 +538,25 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
       return false;
     struct retro_variable *var = (struct retro_variable *)data;
     if (var->key) {
+      std::string key(var->key);
+      if (key != "pcsx2_renderer" && key != "pcsx2_fastmem" && key != "melonds_screen_layout" && key != "desmume_screens_layout" && key != "melonds_touch_mode") {
+        if (g_coreVariables.find(key) != g_coreVariables.end()) {
+          var->value = g_coreVariables[key].c_str();
+          return true;
+        }
+      }
       if (std::string(var->key) == "pcsx2_renderer") {
-        static const char *pcsx2RendererSoftware = "Software (SW)";
-        LOGI("PCSX2 renderer option: %s", pcsx2RendererSoftware);
-        var->value = pcsx2RendererSoftware;
+        // Honour the preference: Vulkan only when requested AND the core
+        // actually advertises a Vulkan value; anything else runs software.
+        static std::string chosen;
+        if (vulkanRequested() && vulkanCoreSupportsVulkan() &&
+            !g_pcsx2VulkanValue.empty()) {
+          chosen = g_pcsx2VulkanValue;
+        } else {
+          chosen = "Software (SW)";
+        }
+        LOGI("PCSX2 renderer option: %s", chosen.c_str());
+        var->value = chosen.c_str();
         return true;
       }
       if (std::string(var->key) == "pcsx2_fastmem") {
@@ -520,6 +577,66 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
       int count = ++logCounts[var->key];
       if (count <= 1) {
         LOGD("GET_VARIABLE key: %s", var->key);
+      }
+      if (std::string(var->key) == "melonds_screen_layout" ||
+          std::string(var->key) == "desmume_screens_layout") {
+        // The FRONTEND owns the DS screen flip (see the row swap in
+        // video.cpp / g_dsSwapScreens), because a core that also applies the
+        // option would flip the same frame a second time and the two would
+        // cancel - the user sees one flipped frame, then an instant snap back.
+        // So the core is always told "Top/Bottom" and never asked to change it
+        // mid-session; the frontend mirrors the halves instead and the touch
+        // mapping is inverted to match (see setTouchInput).
+        static const char *dsCoreLayout = "Top/Bottom";
+        var->value = dsCoreLayout;
+        return true;
+      }
+      // DS touch screen. melonDS only polls RETRO_DEVICE_POINTER while its
+      // "Touch Mode" option is Touch; that option defaults to "Mouse", where
+      // mouse X/Y are *relative* deltas, and the core silently falls back to
+      // TouchMode::Disabled (no touch input at all) when the option cannot be
+      // resolved. Android hands us an absolute touch surface, so force the
+      // pointer path instead of letting the core pick its desktop default.
+      if (std::string(var->key) == "melonds_touch_mode") {
+        static const char *dsTouchMode = "Touch"; // "Mouse" | "Touch" | "Joystick"
+        static bool loggedTouchMode = false;
+        if (!loggedTouchMode) {
+          LOGI("DS touch mode forced to '%s' (core default is Mouse)", dsTouchMode);
+          loggedTouchMode = true;
+        }
+        var->value = dsTouchMode;
+        return true;
+      }
+      // melonDS's ARM JIT keeps generated code in pages whose protection the
+      // core toggles at runtime. When the DS wireless path wedges (Mario Kart
+      // DS -> Multiplayer is the known trigger), the corruption lands in one
+      // of those pages: the next core call then dies with SEGV_ACCERR inside
+      // the core .so and takes the whole app with it (the 00:29 log: "CORE:
+      // executing reset on emulation thread", SIGSEGV 4 ms later, #01/#02 =
+      // melonds .so). Disabling the JIT removes that failure mode entirely;
+      // the interpreter is slower but far harder to wedge. Lemuroid never hits
+      // this because its DS core is DeSmuME, which has no recompiler at all.
+      if (std::string(var->key) == "melonds_jit_enable" ||
+          std::string(var->key) == "jit_enable") {
+        static const char *dsJitOff = "disabled";
+        var->value = dsJitOff;
+        return true;
+      }
+      // Give the emulated DS a real identity. An empty frontend username can
+      // leave the generated firmware header blank, and MKDS reads the WIFI
+      // calibration plus the console nickname out of that header when it opens
+      // multiplayer.
+      if (std::string(var->key) == "melonds_username") {
+        static const char *dsUsername = "Player";
+        var->value = dsUsername;
+        return true;
+      }
+      // Same story for DeSmuME, which must be told to use the stylus/pointer
+      // instead of its mouse pointer default.
+      if (std::string(var->key) == "desmume_pointer_type") {
+        static const char *dsPointerType = "touch";
+        var->value = dsPointerType;
+        return true;
       }
       auto found = g_coreVariables.find(std::string(var->key));
       if (found != g_coreVariables.end()) {
@@ -584,12 +701,22 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
     return false;
   case RETRO_ENVIRONMENT_GET_INPUT_DEVICE_CAPABILITIES:
     if (data) {
-      *(uint64_t *)data =
-          (1ULL << RETRO_DEVICE_JOYPAD) | (1ULL << RETRO_DEVICE_ANALOG);
+      // POINTER is advertised too: the touch surface is exposed through
+      // RETRO_DEVICE_POINTER, and cores consult this bit to auto-detect a
+      // touch-capable frontend before choosing touch over mouse input.
+      *(uint64_t *)data = (1ULL << RETRO_DEVICE_JOYPAD) |
+                          (1ULL << RETRO_DEVICE_ANALOG) |
+                          (1ULL << RETRO_DEVICE_POINTER);
       return true;
     }
     return false;
   case RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE:
+    // Vulkan: only ever answered once the backend is fully built, so the core
+    // can never dereference an empty interface.
+    if (g_useVulkan && vulkanInterface()) {
+      *reinterpret_cast<void **>(data) = vulkanInterface();
+      return true;
+    }
     return false;
   default:
     // Do not log unsupported high-frequency probes on every frame. Dolphin

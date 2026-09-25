@@ -5,8 +5,44 @@
 #include "input.h"
 #include "arc_common.h"
 #include "video.h"
+#include "vulkan_bridge.h"
 
 extern "C" {
+
+// Stopping the emulation thread is the only safe way to end a session: that
+// thread closes the core itself (UnloadCore() at the end of EmuThreadFunc), so
+// nothing else may dlclose() or deinit the core while it might still be inside
+// a core call. Bounded wait: a core that has hung inside its own code (melonDS
+// can wedge in its DS wireless path) must not be able to freeze the app, and
+// re-entering such a core (reset/unload) is what used to crash the process.
+// Returns false when the thread had to be abandoned - the caller must then not
+// start another core session in this process.
+static bool StopEmuThread(unsigned timeoutMs) {
+  g_isRunning.store(false);
+  g_resetRequested.store(false);
+
+  const int64_t deadline = ArcNowMs() + (int64_t)timeoutMs;
+  while (g_emuThreadActive.load() && ArcNowMs() < deadline)
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+
+  if (g_emuThreadActive.load()) {
+    LOGW("CORE: emulation thread still running after %u ms - abandoning it "
+         "(core wedged, no further core calls in this process)",
+         timeoutMs);
+    g_coreWedged.store(true);
+    if (g_emuPthread) {
+      pthread_detach(g_emuPthread); // never joinable again; freed when it exits
+      g_emuPthread = 0;
+    }
+    return false;
+  }
+
+  if (g_emuPthread) {
+    pthread_join(g_emuPthread, nullptr);
+    g_emuPthread = 0;
+  }
+  return true;
+}
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
   g_vm = vm;
@@ -38,6 +74,13 @@ Java_com_blinkchase_arc_MainActivity_setSystemDirectories(JNIEnv *env,
 
 JNIEXPORT jstring JNICALL Java_com_blinkchase_arc_MainActivity_loadCore(
     JNIEnv *env, jobject thiz, jstring corePath) {
+  // A core whose emulation thread is still stuck inside a previous call must
+  // never be dlopen()ed/re-armed: that thread owns the instance state.
+  if (g_coreWedged.load()) {
+    LOGE("CORE: refusing LoadCore - a previous emulation session is wedged");
+    return env->NewStringUTF(
+        "The previous emulation session stopped responding. Restart Arc to play again.");
+  }
   const char *path = env->GetStringUTFChars(corePath, 0);
   bool success = LoadCore(path);
   env->ReleaseStringUTFChars(corePath, path);
@@ -46,10 +89,16 @@ JNIEXPORT jstring JNICALL Java_com_blinkchase_arc_MainActivity_loadCore(
 
 JNIEXPORT jboolean JNICALL Java_com_blinkchase_arc_MainActivity_nativeLoadGame(
     JNIEnv *env, jobject thiz, jstring romPath) {
-  if (g_isRunning.load()) {
-    g_isRunning.store(false);
-    if (g_emuThread.joinable())
-      g_emuThread.join();
+  if (g_coreWedged.load()) {
+    LOGE("CORE: refusing to load a game - the previous session is wedged; "
+         "restart Arc");
+    return JNI_FALSE;
+  }
+  if (g_emuThreadActive.load() || g_isRunning.load()) {
+    if (!StopEmuThread(4000)) {
+      LOGE("CORE: previous emulation thread will not stop - refusing to load");
+      return JNI_FALSE;
+    }
   }
 
   // Reset State
@@ -68,6 +117,9 @@ JNIEXPORT jboolean JNICALL Java_com_blinkchase_arc_MainActivity_nativeLoadGame(
   g_analogY = 0;
   g_analogRightX = 0;
   g_analogRightY = 0;
+  g_touchX = 0;
+  g_touchY = 0;
+  g_touchPressed.store(false);
   g_resetDebugCounters.store(true);
   g_variablesUpdated.store(true);
   g_videoRefreshCount.store(0);
@@ -78,7 +130,28 @@ JNIEXPORT jboolean JNICALL Java_com_blinkchase_arc_MainActivity_nativeLoadGame(
 
   g_isRunning.store(true);
   g_loadRequested.store(true);
-  g_emuThread = std::thread(EmuThreadFunc);
+  g_lastEmuHeartbeatMs.store(ArcNowMs());
+
+  // The emulation thread runs the core with a large stack. bionic's default
+  // pthread stack is 1 MB, which deep core paths can overflow - melonDS's DS
+  // wireless stack when a game opens local multiplayer is one example - and an
+  // overflow surfaces as a SIGSEGV inside the core .so. RetroArch runs cores on
+  // an 8 MB main thread for the same reason.
+  pthread_attr_t threadAttr;
+  pthread_attr_init(&threadAttr);
+  pthread_attr_setstacksize(&threadAttr, 8 * 1024 * 1024);
+  g_emuThreadActive.store(true);
+  const int createResult =
+      pthread_create(&g_emuPthread, &threadAttr, EmuThreadEntry, nullptr);
+  pthread_attr_destroy(&threadAttr);
+  if (createResult != 0) {
+    LOGE("CORE: pthread_create failed: %d", createResult);
+    g_emuThreadActive.store(false);
+    g_emuPthread = 0;
+    g_isRunning.store(false);
+    return JNI_FALSE;
+  }
+
   for (int i = 0; i < 15000; i++) {
     if (g_gameLoadComplete.load())
       return g_gameLoadResult.load() ? JNI_TRUE : JNI_FALSE;
@@ -92,6 +165,10 @@ JNIEXPORT jboolean JNICALL Java_com_blinkchase_arc_MainActivity_nativeLoadGame(
 
 JNIEXPORT void JNICALL Java_com_blinkchase_arc_MainActivity_nativePauseGame(
     JNIEnv *env, jobject thiz) {
+  // A pause dialog can swallow the ACTION_UP that would normally release the
+  // stylus, which would leave the DS holding a press for as long as the dialog
+  // stays open.
+  g_touchPressed.store(false);
   g_isPaused.store(true);
 }
 
@@ -105,26 +182,66 @@ JNIEXPORT void JNICALL Java_com_blinkchase_arc_MainActivity_nativeResumeGame(
   g_isPaused.store(false);
 }
 
-JNIEXPORT void JNICALL
+JNIEXPORT jint JNICALL
 Java_com_blinkchase_arc_MainActivity_resetGame(JNIEnv *env, jobject thiz) {
   if (!g_isRunning.load() || !core_reset)
-    return;
+    return -1; // nothing to reset
+
+  // core_reset() is executed by the emulation thread. If that thread is stuck
+  // inside a core call the core's state is already inconsistent, and the reset
+  // (or the unload that follows it) is exactly what crashed the process before.
+  // Refuse instead and let the UI tell the user to leave the game safely.
+  // EmuCallBlockedMs() is authoritative here: it is only non-zero while the
+  // emulation thread is physically inside retro_run()/retro_reset(), which is
+  // precisely when letting another reset in is fatal. A merely stale heartbeat
+  // just means the loop hasn't ticked (pause, surface loss); that is safe.
+  const int64_t thresholdMs = g_isDolphinCore.load() ? 15000 : 5000;
+  if (g_coreWedged.load() || EmuCallBlockedMs() > thresholdMs) {
+    LOGW("CORE: reset refused - core is inside a call (blocked %lld ms)",
+         (long long)EmuCallBlockedMs());
+    return 0; // core unresponsive
+  }
+
   // retro_reset must run on the emulation thread. Calling it from Compose's
   // UI thread races Dolphin's CPU/renderer threads and can crash the core.
   g_resetRequested.store(true);
   g_isPaused.store(false);
+  return 1; // queued
 }
 
 JNIEXPORT void JNICALL Java_com_blinkchase_arc_MainActivity_nativeQuitGame(
     JNIEnv *env, jobject thiz) {
-  g_isRunning.store(false);
-  g_resetRequested.store(false);
-  if (g_emuThread.joinable())
-    g_emuThread.join();
+  // Bounded, recoverable shutdown: the emulation thread unloads the core and
+  // exits on its own, and if it never does (core wedged inside a call of its
+  // own) it is abandoned rather than joined, so the Quit button cannot hang the
+  // app or crash it by re-entering a wedged core.
+  StopEmuThread(4000);
+}
+
+void toggleDsScreenLayout() {
+  if (g_dsScreenLayout.empty() || g_dsScreenLayout == "Top/Bottom") {
+    g_dsScreenLayout = "Bottom/Top";
+  } else {
+    g_dsScreenLayout = "Top/Bottom";
+  }
+  auto it = g_coreVariables.find("melonds_screen_layout");
+  if (it != g_coreVariables.end()) it->second = g_dsScreenLayout;
+  auto it2 = g_coreVariables.find("desmume_screens_layout");
+  if (it2 != g_coreVariables.end()) it2->second = g_dsScreenLayout;
+  // Same contract as nativeSetDsScreenLayout(): the blit path performs the
+  // visible flip, the core stays pinned to "Top/Bottom", and swapping screens
+  // must not reset the game or re-announce the option.
+  g_dsSwapScreens.store(g_dsScreenLayout == "Bottom/Top");
+  LOGI("DS Screen Layout toggled to: %s (swap=%d)", g_dsScreenLayout.c_str(),
+       g_dsSwapScreens.load() ? 1 : 0);
 }
 
 JNIEXPORT void JNICALL Java_com_blinkchase_arc_MainActivity_sendInput(
     JNIEnv *env, jobject thiz, jint buttonId, jint value) {
+  if (buttonId == 16 && value == 1) { // BTN_SCREEN_SWAP
+    toggleDsScreenLayout();
+    return;
+  }
   uint16_t bits = g_joypadBits.load();
   if (value)
     bits |= (1 << buttonId);
@@ -276,6 +393,9 @@ Java_com_blinkchase_arc_MainActivity_nativeOnSurfaceDestroyed(JNIEnv *env,
                                                                jobject thiz) {
   std::lock_guard<std::mutex> lock(g_windowMutex);
   LOGI("Surface destroyed");
+  // The touch listener goes away with the surface; drop any held press so the
+  // next surface does not start with a stuck stylus.
+  g_touchPressed.store(false);
   // Let the emulation thread destroy the EGL surface/context. The UI thread
   // must not invalidate EGL while Dolphin is rendering.
   g_surfaceInvalidated.store(true);
@@ -305,5 +425,83 @@ Java_com_blinkchase_arc_MainActivity_setCheat(JNIEnv *env,
                                                 jboolean enabled,
                                                 jstring code) {
   // Stub
+}
+
+// PS2 Vulkan renderer preference (persisted by the Kotlin settings UI).
+// vulkanSetRequested() is declared in vulkan_bridge.h, which is included above
+// outside this extern "C" block so the C++ linkage matches the definition.
+JNIEXPORT void JNICALL
+Java_com_blinkchase_arc_MainActivity_nativeSetVulkanRequested(JNIEnv *env,
+                                                             jobject thiz,
+                                                             jboolean enabled) {
+  vulkanSetRequested(enabled == JNI_TRUE);
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_blinkchase_arc_MainActivity_nativeIsVulkanRequested(JNIEnv *env,
+                                                             jobject thiz) {
+  return vulkanIsRequested() ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_blinkchase_arc_MainActivity_nativeIsVulkanActive(JNIEnv *env,
+                                                            jobject thiz) {
+  return vulkanIsActive() ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_blinkchase_arc_MainActivity_nativeCoreSupportsVulkan(JNIEnv *env,
+                                                              jobject thiz) {
+  return vulkanCoreSupportsVulkan() ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT void JNICALL Java_com_blinkchase_arc_MainActivity_setTouchInput(
+    JNIEnv *env, jobject thiz, jint x, jint y, jboolean pressed) {
+  // The core is pinned to "Top/Bottom" (environment.cpp), so it always believes
+  // the touch screen is the BOTTOM half of the frame it renders. When the user
+  // swaps screens the frontend mirrors the halves, which puts the touch screen
+  // on top - so the Y the user pressed has to be inverted to land on the same
+  // physical spot inside the core's own frame. Without this, touch would work
+  // but would be mirrored vertically after a swap.
+  const int16_t outY =
+      g_dsSwapScreens.load() ? static_cast<int16_t>(-y) : static_cast<int16_t>(y);
+  g_touchX.store((int16_t)x);
+  g_touchY.store(outY);
+  g_touchPressed.store(pressed == JNI_TRUE);
+}
+
+JNIEXPORT void JNICALL
+Java_com_blinkchase_arc_MainActivity_nativeSetDsScreenLayout(JNIEnv *env, jobject thiz, jstring layout) {
+  const char *chars = env->GetStringUTFChars(layout, nullptr);
+  if (chars) {
+    g_dsScreenLayout = chars;
+    env->ReleaseStringUTFChars(layout, chars);
+  }
+  auto it = g_coreVariables.find("melonds_screen_layout");
+  if (it != g_coreVariables.end()) it->second = g_dsScreenLayout;
+  auto it2 = g_coreVariables.find("desmume_screens_layout");
+  if (it2 != g_coreVariables.end()) it2->second = g_dsScreenLayout;
+  // The blit path (video.cpp) owns the visible flip. No g_resetRequested here:
+  // a screen swap is not a game reset. g_variablesUpdated is deliberately NOT
+  // raised either - the core is pinned to "Top/Bottom" in the environment
+  // callback, so signalling an update would only invite it to re-apply a second
+  // flip and cancel ours (one flipped frame, then a snap back).
+  g_dsSwapScreens.store(g_dsScreenLayout == "Bottom/Top");
+  LOGI("DS Screen Layout set to: %s (swap=%d)", g_dsScreenLayout.c_str(),
+       g_dsSwapScreens.load() ? 1 : 0);
+}
+
+// Milliseconds since the emulation loop last made progress, or -1 when there is
+// no running session to judge. The UI watchdog uses this to notice a game that
+// hung inside the core (the state that made Reset/Quit crash the app).
+JNIEXPORT jint JNICALL
+Java_com_blinkchase_arc_MainActivity_nativeEmuHeartbeatAgeMs(JNIEnv *env,
+                                                             jobject thiz) {
+  if (!g_emuThreadActive.load() || !g_isRunning.load() || !g_gameLoadComplete.load())
+    return -1;
+  const int64_t last = g_lastEmuHeartbeatMs.load();
+  if (last == 0)
+    return -1;
+  return (jint)(ArcNowMs() - last);
 }
 }

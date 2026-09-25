@@ -25,6 +25,9 @@ interface GameDao {
     @Update
     suspend fun updateGame(game: GameFile)
 
+    @Query("SELECT COUNT(*) FROM games")
+    suspend fun getGameCount(): Int
+
     @Delete
     suspend fun deleteGame(game: GameFile)
 

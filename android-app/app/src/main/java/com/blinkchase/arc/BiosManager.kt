@@ -45,7 +45,7 @@ object BiosManager {
     )
 
     fun calculateFileMd5(file: File): String {
-        if (!file.exists()) return ""
+        if (!file.exists() || !file.isFile) return ""
         return try {
             val digest = MessageDigest.getInstance("MD5")
             val fis = FileInputStream(file)
@@ -65,41 +65,26 @@ object BiosManager {
         val systemDir = File(storageDir, "system").also { it.mkdirs() }
         val results = mutableListOf<BiosCheckResult>()
 
+        // Gather all files recursively in system directory
+        val allFiles = systemDir.walkTopDown().filter { it.isFile }.toList()
+
         BIOS_REGISTRY.forEach { req ->
-            val file = if (req.platform == Platform.PS2) {
-                findPs2Bios(systemDir)
-            } else {
-                systemDir.walkTopDown().firstOrNull {
-                    it.isFile && it.name.equals(req.fileName, true)
-                }
-            } ?: File(systemDir, req.fileName)
-            if (file.exists()) {
-                val actualMd5 = calculateFileMd5(file)
+            // Match file by filename OR by expected MD5 hash (handles custom names or subfolders)
+            val matchedFile = allFiles.firstOrNull { file ->
+                file.name.equals(req.fileName, true) || calculateFileMd5(file).lowercase() == req.expectedMd5.lowercase()
+            }
+
+            if (matchedFile != null) {
+                val actualMd5 = calculateFileMd5(matchedFile)
                 if (actualMd5.lowercase() == req.expectedMd5.lowercase()) {
-                    results.add(BiosCheckResult(req, BiosStatus.VALID, file.absolutePath))
+                    results.add(BiosCheckResult(req, BiosStatus.VALID, matchedFile.absolutePath))
                 } else {
-                    results.add(BiosCheckResult(req, BiosStatus.CORRUPTED, file.absolutePath))
+                    results.add(BiosCheckResult(req, BiosStatus.CORRUPTED, matchedFile.absolutePath))
                 }
             } else {
                 results.add(BiosCheckResult(req, BiosStatus.MISSING))
             }
         }
         return results
-    }
-
-    private fun findPs2Bios(systemDir: File): File? {
-        val candidates = sequenceOf(
-            File(systemDir, "scph39001.bin"),
-            File(File(systemDir, "pcsx2"), "bios/scph39001.bin")
-        ) + (systemDir.listFiles()?.asSequence() ?: emptySequence())
-        return candidates
-            .flatMap { file ->
-                if (file.isDirectory) file.walkTopDown() else sequenceOf(file)
-            }
-            .firstOrNull {
-                it.isFile &&
-                    it.extension.equals("bin", true) &&
-                    it.name.lowercase().replace("-", "").contains("scph39001")
-            }
     }
 }

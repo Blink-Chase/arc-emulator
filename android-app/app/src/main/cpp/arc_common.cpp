@@ -32,16 +32,26 @@ std::atomic<int16_t> g_analogX{0};
 std::atomic<int16_t> g_analogY{0};
 std::atomic<int16_t> g_analogRightX{0};
 std::atomic<int16_t> g_analogRightY{0};
+std::atomic<int16_t> g_touchX{0};
+std::atomic<int16_t> g_touchY{0};
+std::atomic<bool> g_touchPressed{false};
 std::atomic<int> g_pendingControllerType{1};
 std::atomic<bool> g_isDolphinCore{false};
 std::atomic<bool> g_isPcsx2Core{false};
 std::atomic<int> g_pixelFormat{RETRO_PIXEL_FORMAT_RGB565};
+std::string g_dsScreenLayout = "";
+std::atomic<bool> g_dsSwapScreens{false};
 
 // Vulkan Globals
 struct retro_hw_render_interface_vulkan g_vulkanInterface = {};
 bool g_vulkanInitialized = false;
 
-std::thread g_emuThread;
+pthread_t g_emuPthread = 0;
+std::atomic<bool> g_emuThreadActive{false};
+std::atomic<bool> g_coreWedged{false};
+std::atomic<int64_t> g_lastEmuHeartbeatMs{0};
+std::atomic<int64_t> g_coreCallStartUs{0};
+std::atomic<int> g_coreCallKind{0};
 std::mutex g_activityMutex;
 std::mutex g_windowMutex;
 std::recursive_mutex g_emuMutex;
@@ -135,6 +145,13 @@ void LogCallback(enum retro_log_level level, const char *fmt, ...) {
   } else {
     dupCount++;
   }
+}
+
+// Monotonic milliseconds, shared by the emulation heartbeat and its watchdog.
+int64_t ArcNowMs() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
 }
 
 JNIEnv *GetJNIEnv() {
