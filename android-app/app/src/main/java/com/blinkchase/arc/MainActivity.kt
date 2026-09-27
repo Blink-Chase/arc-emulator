@@ -847,6 +847,14 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 Platform.GAMECUBE -> 1 // GameCube Controller
+                // The DS stylus is an absolute pointer, not a joypad. DeSmuME and
+                // melonDS only take their absolute touch path when port 0 is
+                // declared as RETRO_DEVICE_POINTER; with a joypad they fall back
+                // to a relative mouse cursor, where a tap and a drag are the same
+                // event and the stylus has to be dragged onto a target before it
+                // registers. That is why the bottom screen never responded to a
+                // plain tap.
+                Platform.DS -> 6 // RETRO_DEVICE_POINTER
                 else -> {
                     val deviceKey = "device_pref_${game.platform.name}"
                     val deviceTypeString = prefs.getString(deviceKey, if (game.platform == Platform.N64 || game.platform == Platform.PS1) EmulatedDevice.ANALOG.name else EmulatedDevice.JOYPAD.name)

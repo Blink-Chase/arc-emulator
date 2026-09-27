@@ -322,7 +322,37 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
     return true;
   }
   case RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO:
-  case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:
+    return true;
+  case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO: {
+    if (!data)
+      return true;
+    // data points at the core's retro_controller_info array, one entry per port,
+    // and the frontend must fill it in and keep its own copy alive. Port 0 is the
+    // only port this frontend drives; the rest stay zeroed as the core expects.
+    //
+    // Field order within an entry is {types, num_types}: pointer first, then the
+    // count. num_types is unsigned, so the terminator is a null pointer with a
+    // count of 0.
+    static const struct retro_controller_description descs[] = {
+        {"DS Stylus", RETRO_DEVICE_POINTER},
+        {"Mouse", RETRO_DEVICE_MOUSE},
+        {"RetroPad", RETRO_DEVICE_JOYPAD},
+        {"RetroPad (analog)", RETRO_DEVICE_ANALOG},
+    };
+    static const unsigned numDescs = sizeof(descs) / sizeof(descs[0]);
+    auto *infos = static_cast<struct retro_controller_info *>(data);
+    infos[0].types = descs;
+    infos[0].num_types = numDescs;
+    // Terminate the array in case the core expects a sentinel after our entry.
+    infos[1].types = nullptr;
+    infos[1].num_types = 0;
+    static bool loggedControllerInfo = false;
+    if (!loggedControllerInfo) {
+      LOGI("DS stylus: advertising port 0 devices incl. POINTER (absolute touch)");
+      loggedControllerInfo = true;
+    }
+    return true;
+  }
   case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS:
   case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
     return true;
@@ -550,7 +580,17 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
     struct retro_variable *var = (struct retro_variable *)data;
     if (var->key) {
       std::string key(var->key);
-      if (key != "pcsx2_renderer" && key != "pcsx2_fastmem" && key != "melonds_screen_layout" && key != "desmume_screens_layout" && key != "melonds_touch_mode") {
+      // Keys the frontend answers explicitly below, rather than from the
+      // g_coreVariables defaults. SET_CORE_OPTIONS seeds g_coreVariables with
+      // every option's *default* value, so without excluding a key here the
+      // generic lookup below would return that default and return true, making
+      // the explicit handler further down unreachable dead code. That is exactly
+      // why melonds_touch_mode is listed: the core default is Mouse, so the
+      // forced "Touch" would otherwise never be applied.
+      if (key != "pcsx2_renderer" && key != "pcsx2_fastmem" &&
+          key != "melonds_screen_layout" && key != "desmume_screens_layout" &&
+          key != "melonds_touch_mode" && key != "desmume_pointer_type" &&
+          key != "desmume_pointer_mouse") {
         if (g_coreVariables.find(key) != g_coreVariables.end()) {
           var->value = g_coreVariables[key].c_str();
           return true;
@@ -644,11 +684,21 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
         var->value = dsUsername;
         return true;
       }
-      // Same story for DeSmuME, which must be told to use the stylus/pointer
-      // instead of its mouse pointer default.
+      // DeSmuME's stylus API selection. Per the core's own options, it picks
+      // between the relative mouse API and the absolute pointer API based on
+      // "desmume_pointer_type" (mouse | touch), and that choice only has effect
+      // while "desmume_pointer_mouse" (Mouse/Pointer) is enabled - which is the
+      // core default. "touch" gives the absolute path, so a tap registers exactly
+      // where the finger is instead of having to drag a cursor onto a target.
       if (std::string(var->key) == "desmume_pointer_type") {
         static const char *dsPointerType = "touch";
         var->value = dsPointerType;
+        LOGI("DS stylus: desmume_pointer_type -> 'touch' (absolute pointer)");
+        return true;
+      }
+      if (std::string(var->key) == "desmume_pointer_mouse") {
+        static const char *dsPointerMouse = "enabled";
+        var->value = dsPointerMouse;
         return true;
       }
       auto found = g_coreVariables.find(std::string(var->key));
@@ -716,9 +766,15 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
     if (data) {
       // POINTER is advertised too: the touch surface is exposed through
       // RETRO_DEVICE_POINTER, and cores consult this bit to auto-detect a
-      // touch-capable frontend before choosing touch over mouse input.
+      // touch-capable frontend before choosing touch over mouse input. MOUSE is
+      // included for cores that only implement the relative-mouse path, so they
+      // still get a usable (if imperfect) stylus rather than nothing at all.
+      // A core reads this from a front-end that has no real mouse, so it is the
+      // capability query - not a port device - that tells the core an absolute
+      // touch surface exists.
       *(uint64_t *)data = (1ULL << RETRO_DEVICE_JOYPAD) |
                           (1ULL << RETRO_DEVICE_ANALOG) |
+                          (1ULL << RETRO_DEVICE_MOUSE) |
                           (1ULL << RETRO_DEVICE_POINTER);
       return true;
     }

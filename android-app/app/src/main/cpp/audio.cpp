@@ -6,14 +6,18 @@ void AudioSampleCallback(int16_t left, int16_t right) {
 }
 
 size_t AudioSampleBatchCallback(const int16_t *data, size_t frames) {
-  static int logCounter = 0;
-  if (logCounter++ > 60) {
+  // Buffer stats every 60 batches is ~10x/second and drowns out everything else
+  // in logcat. Once every 5 seconds is enough to spot a drift or an overflow.
+  static auto lastUsageLog = std::chrono::steady_clock::now();
+  const auto nowLog = std::chrono::steady_clock::now();
+  if (std::chrono::duration_cast<std::chrono::seconds>(nowLog - lastUsageLog)
+          .count() >= 5) {
+    lastUsageLog = nowLog;
     int wp = g_audioWritePos.load();
     int rp = g_audioReadPos.load();
     int usage = (wp >= rp) ? (wp - rp) : (AUDIO_BUFFER_SIZE - rp + wp);
     LOGI("AUDIO: Buffer Usage: %d / %d samples (%.1f%%)", usage,
          AUDIO_BUFFER_SIZE, (float)usage * 100.0f / AUDIO_BUFFER_SIZE);
-    logCounter = 0;
   }
 
   if (g_fastForward.load() || !data || frames == 0)
