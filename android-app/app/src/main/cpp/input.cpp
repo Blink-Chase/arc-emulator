@@ -42,7 +42,10 @@ int16_t InputStateCallback(unsigned port, unsigned device, unsigned index,
       // here (that broke swapped layouts and hybrid layouts entirely).
       if (id == RETRO_DEVICE_ID_POINTER_COUNT)
         return pressed ? 1 : 0;
-      if (id == RETRO_DEVICE_ID_POINTER_IS_OFFSCREEN)
+      // The pointer is only ever "offscreen" when it is not being touched.
+      // id 15 is POINTER_IS_OFFSCREEN, but cores may also probe it via the
+      // generic `index` slot, so handle both spellings.
+      if (id == RETRO_DEVICE_ID_POINTER_IS_OFFSCREEN || index == 15)
         return pressed ? 0 : 1;
       if (index == 0) {
         if (id == RETRO_DEVICE_ID_POINTER_X)

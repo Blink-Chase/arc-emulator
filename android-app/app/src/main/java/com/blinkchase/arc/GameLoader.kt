@@ -351,10 +351,58 @@ object GameLoader {
                 val dolphinDir = File(systemDir, "dolphin-emu")
                 if (!dolphinDir.exists()) dolphinDir.mkdirs()
                 
-                // Create subdirectories Dolphin often expects
-                File(dolphinDir, "Sys").mkdirs()
-                File(dolphinDir, "Config").mkdirs()
+                val configDir = File(dolphinDir, "Config").also { it.mkdirs() }
                 installDolphinShader(context, dolphinDir)
+
+                val wiimoteContent = """
+                    [Wiimote1]
+                    Source = 1
+                    WiimoteType = 1
+                    Extension = Nunchuk
+                    ContinuousScanning = True
+                    
+                    [Wiimote2]
+                    Source = 0
+                    
+                    [Wiimote3]
+                    Source = 0
+                    
+                    [Wiimote4]
+                    Source = 0
+                """.trimIndent()
+
+                listOf(
+                    File(configDir, "WiimoteNew.ini"),
+                    File(configDir, "Wiimote.ini"),
+                    File(storageDir, "saves/User/Config/WiimoteNew.ini").also { it.parentFile?.mkdirs() },
+                    File(storageDir, "saves/User/Config/Wiimote.ini").also { it.parentFile?.mkdirs() }
+                ).forEach { file ->
+                    try {
+                        if (!file.exists() || (platform == Platform.WII && !file.readText().contains("Nunchuk"))) {
+                            file.writeText(wiimoteContent)
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to write Dolphin Wiimote config: ${file.absolutePath}", e)
+                    }
+                }
+
+                val dolphinIniContent = """
+                    [Core]
+                    Wii = True
+                """.trimIndent()
+
+                listOf(
+                    File(configDir, "Dolphin.ini"),
+                    File(storageDir, "saves/User/Config/Dolphin.ini").also { it.parentFile?.mkdirs() }
+                ).forEach { file ->
+                    try {
+                        if (!file.exists() || !file.readText().contains("Wii = True")) {
+                            file.writeText(dolphinIniContent)
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to write Dolphin.ini: ${file.absolutePath}", e)
+                    }
+                }
             }
             Platform.PS2 -> {
                 // PCSX2 needs a specific config/bios folder structure
@@ -398,9 +446,35 @@ object GameLoader {
                 File(pcsx2Dir, "inis").mkdirs()
             }
             Platform.DS -> {
-                // MelonDS sometimes needs firmware in a specific spot or just 'system'
+                // MelonDS needs bios7.bin, bios9.bin, firmware.bin in system/melonds or system/
                 val dsDir = File(systemDir, "melonds")
                 if (!dsDir.exists()) dsDir.mkdirs()
+
+                val bios7 = File(dsDir, "bios7.bin")
+                val bios9 = File(dsDir, "bios9.bin")
+                val firmware = File(dsDir, "firmware.bin")
+
+                val rootBios7 = File(systemDir, "bios7.bin")
+                val rootBios9 = File(systemDir, "bios9.bin")
+                val rootFirmware = File(systemDir, "firmware.bin")
+
+                try {
+                    if (!bios7.exists() || bios7.length() == 0L) {
+                        bios7.writeBytes(ByteArray(16384))
+                    }
+                    if (!bios9.exists() || bios9.length() == 0L) {
+                        bios9.writeBytes(ByteArray(4096))
+                    }
+                    if (!firmware.exists() || firmware.length() == 0L) {
+                        firmware.writeBytes(ByteArray(131072))
+                    }
+
+                    if (!rootBios7.exists()) bios7.copyTo(rootBios7, overwrite = true)
+                    if (!rootBios9.exists()) bios9.copyTo(rootBios9, overwrite = true)
+                    if (!rootFirmware.exists()) firmware.copyTo(rootFirmware, overwrite = true)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to create DS BIOS/firmware files", e)
+                }
             }
             else -> {}
         }

@@ -114,7 +114,7 @@ class MainActivity : ComponentActivity() {
             Platform.PS1 to listOf("pcsx_rearmed_libretro_android", "swanstation_libretro_android", "pcsx_rearmed"),
             Platform.GAMECUBE to listOf("dolphin_libretro_android", "dolphin"),
             Platform.WII to listOf("dolphin_libretro_android", "dolphin"),
-            Platform.DS to listOf("melonds_libretro_android", "desmume_libretro_android"),
+            Platform.DS to listOf("desmume_libretro_android", "melonds_libretro_android"),
             Platform.PS2 to listOf("pcsx2_libretro_android"),
             Platform.SATURN to listOf("yabause_libretro_android", "beetle_saturn_libretro_android")
         )
@@ -176,6 +176,7 @@ class MainActivity : ComponentActivity() {
     external fun setFastForward(enabled: Boolean)
     external fun setCheat(index: Int, enabled: Boolean, code: String)
     external fun setControllerType(port: Int, type: Int)
+    external fun setWiiControllerStyle(style: Int)
     external fun getAudioSamples(buffer: ShortArray, maxSamples: Int): Int
     external fun getNativeFps(): Int
     external fun getGameSampleRate(): Double
@@ -835,11 +836,14 @@ class MainActivity : ComponentActivity() {
 
             val retroType = when (game.platform) {
                 Platform.WII -> {
+                    // Dolphin libretro Wiimote device IDs (dolphin_input.cpp):
+                    // 513 = sideways, 769 = wiimote+nunchuk, 1025 = classic.
                     val wiiStyle = prefs.getInt(KEY_WII_CONTROLLER_STYLE, 0)
+                    setWiiControllerStyle(wiiStyle)
                     when (wiiStyle) {
-                        1 -> 769 // Wiimote + Classic Controller
-                        2 -> 257 // Sideways Wiimote
-                        else -> 513 // Wiimote + Nunchuk
+                        1 -> 1025 // Classic Controller
+                        2 -> 513 // Sideways Wiimote
+                        else -> 769 // Wii Remote + Nunchuk
                     }
                 }
                 Platform.GAMECUBE -> 1 // GameCube Controller

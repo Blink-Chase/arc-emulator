@@ -215,9 +215,9 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
     if (!data)
       return false;
     auto pcsx2Renderer = g_coreVariables.find("pcsx2_renderer");
-    if (pcsx2Renderer != g_coreVariables.end() &&
-        pcsx2Renderer->second == "Software (SW)") {
-      LOGI("SET_HW_RENDER rejected: PCSX2 software renderer uses framebuffer callbacks");
+    if ((pcsx2Renderer != g_coreVariables.end() &&
+        pcsx2Renderer->second == "Software (SW)") || g_isDsCore.load()) {
+      LOGI("SET_HW_RENDER rejected: software renderer uses framebuffer callbacks");
       return false;
     }
 
@@ -364,9 +364,17 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
       ResolveFastmemFromValues(option->values, option->key);
       ResolveRendererFromValues(option->values, option->key);
     }
+    // Dolphin stability on this frontend's single EGL context: compile
+    // shaders on the emulation thread, keep CPU on the JIT. Wiimote type is
+    // NOT a core option (see dolphin_input.cpp / retro_set_controller_port_
+    // device) - it arrives via retro_set_controller_port_device on the emu
+    // thread, so writing dolphin_wiimote_* keys here would only sit unread.
     if (g_isDolphinCore.load()) {
       g_coreVariables["dolphin_shader_compilation_mode"] = "synchronous";
-      g_coreVariables["dolphin_wait_for_shaders"] = "false";
+      g_coreVariables["dolphin_wait_for_shaders"] = "true";
+      g_coreVariables["dolphin_main_cpu_thread"] = "False";
+      g_coreVariables["dolphin_fastmem"] = "Enabled";
+      g_coreVariables["dolphin_cpu_core"] = "JIT ARM64";
     }
     ApplyPcsx2Renderer();
     // PCSX2's fastmem write-protects guest RAM pages so the recompiler can
@@ -404,7 +412,10 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
     }
     if (g_isDolphinCore.load()) {
       g_coreVariables["dolphin_shader_compilation_mode"] = "synchronous";
-      g_coreVariables["dolphin_wait_for_shaders"] = "false";
+      g_coreVariables["dolphin_wait_for_shaders"] = "true";
+      g_coreVariables["dolphin_main_cpu_thread"] = "False";
+      g_coreVariables["dolphin_fastmem"] = "Enabled";
+      g_coreVariables["dolphin_cpu_core"] = "JIT ARM64";
     }
     ApplyPcsx2Renderer();
     // See the SET_CORE_OPTIONS note: fastmem's write-protected guest RAM
@@ -514,7 +525,7 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
     // emulation thread instead of letting the worker fail during startup.
     if (g_isDolphinCore.load()) {
       g_coreVariables["dolphin_shader_compilation_mode"] = "synchronous";
-      g_coreVariables["dolphin_wait_for_shaders"] = "false";
+      g_coreVariables["dolphin_wait_for_shaders"] = "true";
       g_coreVariables["dolphin_main_cpu_thread"] = "False";
       g_coreVariables["dolphin_fastmem"] = "Enabled";
       g_coreVariables["dolphin_cpu_core"] = "JIT ARM64";
@@ -578,16 +589,23 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
       if (count <= 1) {
         LOGD("GET_VARIABLE key: %s", var->key);
       }
-      if (std::string(var->key) == "melonds_screen_layout" ||
-          std::string(var->key) == "desmume_screens_layout") {
+      if (std::string(var->key) == "melonds_screen_layout") {
         // The FRONTEND owns the DS screen flip (see the row swap in
         // video.cpp / g_dsSwapScreens), because a core that also applies the
         // option would flip the same frame a second time and the two would
         // cancel - the user sees one flipped frame, then an instant snap back.
-        // So the core is always told "Top/Bottom" and never asked to change it
-        // mid-session; the frontend mirrors the halves instead and the touch
-        // mapping is inverted to match (see setTouchInput).
+        // So the core is always told its default and never asked to change it
+        // mid-session; the frontend mirrors the halves instead.
+        // NOTE: melonDS matches "Top/Bottom" (capitalised, see melonds_lib.cpp)
         static const char *dsCoreLayout = "Top/Bottom";
+        var->value = dsCoreLayout;
+        return true;
+      }
+      if (std::string(var->key) == "desmume_screens_layout") {
+        // Same frontend-owned flip as above, but DeSmuME strcmp()s lowercase
+        // values ("top/bottom", see desmume_libretro.cpp) - "Top/Bottom" would
+        // match nothing and leave the layout undefined.
+        static const char *dsCoreLayout = "top/bottom";
         var->value = dsCoreLayout;
         return true;
       }
@@ -607,21 +625,16 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
         var->value = dsTouchMode;
         return true;
       }
-      // melonDS's ARM JIT keeps generated code in pages whose protection the
-      // core toggles at runtime. When the DS wireless path wedges (Mario Kart
-      // DS -> Multiplayer is the known trigger), the corruption lands in one
-      // of those pages: the next core call then dies with SEGV_ACCERR inside
-      // the core .so and takes the whole app with it (the 00:29 log: "CORE:
-      // executing reset on emulation thread", SIGSEGV 4 ms later, #01/#02 =
-      // melonds .so). Disabling the JIT removes that failure mode entirely;
-      // the interpreter is slower but far harder to wedge. Lemuroid never hits
-      // this because its DS core is DeSmuME, which has no recompiler at all.
-      if (std::string(var->key) == "melonds_jit_enable" ||
-          std::string(var->key) == "jit_enable") {
-        static const char *dsJitOff = "disabled";
-        var->value = dsJitOff;
+      // melonDS boots straight into the game when "Boot Game Directly" is
+      // enabled (its default); answering "disabled" here would drop the user
+      // at the DS firmware menu instead. There is no "melonds_boot_with_
+      // firmware" key - keep the real one at its default.
+      if (std::string(var->key) == "melonds_boot_directly") {
+        static const char *dsBootDirect = "enabled";
+        var->value = dsBootDirect;
         return true;
       }
+
       // Give the emulated DS a real identity. An empty frontend username can
       // leave the generated firmware header blank, and MKDS reads the WIFI
       // calibration plus the console nickname out of that header when it opens

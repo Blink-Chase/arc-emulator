@@ -215,6 +215,8 @@ bool LoadCore(const char *libPath) {
   }
   g_isDolphinCore.store(std::string(libPath).find("dolphin") != std::string::npos);
   g_isPcsx2Core.store(std::string(libPath).find("pcsx2") != std::string::npos);
+  g_isDsCore.store(std::string(libPath).find("melonds") != std::string::npos ||
+                   std::string(libPath).find("desmume") != std::string::npos);
 
   // Android invokes JNI_OnLoad automatically as part of dlopen. Calling it
   // again here double-initializes Dolphin and can crash during game startup.
@@ -298,6 +300,7 @@ void UnloadCore() {
   g_coreGameLoaded = false;
   g_isDolphinCore.store(false);
   g_isPcsx2Core.store(false);
+  g_isDsCore.store(false);
 
   if (g_vulkanInitialized) {
       deinitVulkan();
@@ -500,10 +503,7 @@ void EmuThreadFunc() {
         // its first retro_run before pause can be honored.
         if (g_isDolphinCore.load())
           g_isPaused.store(false);
-        // Dolphin's libretro controller setter is not safe during its
-        // asynchronous boot sequence. Its default port is already a
-        // standard controller, so leave it untouched for Dolphin.
-        if (core_set_controller_port_device && !g_isDolphinCore.load()) {
+        if (core_set_controller_port_device) {
           core_set_controller_port_device(0, (unsigned)g_pendingControllerType.load());
         }
         if (core_get_system_av_info) {
@@ -535,6 +535,7 @@ void EmuThreadFunc() {
         vulkanContextDestroy();
       } else if (eglInitialized && g_useHwRender) {
         LOGI("CORE: retiring EGL window surface after surface destruction");
+        std::lock_guard<std::recursive_mutex> lock(g_emuMutex);
         cleanupSurfaceEGL();
         eglInitialized = false;
       }
@@ -555,6 +556,7 @@ void EmuThreadFunc() {
       if (!vulkanContextActive() && !vulkanFailed())
         vulkanContextReset();
     } else if (g_useHwRender && !eglInitialized) {
+      std::lock_guard<std::recursive_mutex> lock(g_emuMutex);
       if (setupEGL()) {
         eglInitialized = true;
         LOGI("CORE: EGL ready after game load");
@@ -619,10 +621,18 @@ void EmuThreadFunc() {
           g_isDolphinCore.load() && core_set_controller_port_device) {
         // Dolphin's controller port must be configured after its asynchronous
         // boot. Doing this during retro_load_game races Dolphin's input setup.
-        const unsigned devType = static_cast<unsigned>(g_pendingControllerType.load());
-        core_set_controller_port_device(0, devType);
+        // Use the pending slot (set by setWiiControllerStyle / launchGame):
+        // Dolphin libretro Wiimote IDs are 513 (sideways), 769 (nunchuk),
+        // 1025 (classic) - NOT the generic JOYPAD=1. Only Wii games take a
+        // Wiimote ID; GameCube reuses the same slot with plain JOYPAD=1.
+        unsigned device = (unsigned)g_pendingControllerType.load();
+        if (!g_isWiiGame.load() && device >= 513)
+          device = RETRO_DEVICE_JOYPAD;
+        if (g_isWiiGame.load() && device < 513)
+          device = 769; // default Wii Remote + Nunchuk
+        core_set_controller_port_device(0, device);
         dolphinControllerConfigured = true;
-        LOGI("INPUT: Dolphin port 0 configured as device type %u", devType);
+        LOGI("INPUT: Dolphin port 0 configured as device %u", device);
       }
     }
     frameCount++;

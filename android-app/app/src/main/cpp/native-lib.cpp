@@ -74,12 +74,11 @@ Java_com_blinkchase_arc_MainActivity_setSystemDirectories(JNIEnv *env,
 
 JNIEXPORT jstring JNICALL Java_com_blinkchase_arc_MainActivity_loadCore(
     JNIEnv *env, jobject thiz, jstring corePath) {
-  // A core whose emulation thread is still stuck inside a previous call must
-  // never be dlopen()ed/re-armed: that thread owns the instance state.
   if (g_coreWedged.load()) {
-    LOGE("CORE: refusing LoadCore - a previous emulation session is wedged");
-    return env->NewStringUTF(
-        "The previous emulation session stopped responding. Restart Arc to play again.");
+    LOGW("CORE: previous emulation session was wedged - force resetting state");
+    g_coreWedged.store(false);
+    StopEmuThread(1000);
+    UnloadCore();
   }
   const char *path = env->GetStringUTFChars(corePath, 0);
   bool success = LoadCore(path);
@@ -90,14 +89,17 @@ JNIEXPORT jstring JNICALL Java_com_blinkchase_arc_MainActivity_loadCore(
 JNIEXPORT jboolean JNICALL Java_com_blinkchase_arc_MainActivity_nativeLoadGame(
     JNIEnv *env, jobject thiz, jstring romPath) {
   if (g_coreWedged.load()) {
-    LOGE("CORE: refusing to load a game - the previous session is wedged; "
-         "restart Arc");
-    return JNI_FALSE;
+    LOGW("CORE: forcing reset of wedged session on new game load");
+    g_coreWedged.store(false);
+    StopEmuThread(1000);
+    UnloadCore();
   }
   if (g_emuThreadActive.load() || g_isRunning.load()) {
     if (!StopEmuThread(4000)) {
-      LOGE("CORE: previous emulation thread will not stop - refusing to load");
-      return JNI_FALSE;
+      LOGW("CORE: previous emulation thread will not stop gracefully - force stopping");
+      g_isRunning.store(false);
+      g_emuThreadActive.store(false);
+      UnloadCore();
     }
   }
 
@@ -255,8 +257,33 @@ JNIEXPORT void JNICALL Java_com_blinkchase_arc_MainActivity_setControllerType(
   // Controller changes are consumed by the emulation thread after the core
   // has finished loading. Calling Dolphin from the UI thread during startup
   // races its initialization and can cause a native crash.
-  if (port == 0)
+  // Range doubles as the Wii/GameCube discriminator for the shared Dolphin
+  // slot: anything >= 513 is a Wii Remote style ID, plain JOYPAD(1) is GC.
+  if (port == 0) {
     g_pendingControllerType.store((int)type);
+    g_isWiiGame.store((int)type >= 513);
+  }
+}
+
+JNIEXPORT void JNICALL Java_com_blinkchase_arc_MainActivity_setWiiControllerStyle(
+    JNIEnv *env, jobject thiz, jint style) {
+  // Dolphin's libretro port has NO core options for the Wiimote type - the
+  // choice arrives as the `device` argument to retro_set_controller_port_
+  // device() (see dolphin_input.cpp):
+  //   RETRO_DEVICE_WIIMOTE    = 1 (RETRO_DEVICE_JOYPAD)
+  //   RETRO_DEVICE_WIIMOTE_SW = (2<<8)|JOYPAD = 513  (sideways)
+  //   RETRO_DEVICE_WIIMOTE_NC = (3<<8)|JOYPAD = 769  (wiimote + nunchuk)
+  //   RETRO_DEVICE_WIIMOTE_CC = (4<<8)|JOYPAD = 1025 (classic controller)
+  // Forward into the pending slot consumed by the emulation thread, which is
+  // the only thread allowed to call into the core. Also marks this session
+  // as a Wii game (see setControllerType).
+  int device = 769; // Wii Remote + Nunchuk
+  if (style == 1)
+    device = 1025; // Classic Controller
+  else if (style == 2)
+    device = 513; // Sideways Wiimote
+  g_pendingControllerType.store(device);
+  g_isWiiGame.store(true);
 }
 
 JNIEXPORT void JNICALL Java_com_blinkchase_arc_MainActivity_setAnalogInput(
