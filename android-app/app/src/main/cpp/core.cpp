@@ -154,6 +154,12 @@ bool LoadCore(const char *libPath) {
             std::string(libPath).find("desmume") != std::string::npos);
     g_isN64Core.store(std::string(libPath).find("mupen64plus") != std::string::npos ||
             std::string(libPath).find("parallel_n64") != std::string::npos);
+    g_isPs1Core.store(std::string(libPath).find("swanstation") != std::string::npos ||
+            std::string(libPath).find("duckstation") != std::string::npos ||
+            std::string(libPath).find("pcsx_rearmed") != std::string::npos);
+    // SwanStation is tracked separately: it is the one PS1 core that needs a
+    // DualShock announced on port 0, which is what makes it read input at all.
+    g_isSwanStationCore.store(std::string(libPath).find("swanstation") != std::string::npos);
 
     LOGI("Core opened successfully");
 
@@ -182,6 +188,18 @@ bool LoadCore(const char *libPath) {
     if (core_set_audio_sample_batch) core_set_audio_sample_batch(AudioSampleBatchCallback);
     if (core_set_input_poll) core_set_input_poll(InputPollCallback);
     if (core_set_input_state) core_set_input_state(InputStateCallback);
+
+    // DIAG: SwanStation was observed calling retro_input_poll every frame while
+    // never calling retro_input_state, which means it had no usable state
+    // callback. Log the resolved pointers so a failed dlsym is visible instead
+    // of silently leaving the core without input.
+    LOGI("INPUT_DIAG: callbacks poll=%p state=%p controller_port_device=%p",
+         (void *)core_set_input_poll, (void *)core_set_input_state,
+         (void *)core_set_controller_port_device);
+    if (!core_set_input_state)
+        LOGE("INPUT_DIAG: retro_set_input_state MISSING - core cannot read buttons");
+    if (!core_set_input_poll)
+        LOGE("INPUT_DIAG: retro_set_input_poll MISSING");
 
     LOGI("Core loaded: %s", libPath);
     return true;
@@ -231,6 +249,9 @@ void UnloadCore() {
     g_isPcsx2Core.store(false);
     g_isDsCore.store(false);
     g_isN64Core.store(false);
+    g_isPs1Core.store(false);
+    g_isSwanStationCore.store(false);
+    g_port0Device.store(RETRO_DEVICE_JOYPAD);
 
     if (g_vulkanInitialized) {
         deinitVulkan();
@@ -259,11 +280,12 @@ void EmuThreadFunc() {
     bool loggedFirstRun = false;
     bool dolphinStarted = false;
     bool dolphinControllerConfigured = false;
+    bool swanStationControllerConfigured = false;
     bool eglInitialized = false;
     bool gameLoaded = false;
 
     while (g_isRunning.load()) {
-        g_lastEmuHeartbeatMs.store(ArcNowMs());
+        g_lastEmuHeartbeatMs.load();
 
         // 1. ASYNC STATE HANDLING
         if (g_saveStateRequested.load()) {
@@ -382,6 +404,32 @@ void EmuThreadFunc() {
                 }
             }
 
+            // Pre-load controller assignment.
+            //
+            // ONLY SwanStation may be configured here, and that is load-bearing.
+            //
+            // SwanStation reads the port device during retro_load_game to decide
+            // whether to expose DualShock axes, so it has to be set beforehand.
+            // SwanStation also advertises DualShock as an ANALOG *subclass* (261)
+            // rather than the base RETRO_DEVICE_ANALOG type (5); with the base
+            // type it installs no PS1 controller at all and never calls our
+            // input-state callback.
+            //
+            // Every other core must NOT be touched before retro_load_game.
+            // Dolphin's retro_set_controller_port_device dereferences the emulated
+            // system, which does not exist yet at this point: calling it here
+            // crashes GameCube / Wii with SIGSEGV at fault address 0x18. The
+            // post-load block further down assigns Dolphin's device after the
+            // system exists, exactly as before.
+            if (core_set_controller_port_device && g_isSwanStationCore.load()) {
+                const unsigned deviceType =
+                        RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 0);
+                g_port0Device.store((int)deviceType);
+                core_set_controller_port_device(0, deviceType);
+                LOGI("INPUT: Set Port 0 to device type %u before retro_load_game "
+                     "(swanstation=1)", deviceType);
+            }
+
             LOGI("CORE: calling retro_load_game");
             g_coreGameLoaded = false;
             bool loaded = core_load_game && core_load_game(&game_info);
@@ -420,28 +468,42 @@ void EmuThreadFunc() {
                 if (g_isDolphinCore.load())
                     g_isPaused.store(false);
 
-                // PS1 Controller Type Auto-Detect (DualShock RETRO_DEVICE_ANALOG = 5)
-                const bool isPs1 = (g_romPath.find(".cue") != std::string::npos ||
-                        g_romPath.find(".chd") != std::string::npos ||
-                        g_romPath.find(".pbp") != std::string::npos ||
-                        g_romPath.find(".bin") != std::string::npos);
-
+                // Reassert the selected controller once content has loaded.
                 if (core_set_controller_port_device) {
-                    if (isPs1) {
-                        core_set_controller_port_device(0, 5 /* RETRO_DEVICE_ANALOG */);
-                        LOGI("INPUT: Set Port 0 to RETRO_DEVICE_ANALOG (5) for PS1");
+                    unsigned deviceType;
+                    if (g_isSwanStationCore.load()) {
+                        deviceType = RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 0);
                     } else {
-                        core_set_controller_port_device(0, (unsigned)g_pendingControllerType.load());
+                        deviceType = (unsigned)g_pendingControllerType.load();
+                        if (deviceType == 0) deviceType = RETRO_DEVICE_JOYPAD;
                     }
+                    g_port0Device.store((int)deviceType);
+                    core_set_controller_port_device(0, deviceType);
+                    LOGI("INPUT: Reinforced Port 0 to device type %u post retro_load_game", deviceType);
                 }
+
                 if (core_get_system_av_info) {
                     core_get_system_av_info(&g_avInfo);
                     if (g_avInfo.timing.fps > 0.0)
                         targetFrameMs = 1000.0 / g_avInfo.timing.fps;
+                    LOGI("INPUT_DIAG: av_info fps=%.4f sample_rate=%.1f size=%ux%u",
+                         g_avInfo.timing.fps, g_avInfo.timing.sample_rate,
+                         g_avInfo.geometry.base_width, g_avInfo.geometry.base_height);
                 }
             } else {
                 LOGE("CORE: retro_load_game failed");
                 g_isRunning.store(false);
+            }
+            // DIAG: SwanStation was observed to call retro_input_poll every frame
+            // while never calling retro_input_state or video_refresh, which means
+            // retro_run is being reached but the emulated system is not actually
+            // executing. Report what the core said about the BIOS/system so a
+            // silent boot failure is visible.
+            if (g_isSwanStationCore.load()) {
+                LOGI("INPUT_DIAG: swanstation boot report - systemDir='%s' "
+                     "hwRender=%d vulkan=%d avInfoValid=%d",
+                     g_systemDir.c_str(), g_useHwRender ? 1 : 0,
+                     g_useVulkan ? 1 : 0, g_avInfo.timing.fps > 0.0 ? 1 : 0);
             }
             g_gameLoadResult.store(gameLoaded);
             g_gameLoadComplete.store(true);
@@ -468,6 +530,17 @@ void EmuThreadFunc() {
 
         // 3. WINDOW & EGL SETUP FOR LATE-ATTACHED SURFACES
         if (!g_nativeWindow) {
+            // DIAG: the loop spins here forever when no SurfaceView is attached,
+            // which means retro_run() is never reached and the core never polls
+            // input - the exact "no buttons work" symptom. Log once, loudly.
+            static bool warnedNoWindow = false;
+            if (!warnedNoWindow) {
+                warnedNoWindow = true;
+                LOGE("INPUT_DIAG: STALLED - no native window attached; "
+                     "retro_run() is never called so the core never polls input "
+                     "(isSurfaceActive=%d gameLoaded=%d)",
+                     0, gameLoaded ? 1 : 0);
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds(16));
             lastFrameTime = std::chrono::steady_clock::now();
             continue;
@@ -529,8 +602,21 @@ void EmuThreadFunc() {
                     device = RETRO_DEVICE_JOYPAD;
                 if (g_isWiiGame.load() && device < 513)
                     device = 769;
+                g_port0Device.store((int)device);
                 core_set_controller_port_device(0, device);
                 dolphinControllerConfigured = true;
+            }
+            // Reassert the SwanStation DualShock subclass after the first frame
+            // in case the core recreates its controller while loading content.
+            if (dolphinStarted && !swanStationControllerConfigured &&
+                    g_isSwanStationCore.load() && core_set_controller_port_device) {
+                const unsigned deviceType =
+                        RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_ANALOG, 0);
+                g_port0Device.store(deviceType);
+                core_set_controller_port_device(0, deviceType);
+                swanStationControllerConfigured = true;
+                LOGI("INPUT: re-asserted Port 0 as SwanStation DualShock (%u)",
+                     deviceType);
             }
         }
         frameCount++;

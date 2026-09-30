@@ -165,19 +165,39 @@ object CoreManager {
                         if (downloadUrlString.endsWith(".zip", ignoreCase = true)) {
                             Log.d(TAG, "Extracting zip...")
                             val zipInput = ZipInputStream(tempFile.inputStream())
+                            // Prefer the entry whose name matches the .so we are about to
+                            // install. Taking the *first* .so in the archive silently
+                            // installs a helper library instead of the core when a
+                            // package ships more than one, which produces a file that
+                            // loads but behaves like the wrong core.
+                            val wantedEntryName = finalCoreFile.name
                             var entry = zipInput.nextEntry
                             var extracted = false
+                            var fallbackEntryName: String? = null
+                            val fallbackBuffer = java.io.ByteArrayOutputStream()
                             while (entry != null) {
                                 if (!entry.isDirectory && entry.name.endsWith(".so", ignoreCase = true)) {
-                                    FileOutputStream(finalCoreFile).use { fos ->
-                                        zipInput.copyTo(fos)
+                                    if (entry.name.substringAfterLast('/') == wantedEntryName) {
+                                        FileOutputStream(finalCoreFile).use { fos ->
+                                            zipInput.copyTo(fos)
+                                        }
+                                        Log.d(TAG, "Extracted '$wantedEntryName' from zip")
+                                        extracted = true
+                                        break
                                     }
-                                    extracted = true
-                                    break
+                                    if (fallbackEntryName == null) {
+                                        fallbackEntryName = entry.name
+                                        zipInput.copyTo(fallbackBuffer)
+                                    }
                                 }
                                 entry = zipInput.nextEntry
                             }
                             zipInput.close()
+                            if (!extracted && fallbackEntryName != null) {
+                                Log.w(TAG, "Exact entry '$wantedEntryName' not found, falling back to '$fallbackEntryName'")
+                                finalCoreFile.writeBytes(fallbackBuffer.toByteArray())
+                                extracted = true
+                            }
                             if (!extracted) {
                                 Log.w(TAG, "Exact naming not found, extracting first .so found...")
                                 val fallbackZipInput = ZipInputStream(tempFile.inputStream())

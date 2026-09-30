@@ -111,7 +111,10 @@ class MainActivity : ComponentActivity() {
             Platform.GBC to listOf("mgba_libretro_android", "gambatte_libretro_android", "mgba", "gambatte"),
             Platform.GENESIS to listOf("genesis_plus_gx_libretro_android", "picodrive_libretro_android", "genesis_plus_gx"),
             Platform.N64 to listOf("parallel_n64_libretro_android", "mupen64plus_next_gles3", "mupen64plus_next_gles2", "mupen64plus_next_libretro", "mupen64plus_next_libretro_android", "mupen64plus_next"),
-            Platform.PS1 to listOf("pcsx_rearmed_libretro_android", "swanstation_libretro_android", "pcsx_rearmed"),
+            // SwanStation first: it is the recommended PS1 core and needs a
+            // DualShock, which Arc announces on port 0. PCSX ReARMed stays as
+            // the fallback for devices where SwanStation will not run.
+            Platform.PS1 to listOf("swanstation_libretro_android", "pcsx_rearmed_libretro_android", "pcsx_rearmed", "swanstation"),
             Platform.GAMECUBE to listOf("dolphin_libretro_android", "dolphin"),
             Platform.WII to listOf("dolphin_libretro_android", "dolphin"),
             Platform.DS to listOf("desmume_libretro_android", "melonds_libretro_android"),

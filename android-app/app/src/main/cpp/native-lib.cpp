@@ -250,6 +250,14 @@ JNIEXPORT void JNICALL Java_com_blinkchase_arc_MainActivity_sendInput(
   else
     bits &= ~(1 << buttonId);
   g_joypadBits.store(bits);
+  // DIAG: proves the touch overlay actually reached the native layer. If these
+  // never appear, the problem is in the Compose UI (GameButton / findMainActivity)
+  // and not in the core or the input callback.
+  static int sendCount = 0;
+  if (sendCount < 40) {
+    sendCount++;
+    LOGI("INPUT_DIAG: sendInput id=%d value=%d bits=0x%04X", buttonId, value, bits);
+  }
 }
 
 JNIEXPORT void JNICALL Java_com_blinkchase_arc_MainActivity_setControllerType(

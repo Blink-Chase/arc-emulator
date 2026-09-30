@@ -77,6 +77,16 @@ extern std::atomic<bool> g_isDolphinCore;
 extern std::atomic<bool> g_isPcsx2Core;
 extern std::atomic<bool> g_isDsCore;
 extern std::atomic<bool> g_isN64Core;
+extern std::atomic<bool> g_isPs1Core;
+// True only for the SwanStation core. SwanStation needs a DualShock on port 0,
+// so the frontend has to answer analog queries and announce the port device as
+// RETRO_DEVICE_ANALOG before retro_load_game runs. Detected separately from
+// g_isPs1Core because PCSX ReARMed wants the plain joypad instead.
+extern std::atomic<bool> g_isSwanStationCore;
+// Device type most recently assigned to port 0 with
+// retro_set_controller_port_device. InputStateCallback consults this to tell an
+// analog-axis query apart from a digital-button query on the same device id.
+extern std::atomic<int> g_port0Device;
 extern std::atomic<int> g_pixelFormat;
 extern std::string g_dsScreenLayout;
 // True when the DS screens should be presented bottom-first ("Bottom/Top").

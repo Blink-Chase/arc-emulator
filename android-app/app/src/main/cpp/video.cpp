@@ -91,6 +91,9 @@ bool setupEGL() {
     if (!eglInitialize(g_eglDisplay, nullptr, nullptr))
         return false;
 
+    // CRITICAL: Force EGL to bind explicit OpenGLES API for Qualcomm/Adreno drivers
+    eglBindAPI(EGL_OPENGL_ES_API);
+
     bool useGLES3 = (g_hwRender.version_major >= 3) ||
             (g_hwRender.context_type == RETRO_HW_CONTEXT_OPENGLES3) ||
             (g_hwRender.context_type == RETRO_HW_CONTEXT_OPENGLES_VERSION);
@@ -188,7 +191,7 @@ void VideoRefreshCallback(const void *data, unsigned width, unsigned height, siz
     const uintptr_t dataVal = (uintptr_t)data;
     const bool isRawCpuPointer = (dataVal > 0x10000 && data != RETRO_HW_FRAME_BUFFER_VALID);
 
-    // 1. HARDWARE RENDER PATH (Mupen64Plus, Dolphin, PCSX2, SwanStation HW)
+    // 1. HARDWARE RENDER PATH
     if (g_useHwRender && !isRawCpuPointer) {
         std::lock_guard<std::mutex> lock(g_windowMutex);
 
@@ -239,7 +242,7 @@ void VideoRefreshCallback(const void *data, unsigned width, unsigned height, siz
                     glBindBuffer(GL_ARRAY_BUFFER, 0);
                     glBindTexture(GL_TEXTURE_2D, 0);
                 }
-                    // CASE B: Core rendered directly into native FBO
+                    // CASE B: Core rendered directly into native FBO (SwanStation / Dolphin / PCSX2)
                 else if (data == RETRO_HW_FRAME_BUFFER_VALID) {
                     GLint currentFbo = 0;
                     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &currentFbo);
@@ -270,11 +273,10 @@ void VideoRefreshCallback(const void *data, unsigned width, unsigned height, siz
         return;
     }
 
-    // 2. SOFTWARE FALLBACK PATH (Handles CPU pointers and tears down EGL surface locks)
+    // 2. SOFTWARE FALLBACK PATH
     if (!data)
         return;
 
-    // Release EGL surface binding before locking ANativeWindow to prevent BLAST Consumer conflicts
     if (g_eglDisplay != EGL_NO_DISPLAY && g_eglSurface != EGL_NO_SURFACE) {
         cleanupSurfaceEGL();
     }

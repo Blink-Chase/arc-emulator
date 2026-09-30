@@ -86,6 +86,28 @@ object GameLoader {
             }
             Log.d(TAG, "PCSX2 BIOS preflight passed: ${ps2Bios.absolutePath} (${ps2Bios.length()} bytes)")
         }
+
+        if (platform == Platform.PS1) {
+            // PS1 got no preflight at all, so a missing or misnamed BIOS used to
+            // fail silently: the core would return true from retro_load_game, the
+            // frontend would report a successful load, and the emulated system
+            // would never actually run (no video frames, no input polling, black
+            // screen). Surface the problem at load time instead.
+            val ps1BiosDir = File(storageDir, "system")
+            val found = listOf("scph5501.bin", "scph5500.bin", "scph5502.bin")
+                .map { File(ps1BiosDir, it) }
+                .filter { it.isFile && it.length() > 0L }
+            if (found.isEmpty()) {
+                return@withContext LoadResult(
+                    false,
+                    "No PlayStation 1 BIOS found in ${ps1BiosDir.absolutePath}. " +
+                        "Import scph5501.bin (or scph5500/scph5502) in BIOS Manager first."
+                )
+            }
+            Log.d(TAG, "PS1 BIOS preflight passed: ${found.joinToString { it.name }}")
+        }
+
+
         
         // Step 5: Prepare cores list
         val internalCoresDir = File(context.filesDir, "cores")
