@@ -1,50 +1,50 @@
 #include "input.h"
+#include "environment.h"
 
 void InputPollCallback() {
-  // Poll input if needed (Arc currently pulls from atomic vars)
+  // Poll input if needed (Arc pulls from atomic vars)
 }
 
 int16_t InputStateCallback(unsigned port, unsigned device, unsigned index,
-                           unsigned id) {
+        unsigned id) {
   if (port == 0) {
-    // Cores may pass a device subclass (for example a GameCube controller)
-    // rather than the base RetroPad value. Libretro requires the frontend to
-    // handle the base device type in that case.
     const unsigned baseDevice = device & RETRO_DEVICE_MASK;
-    if (baseDevice == RETRO_DEVICE_JOYPAD && index == 0) {
+
+    // 1. DIGITAL BUTTONS (Handles standard Joypad AND DualShock digital buttons)
+    if ((baseDevice == RETRO_DEVICE_JOYPAD || baseDevice == RETRO_DEVICE_ANALOG) && index == 0) {
       const uint16_t buttons = g_joypadBits.load();
       if (id == RETRO_DEVICE_ID_JOYPAD_MASK)
         return static_cast<int16_t>(buttons);
       if (id < 16)
         return (buttons & (static_cast<uint16_t>(1u) << id)) ? 1 : 0;
-      return 0;
     }
+
+    // 2. ANALOG STICKS (PS1 DualShock, PS2, N64)
     if (baseDevice == RETRO_DEVICE_ANALOG) {
       if (index == RETRO_DEVICE_INDEX_ANALOG_LEFT &&
-          id == RETRO_DEVICE_ID_ANALOG_X)
+              id == RETRO_DEVICE_ID_ANALOG_X)
         return g_analogX.load();
       if (index == RETRO_DEVICE_INDEX_ANALOG_LEFT &&
-          id == RETRO_DEVICE_ID_ANALOG_Y)
+              id == RETRO_DEVICE_ID_ANALOG_Y)
         return -g_analogY.load();
       if (index == RETRO_DEVICE_INDEX_ANALOG_RIGHT &&
-          id == RETRO_DEVICE_ID_ANALOG_X)
+              id == RETRO_DEVICE_ID_ANALOG_X)
         return g_analogRightX.load();
       if (index == RETRO_DEVICE_INDEX_ANALOG_RIGHT &&
-          id == RETRO_DEVICE_ID_ANALOG_Y)
+              id == RETRO_DEVICE_ID_ANALOG_Y)
         return -g_analogRightY.load();
+      return 0;
     }
-    // Touch screens (Nintendo DS and friends).
+
+    // 3. TOUCH / POINTER (STRICTLY GUARDED FOR DS & DOLPHIN ONLY)
     if (baseDevice == RETRO_DEVICE_POINTER) {
+      if (!g_isDsCore.load() && !g_isDolphinCore.load()) {
+        return 0; // BLOCK pointer queries for PS1, PS2, N64!
+      }
+
       const bool pressed = g_touchPressed.load();
-      // X/Y are absolute and span the whole video frame in [-32768, 32767].
-      // The core maps them onto its own screen layout and decides which part of
-      // the frame is the touch screen, so no half-screen preselection happens
-      // here (that broke swapped layouts and hybrid layouts entirely).
       if (id == RETRO_DEVICE_ID_POINTER_COUNT)
         return pressed ? 1 : 0;
-      // The pointer is only ever "offscreen" when it is not being touched.
-      // id 15 is POINTER_IS_OFFSCREEN, but cores may also probe it via the
-      // generic `index` slot, so handle both spellings.
       if (id == RETRO_DEVICE_ID_POINTER_IS_OFFSCREEN || index == 15)
         return pressed ? 0 : 1;
       if (index == 0) {
@@ -57,13 +57,10 @@ int16_t InputStateCallback(unsigned port, unsigned device, unsigned index,
       }
       return 0;
     }
-    // Mouse. RETRO_DEVICE_ID_MOUSE_X/Y are *relative* movements since the last
-    // poll, not positions: aliasing the absolute touch surface onto them threw
-    // any core running a mouse-driven touch mode (melonDS defaults its touch
-    // mode to "Mouse") at the screen edges on every tap. Arc has no real mouse,
-    // so report no movement at all; only the button state is meaningful.
+
+    // 4. MOUSE (DS ONLY)
     if (baseDevice == RETRO_DEVICE_MOUSE && index == 0) {
-      if (id == RETRO_DEVICE_ID_MOUSE_LEFT)
+      if (g_isDsCore.load() && id == RETRO_DEVICE_ID_MOUSE_LEFT)
         return g_touchPressed.load() ? 1 : 0;
       return 0;
     }
@@ -72,7 +69,6 @@ int16_t InputStateCallback(unsigned port, unsigned device, unsigned index,
 }
 
 bool set_rumble_state(unsigned port, enum retro_rumble_effect effect,
-                      uint16_t strength) {
-  // Implementation for rumble if hardware supports it
+        uint16_t strength) {
   return true;
 }

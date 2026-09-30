@@ -36,6 +36,7 @@ find_library(
 find_library(android-lib android)
 find_library(egl-lib EGL)
 find_library(glesv2-lib GLESv2)
+find_library(glesv3-lib GLESv3)
 find_library(vulkan-lib vulkan)
 
 target_link_libraries(
@@ -44,4 +45,5 @@ target_link_libraries(
         ${android-lib}
         ${egl-lib}
         ${glesv2-lib}
+        ${glesv3-lib}
         ${vulkan-lib})

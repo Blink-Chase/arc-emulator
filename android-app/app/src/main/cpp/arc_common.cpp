@@ -40,6 +40,7 @@ std::atomic<bool> g_isWiiGame{false};
 std::atomic<bool> g_isDolphinCore{false};
 std::atomic<bool> g_isPcsx2Core{false};
 std::atomic<bool> g_isDsCore{false};
+std::atomic<bool> g_isN64Core{false};
 std::atomic<int> g_pixelFormat{RETRO_PIXEL_FORMAT_RGB565};
 std::string g_dsScreenLayout = "";
 std::atomic<bool> g_dsSwapScreens{false};

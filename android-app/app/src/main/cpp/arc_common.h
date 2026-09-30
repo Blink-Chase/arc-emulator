@@ -76,6 +76,7 @@ extern std::atomic<bool> g_isWiiGame;
 extern std::atomic<bool> g_isDolphinCore;
 extern std::atomic<bool> g_isPcsx2Core;
 extern std::atomic<bool> g_isDsCore;
+extern std::atomic<bool> g_isN64Core;
 extern std::atomic<int> g_pixelFormat;
 extern std::string g_dsScreenLayout;
 // True when the DS screens should be presented bottom-first ("Bottom/Top").
