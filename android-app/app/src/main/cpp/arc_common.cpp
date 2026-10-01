@@ -18,11 +18,23 @@ struct retro_hw_render_callback g_hwRender;
 EGLDisplay g_eglDisplay = EGL_NO_DISPLAY;
 EGLContext g_eglContext = EGL_NO_CONTEXT;
 EGLSurface g_eglSurface = EGL_NO_SURFACE;
+// True when the most recent setupEGL() call created a brand new GL context.
+//
+// Only then may context_reset be signalled to the core. A rotation rebuilds
+// just the EGL *window surface* on the existing context, and telling a core its
+// context was reset when it was not makes it tear down and recreate GPU
+// objects that are still live - Dolphin rebuilds its EFB, shader cache and
+// texture cache on top of valid state, which corrupts rendering.
+bool g_eglContextCreated = false;
 ANativeWindow *g_nativeWindow = nullptr;
 
 int32_t g_prevWidth = 0;
 int32_t g_prevHeight = 0;
 int32_t g_prevFormat = 0;
+int32_t g_surfaceWidth = 0;
+int32_t g_surfaceHeight = 0;
+std::atomic<bool> g_surfaceResizePending{false};
+std::atomic<int64_t> g_surfaceResizeAtMs{0};
 
 std::atomic<bool> g_isRunning{false};
 std::atomic<bool> g_isPaused{false};

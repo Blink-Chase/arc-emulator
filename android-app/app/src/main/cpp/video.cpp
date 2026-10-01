@@ -68,10 +68,16 @@ void InitBlitter() {
 
 bool setupEGL() {
     std::unique_lock<std::mutex> lock(g_windowMutex);
+    // Assume no context was created; only the full path below may set this.
+    g_eglContextCreated = false;
     if (!g_nativeWindow)
         return false;
 
     if (g_eglDisplay != EGL_NO_DISPLAY && g_eglContext != EGL_NO_CONTEXT) {
+        // An existing context is reused: only the window surface is rebuilt
+        // (this is the rotation path). g_eglContextCreated stays false so the
+        // caller does not signal context_reset for a context that never went
+        // away.
         if (g_eglSurface == EGL_NO_SURFACE) {
             g_eglSurface = eglCreateWindowSurface(g_eglDisplay, g_eglConfig, g_nativeWindow, nullptr);
             if (g_eglSurface == EGL_NO_SURFACE)
@@ -79,7 +85,7 @@ bool setupEGL() {
             if (!eglMakeCurrent(g_eglDisplay, g_eglSurface, g_eglSurface, g_eglContext))
                 return false;
             eglSwapInterval(g_eglDisplay, 0);
-            LOGI("EGL window surface recreated");
+            LOGI("EGL window surface recreated on existing GL context");
         }
         return true;
     }
@@ -150,6 +156,9 @@ bool setupEGL() {
         InitBlitter();
     }
 
+    // A brand new context exists, so the core must be told to (re)create its
+    // GPU resources.
+    g_eglContextCreated = true;
     return true;
 }
 

@@ -419,6 +419,11 @@ Java_com_blinkchase_arc_MainActivity_nativeOnSurfaceCreated(JNIEnv *env,
     g_prevWidth = 0;
     g_prevHeight = 0;
     g_prevFormat = 0;
+    // A brand new native window invalidates any EGL surface still bound to the
+    // previous one, and its size is unknown until surfaceChanged reports it.
+    g_surfaceWidth = 0;
+    g_surfaceHeight = 0;
+    g_surfaceInvalidated.store(true);
     LOGI("Surface created: %p", g_nativeWindow);
   }
 }
@@ -448,8 +453,37 @@ Java_com_blinkchase_arc_MainActivity_nativeOnSurfaceChanged(JNIEnv *env,
                                                               jint height) {
   std::lock_guard<std::mutex> lock(g_windowMutex);
   if (g_nativeWindow) {
-      g_prevWidth = 0; // Force geometry re-measurement in VideoRefreshCallback
-      LOGI("Surface changed: %dx%d", width, height);
+    // An EGL window surface is sized once, when it is created, and does not
+    // track the native window afterwards, so a rotation leaves a stale surface
+    // behind and the core's frames end up stretched.
+    //
+    // A rotation is not a single callback though: Compose re-lays-out the
+    // SurfaceView several times with different intermediate sizes, and rebuilding
+    // the GL context on each of those left Dolphin with no usable context
+    // ("GPU: OGL ERROR: Need OpenGL version 3"). So this only records that a
+    // resize is pending; the emulation thread waits for the size to settle
+    // (g_surfaceResizeSettleMs) before tearing anything down, so one rotation
+    // produces at most one rebuild.
+    // Only a change from an ALREADY-KNOWN size counts as a resize.
+    //
+    // The first surfaceChanged for a surface just establishes its size, and
+    // treating that as a resize rebuilt the EGL surface 300ms into Dolphin's
+    // startup, right after context_reset, which left it with no usable GL
+    // context ("GPU: OGL ERROR: Need OpenGL version 3") and a black screen on
+    // every launch. A genuine rotation reports a different size after a size
+    // has already been established, and that is the case worth rebuilding for.
+    const bool hadKnownSize = (g_surfaceWidth > 0 && g_surfaceHeight > 0);
+    if (hadKnownSize && (width != g_surfaceWidth || height != g_surfaceHeight)) {
+      LOGI("Surface resized %dx%d -> %dx%d; rebuild pending once settled",
+           g_surfaceWidth, g_surfaceHeight, width, height);
+      g_prevWidth = 0; // force geometry re-measurement in VideoRefreshCallback
+      g_prevHeight = 0;
+      g_surfaceResizeAtMs.store(ArcNowMs());
+      g_surfaceResizePending.store(true);
+    }
+    // Track the size either way so the next real change can be recognised.
+    g_surfaceWidth = width;
+    g_surfaceHeight = height;
   }
 }
 

@@ -54,11 +54,36 @@ extern struct retro_hw_render_callback g_hwRender;
 extern EGLDisplay g_eglDisplay;
 extern EGLContext g_eglContext;
 extern EGLSurface g_eglSurface;
+// True when the most recent setupEGL() call created a brand new GL context, as
+// opposed to rebuilding only the EGL window surface on an existing one.
+// Libretro's context_reset contract only applies in the former case.
+extern bool g_eglContextCreated;
 extern ANativeWindow *g_nativeWindow;
 
 extern int32_t g_prevWidth;
 extern int32_t g_prevHeight;
 extern int32_t g_prevFormat;
+// Size the current native window was last created/changed with. An EGL window
+// surface takes its dimensions at eglCreateWindowSurface time and does not
+// follow the window afterwards, so a surface resize (a device rotation, for
+// example) has to retire and rebuild that surface or the core's frames are
+// stretched into the stale size. Tracked here so nativeOnSurfaceChanged can
+// tell a real resize from a redundant callback.
+extern int32_t g_surfaceWidth;
+extern int32_t g_surfaceHeight;
+// True when a resize has been observed but has not yet been acted on. The
+// emulation thread only rebuilds the EGL surface once this has stayed set for
+// g_surfaceResizeSettleMs, because a rotation makes Compose re-lay-out the
+// SurfaceView several times with different intermediate sizes. Rebuilding on
+// every one of those tore down the GL context repeatedly and left Dolphin
+// without a usable context ("GPU: OGL ERROR: Need OpenGL version 3").
+extern std::atomic<bool> g_surfaceResizePending;
+// ArcNowMs() of the most recent resize observation.
+extern std::atomic<int64_t> g_surfaceResizeAtMs;
+// How long the size must stay unchanged before the surface is rebuilt.
+// constexpr (not extern) so each translation unit gets its own copy; an extern
+// constexpr would emit a duplicate symbol in every object file at link time.
+constexpr int64_t g_surfaceResizeSettleMs = 300;
 
 extern std::atomic<bool> g_isRunning;
 extern std::atomic<bool> g_isPaused;

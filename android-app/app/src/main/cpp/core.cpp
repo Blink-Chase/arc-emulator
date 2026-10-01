@@ -516,12 +516,25 @@ void EmuThreadFunc() {
             continue;
         }
 
-        if (g_surfaceInvalidated.exchange(false)) {
+        // A surface resize is rebuilt only once the size has stopped changing.
+        // Compose reports several intermediate sizes during a rotation; acting on
+        // each one tore the GL context down repeatedly and left Dolphin without a
+        // usable one. g_surfaceInvalidated (real surface destruction) is still
+        // handled immediately, since the window really is gone in that case.
+        bool resizeSettled = false;
+        if (g_surfaceResizePending.load()) {
+            if (ArcNowMs() - g_surfaceResizeAtMs.load() >= g_surfaceResizeSettleMs) {
+                g_surfaceResizePending.store(false);
+                resizeSettled = true;
+            }
+        }
+
+        if (g_surfaceInvalidated.exchange(false) || resizeSettled) {
             if (g_useVulkan) {
                 LOGI("CORE: surface destroyed - tearing down Vulkan");
                 vulkanContextDestroy();
             } else if (eglInitialized && g_useHwRender) {
-                LOGI("CORE: retiring EGL window surface after surface destruction");
+                LOGI("CORE: retiring EGL window surface after surface change");
                 std::lock_guard<std::recursive_mutex> lock(g_emuMutex);
                 cleanupSurfaceEGL();
                 eglInitialized = false;
@@ -554,11 +567,19 @@ void EmuThreadFunc() {
             if (setupEGL()) {
                 eglInitialized = true;
                 LOGI("CORE: EGL ready after late surface bind");
-                if (g_hwRender.context_reset) {
+                // Only signal context_reset when setupEGL actually created a new
+                // GL context. A rotation rebuilds just the window surface on the
+                // existing context; signalling a reset there made Dolphin
+                // recreate GPU objects that were still live, which is what
+                // corrupted 3D rendering after rotating the device.
+                if (g_hwRender.context_reset && g_eglContextCreated) {
                     LOGI("VIDEO: Executing context_reset on late EGL setup");
                     InvokeGuardedCoreCall(5, [&]() {
                         g_hwRender.context_reset();
                     });
+                } else if (g_hwRender.context_reset) {
+                    LOGI("VIDEO: window surface rebuilt on the existing GL context "
+                         "- context_reset not signalled");
                 }
             } else {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
