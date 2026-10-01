@@ -1,6 +1,7 @@
 package com.blinkchase.arc
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.view.MotionEvent
@@ -32,6 +33,8 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -251,6 +254,11 @@ fun GameScreen(
     // IMMEDIATE log when GameScreen composes (Grouped)
     Utils.Logger.e("GameScreen", "=== GameScreen composing for: $gamePath ===")
 
+    val isExperimentalPlatform = platform == Platform.PS2 || platform == Platform.N64 || platform == Platform.GAMECUBE || platform == Platform.WII
+    val dontAskKey = "dont_show_experimental_${platform.name}"
+    var showExperimentalDialog by remember { mutableStateOf(false) }
+    var dontAskChecked by remember { mutableStateOf(false) }
+
     // Reset loading state ONLY when the game path is actually different from the last LOADED game
     var lastLoadedPath by rememberSaveable { mutableStateOf("") }
     var surfaceKey by remember { mutableIntStateOf(0) }
@@ -263,11 +271,16 @@ fun GameScreen(
             isGameLoaded = false
             loadAttempted = false
             loadError = null
+
+            if (isExperimentalPlatform && !prefs.getBoolean(dontAskKey, false)) {
+                showExperimentalDialog = true
+            }
         }
     }
 
     // Function to start loading - called from Surface callback
     fun startGameLoading() {
+        if (showExperimentalDialog) return
         if (!isGameLoaded && !loadAttempted && gamePath.isNotEmpty()) {
             android.util.Log.e("GameScreen", "Starting game load for: $gamePath")
             loadAttempted = true
@@ -380,7 +393,7 @@ fun GameScreen(
         // Loading overlay
         if (!isGameLoaded) {
             Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.9f)), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
                     if (loadError != null) {
                         Icon(Icons.Default.Warning, "Error", tint = Color.Red, modifier = Modifier.size(48.dp))
                         Spacer(Modifier.height(16.dp))
@@ -392,6 +405,37 @@ fun GameScreen(
                     }
                 }
             }
+        }
+
+        if (showExperimentalDialog) {
+            AlertDialog(
+                onDismissRequest = {},
+                title = { Text("Experimental Core Notice") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("This core is experimental. It's likely that games will have audio, visual glitches and could have bad performance. If you experience anything, just create an issue in my GitHub.")
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable { dontAskChecked = !dontAskChecked }.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Checkbox(checked = dontAskChecked, onCheckedChange = { dontAskChecked = it })
+                            Text("Don't ask me again for this core/platform", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        if (dontAskChecked) {
+                            prefs.edit { putBoolean(dontAskKey, true) }
+                        }
+                        showExperimentalDialog = false
+                        startGameLoading()
+                    }) {
+                        Text("Continue")
+                    }
+                }
+            )
         }
 
         if (isGameLoaded && showFpsCounter) { FpsSpeedOverlay(fps, speed, Modifier.align(Alignment.TopStart).padding(12.dp)) }
@@ -633,6 +677,20 @@ private fun GameViewSurface(
     var debugNy by remember { mutableStateOf(0) }
     var debugPressed by remember { mutableStateOf(false) }
     var debugInfo by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE) }
+    var dsCursorDebug by remember { mutableStateOf(prefs.getBoolean(MainActivity.KEY_DS_CURSOR_DEBUG, false)) }
+    DisposableEffect(prefs) {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { sharedPreferences, key ->
+            if (key == MainActivity.KEY_DS_CURSOR_DEBUG) {
+                dsCursorDebug = sharedPreferences.getBoolean(key, false)
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose {
+            prefs.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+    }
 
     key(surfaceKey) {
         Box(
@@ -722,7 +780,7 @@ private fun GameViewSurface(
                 modifier = Modifier.fillMaxSize()
             )
 
-            if (platform == Platform.DS) {
+            if (platform == Platform.DS && dsCursorDebug) {
                 if (debugPressed) {
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         drawCircle(

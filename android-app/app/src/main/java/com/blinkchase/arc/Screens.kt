@@ -41,6 +41,7 @@ import coil.compose.AsyncImage
 import com.blinkchase.arc.db.GameDao
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.math.roundToInt
 
@@ -598,6 +599,9 @@ fun SettingsScreen(
     var showDiagnostics by remember { mutableStateOf(false) }
     var showWipeConfirm by remember { mutableStateOf(false) }
     var showResetConfirm by remember { mutableStateOf(false) }
+    var touchDebug by remember { mutableStateOf(prefs.getBoolean(MainActivity.KEY_TOUCH_DEBUG, false)) }
+    var perfTests by remember { mutableStateOf(prefs.getBoolean(MainActivity.KEY_PERF_TESTS, false)) }
+    var dsCursorDebug by remember { mutableStateOf(prefs.getBoolean(MainActivity.KEY_DS_CURSOR_DEBUG, false)) }
     val context = LocalContext.current
     val installedCores = remember(refreshKey) { Utils.scanInstalledCores(context) }
     val internalCoresDir = remember { File(context.filesDir, "cores").also { it.mkdirs() } }
@@ -839,6 +843,35 @@ fun SettingsScreen(
                         Toast.makeText(context, "Scraped $count covers!", Toast.LENGTH_SHORT).show()
                     }
                 }) { Text("Start") } }
+            }
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), thickness = 0.5.dp, color = Color.Gray.copy(alpha = 0.3f))
+            SettingsCategory("DEBUG & DIAGNOSTICS", Icons.Default.BugReport)
+            SettingsItem(title = "Touch Debug & Visualizer", subtitle = "Visualize touch pointer events and coordinates") {
+                Switch(
+                    checked = touchDebug,
+                    onCheckedChange = {
+                        touchDebug = it
+                        prefs.edit { putBoolean(MainActivity.KEY_TOUCH_DEBUG, it) }
+                    }
+                )
+            }
+            SettingsItem(title = "Super High Level Performance Tests", subtitle = "Enable advanced telemetry & profiling metrics") {
+                Switch(
+                    checked = perfTests,
+                    onCheckedChange = {
+                        perfTests = it
+                        prefs.edit { putBoolean(MainActivity.KEY_PERF_TESTS, it) }
+                    }
+                )
+            }
+            SettingsItem(title = "Touch Debug & Cursor for DS", subtitle = "Show stylus touch pointer & crosshair cursor for DS (Disabled by default)") {
+                Switch(
+                    checked = dsCursorDebug,
+                    onCheckedChange = {
+                        dsCursorDebug = it
+                        prefs.edit { putBoolean(MainActivity.KEY_DS_CURSOR_DEBUG, it) }
+                    }
+                )
             }
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), thickness = 0.5.dp, color = Color.Gray.copy(alpha = 0.3f))
             SettingsCategory("SYSTEM", Icons.Default.Dns)
@@ -1360,30 +1393,143 @@ fun SetupGuideScreen(
             Text(text = if (isAdvanced) "Advanced Setup" else "Simple Setup", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             when (step) {
                 1 -> {
-                    Text("Step 1: Core Selection", style = MaterialTheme.typography.titleLarge)
-                    Text("Import Libretro cores (.so files). Arc manages these files internally once imported. You can find official nightly cores at buildbot.libretro.com/nightly/android/", textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium)
+                    Text("Step 1: Add Your Games", style = MaterialTheme.typography.titleLarge)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Select where your ROMs/games are stored so Arc can detect your consoles.", textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium)
                     Spacer(modifier = Modifier.height(24.dp))
-                    Button(onClick = { coreImporter.launch(arrayOf("*/*")) }, modifier = Modifier.fillMaxWidth()) { Text("Import Core Files") }
+                    Button(onClick = { pathLauncher.launch(null) }, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.FolderOpen, null, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(if (customPaths.isNotEmpty()) "ROM Folder Added (${customPaths.size})" else "Select ROM Folder")
+                    }
+                    if (gameList.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Detected ${gameList.size} games across ${gameList.map { it.platform }.distinct().size} platforms!", color = Color.Green, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                    }
                 }
                 2 -> {
                     Text("Step 2: BIOS Files", style = MaterialTheme.typography.titleLarge)
-                    Text("Some consoles require BIOS files. Place them in /Documents/Arc/system/", textAlign = TextAlign.Center)
-                    Spacer(modifier = Modifier.height(24.dp)); Button(onClick = onImportBios, modifier = Modifier.fillMaxWidth()) { Text("Open BIOS Manager") }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Some consoles (PS1, PS2, Saturn) require system BIOS files. Place them in /Documents/Arc/system/", textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium)
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Button(onClick = onImportBios, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Dns, null, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Open BIOS Manager")
+                    }
                 }
                 3 -> {
-                    Text("Step 3: Add Your Games", style = MaterialTheme.typography.titleLarge)
-                    Text("Select where your ROMs are stored.", textAlign = TextAlign.Center)
-                    Spacer(modifier = Modifier.height(24.dp)); Button(onClick = { pathLauncher.launch(null) }, modifier = Modifier.fillMaxWidth()) { Text("Select ROM Folder") }
+                    val scope = rememberCoroutineScope()
+                    var isDownloadingCores by remember { mutableStateOf(false) }
+                    var downloadStatusText by remember { mutableStateOf("") }
+
+                    Text("Step 3: Core Downloader", style = MaterialTheme.typography.titleLarge)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Download emulator cores automatically based on your added games, or install recommended cores.", textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium)
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    if (isDownloadingCores) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                            CircularProgressIndicator()
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(downloadStatusText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                        }
+                    } else {
+                        Button(
+                            onClick = {
+                                scope.launch(Dispatchers.IO) {
+                                    isDownloadingCores = true
+                                    downloadStatusText = "Analyzing detected games..."
+                                    try {
+                                        val items = CoreManager.fetchManifest()
+                                        val detectedPlatforms = gameList.map { it.platform }.toSet()
+                                        val matchingCores = if (detectedPlatforms.isNotEmpty()) {
+                                            items.filter { core -> detectedPlatforms.any { platform -> core.platform.equals(platform.name, ignoreCase = true) } }
+                                        } else {
+                                            items.filter { it.isRecommended }
+                                        }
+                                        var count = 0
+                                        matchingCores.forEach { core ->
+                                            downloadStatusText = "Installing ${core.displayName}..."
+                                            if (CoreManager.downloadAndInstallCore(context, core)) {
+                                                count++
+                                            }
+                                        }
+                                        withContext(Dispatchers.Main) {
+                                            Toast.makeText(context, "Successfully installed $count cores based on your games!", Toast.LENGTH_LONG).show()
+                                        }
+                                    } catch (e: Exception) {
+                                        withContext(Dispatchers.Main) {
+                                            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                                        }
+                                    } finally {
+                                        isDownloadingCores = false
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)
+                        ) {
+                            Icon(Icons.Default.SportsEsports, null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Download Cores for Detected Games")
+                        }
+
+                        Button(
+                            onClick = {
+                                scope.launch(Dispatchers.IO) {
+                                    isDownloadingCores = true
+                                    downloadStatusText = "Fetching core manifest..."
+                                    try {
+                                        val items = CoreManager.fetchManifest()
+                                        val recommended = items.filter { it.isRecommended }
+                                        var count = 0
+                                        recommended.forEach { core ->
+                                            downloadStatusText = "Installing ${core.displayName}..."
+                                            if (CoreManager.downloadAndInstallCore(context, core)) {
+                                                count++
+                                            }
+                                        }
+                                        withContext(Dispatchers.Main) {
+                                            Toast.makeText(context, "Successfully installed $count recommended cores!", Toast.LENGTH_LONG).show()
+                                        }
+                                    } catch (e: Exception) {
+                                        withContext(Dispatchers.Main) {
+                                            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                                        }
+                                    } finally {
+                                        isDownloadingCores = false
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        ) {
+                            Icon(Icons.Default.Download, null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Install All Recommended Cores")
+                        }
+
+                        OutlinedButton(
+                            onClick = { coreImporter.launch(arrayOf("*/*")) },
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        ) {
+                            Icon(Icons.Default.FolderOpen, null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Import Core Files Manually (.so)")
+                        }
+                    }
                 }
                 4 -> {
                     val total = gameList.size
                     val scraped = gameList.count { it.coverUrl != null }
-                    Text("Prepare Your Library", style = MaterialTheme.typography.titleLarge)
+                    Text("Ready to Play!", style = MaterialTheme.typography.titleLarge)
                     Spacer(modifier = Modifier.height(32.dp))
                     if (isScanning || (total > 0 && scraped < total)) {
                         CircularProgressIndicator(); Spacer(modifier = Modifier.height(16.dp)); Text(if (isScanning) "Scanning..." else "Scraping Art...")
                     } else if (total > 0) {
-                        Icon(Icons.Default.CheckCircle, null, tint = Color.Green, modifier = Modifier.size(48.dp)); Text("All Set!", modifier = Modifier.padding(top = 8.dp))
+                        Icon(Icons.Default.CheckCircle, null, tint = Color.Green, modifier = Modifier.size(48.dp)); Text("All Set! $total games loaded.", modifier = Modifier.padding(top = 8.dp), fontWeight = FontWeight.Bold)
+                    } else {
+                        Text("No games added yet, but you can add them anytime from the library.", textAlign = TextAlign.Center, color = Color.Gray)
                     }
                     Spacer(modifier = Modifier.height(24.dp))
                     Button(onClick = {
@@ -1392,7 +1538,7 @@ fun SetupGuideScreen(
                             putBoolean(MainActivity.KEY_TOUR_COMPLETE, isAdvanced)
                         }
                         onFinish()
-                    }, modifier = Modifier.fillMaxWidth()) { Text("Finish & Ready to Play!") }
+                    }, modifier = Modifier.fillMaxWidth()) { Text("Finish & Start Playing!") }
                 }
             }
             Spacer(modifier = Modifier.weight(1f))

@@ -177,6 +177,23 @@ object ArcInputMap {
                 MainActivity.BTN_RIGHT -> "Right"
                 else -> "Button $libretroBtnId"
             }
+            ControllerModel.SATURN -> when (libretroBtnId) {
+                MainActivity.BTN_A -> "A"
+                MainActivity.BTN_B -> "B"
+                MainActivity.BTN_X -> "X"
+                MainActivity.BTN_Y -> "Y"
+                MainActivity.BTN_L2 -> "Z"
+                MainActivity.BTN_R2 -> "C"
+                MainActivity.BTN_L -> "L"
+                MainActivity.BTN_R -> "R"
+                MainActivity.BTN_START -> "Start"
+                MainActivity.BTN_SELECT -> "Mode"
+                MainActivity.BTN_UP -> "Up"
+                MainActivity.BTN_DOWN -> "Down"
+                MainActivity.BTN_LEFT -> "Left"
+                MainActivity.BTN_RIGHT -> "Right"
+                else -> "Button $libretroBtnId"
+            }
         }
     }
 }

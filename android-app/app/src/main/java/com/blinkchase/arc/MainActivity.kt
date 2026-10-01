@@ -93,6 +93,9 @@ class MainActivity : ComponentActivity() {
         const val KEY_PS2_VULKAN = "ps2_vulkan_renderer"
         const val KEY_GC_CONTROLLER_STYLE = "gc_controller_style"
         const val KEY_WII_CONTROLLER_STYLE = "wii_controller_style"
+        const val KEY_TOUCH_DEBUG = "debug_touch_enabled"
+        const val KEY_PERF_TESTS = "debug_perf_tests_enabled"
+        const val KEY_DS_CURSOR_DEBUG = "debug_ds_cursor_enabled"
         const val BTN_B = 0; const val BTN_Y = 1; const val BTN_SELECT = 2; const val BTN_START = 3
         const val BTN_UP = 4; const val BTN_DOWN = 5; const val BTN_LEFT = 6; const val BTN_RIGHT = 7
         const val BTN_A = 8; const val BTN_X = 9; const val BTN_L = 10; const val BTN_R = 11
@@ -1363,7 +1366,31 @@ class MainActivity : ComponentActivity() {
                                 modifier = Modifier.align(Alignment.TopCenter).padding(top = 80.dp)
                             )
                             4 -> GuidedTourTooltip(
-                                text = "Finally, use Settings to customize your experience and manage cores.",
+                                text = "This is Settings. Customize your experience, check diagnostics, and configure control styles here.",
+                                onNext = { 
+                                    tourStep = 5
+                                    navController.navigate(Screen.CORE_MANAGEMENT.name)
+                                },
+                                onSkip = { 
+                                    tourStep = 0
+                                    prefs.edit { putBoolean(KEY_TOUR_COMPLETE, true) }
+                                },
+                                modifier = Modifier.align(Alignment.Center)
+                            )
+                            5 -> GuidedTourTooltip(
+                                text = "Welcome to the Core Downloader! Download or update online emulator cores for your games here. Once installed, Arc auto-assigns them so you can just tap and play!",
+                                onNext = { 
+                                    tourStep = 6
+                                    navController.navigate(Screen.SETTINGS.name)
+                                },
+                                onSkip = { 
+                                    tourStep = 0
+                                    prefs.edit { putBoolean(KEY_TOUR_COMPLETE, true) }
+                                },
+                                modifier = Modifier.align(Alignment.Center)
+                            )
+                            6 -> GuidedTourTooltip(
+                                text = "If you ever need to view this tour or setup guide again, you can click on 'Relaunch Setup Guide' right here in the Settings menu!",
                                 isLast = true,
                                 onNext = { 
                                     tourStep = 0
@@ -1374,7 +1401,7 @@ class MainActivity : ComponentActivity() {
                                     tourStep = 0
                                     prefs.edit { putBoolean(KEY_TOUR_COMPLETE, true) }
                                 },
-                                modifier = Modifier.align(Alignment.Center)
+                                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp)
                             )
                         }
                     }

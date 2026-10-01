@@ -49,7 +49,8 @@ enum class ControllerModel {
     PLAYSTATION,    // Cross, Circle, Square, Triangle
     N64,            // N64 layout (A, B, C-Buttons, Z)
     GAMECUBE,       // GameCube layout (A, B, X, Y, Z, L, R)
-    WII             // Wii Remote / Nunchuk layout (A, B, 1, 2, +, -, C, Z)
+    WII,            // Wii Remote / Nunchuk layout (A, B, 1, 2, +, -, C, Z)
+    SATURN          // Sega Saturn layout (A, B, C, X, Y, Z, L, R)
 }
 
 enum class VisualStyle {
