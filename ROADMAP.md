@@ -115,16 +115,19 @@
 ## Supported Platforms
 
 
-| Platform | Status            | Core                              |
-| -------- | ----------------- | --------------------------------- |
-| SNES     | ✅ Working         | snes9x_libretro_android           |
-| Genesis  | ✅ Working         | genesis_plus_gx_libretro_android  |
-| PS1      | ✅ Working         | pcsx_rearmed_libretro_android     |
-| GBA      | ✅ Working         | mgba_libretro_android             |
-| GB/GBC   | ✅ Working         | mgba_libretro_android             |
-| N64      | ✅ Working         | mupen64plus_next_libretro_android |
-| GameCube | ❌ Planned         | dolphin_libretro_android          |
-| Wii      | ❌ Planned         | dolphin_libretro_android          |
+| Platform      | Status         | Core                              |
+| ------------- | -------------- | --------------------------------- |
+| SNES          | ⚠️ Working     | snes9x_libretro_android           |
+| Genesis       | ⚠️ Working     | genesis_plus_gx_libretro_android  |
+| PS1           | ⚠️ Working     | swanstation_libretro_android      |
+| GBA           | ⚠️ Working     | mgba_libretro_android             |
+| GB/GBC        | ⚠️ Working     | mgba_libretro_android             |
+| N64           | ⚠️ Working     | mupen64plus_next_libretro_android |
+| GameCube      | 🧪 Experimental | dolphin_libretro_android          |
+| Wii           | 🧪 Experimental | dolphin_libretro_android          |
+| PS2           | 🧪 Experimental | pcsx2_libretro_android            |
+| Nintendo DS   | ⚠️ Working     | desmume_libretro_android          |
+| Sega Saturn   | ⚠️ Working     | yabause_libretro_android          |
 
 > [!NOTE]
 > **Active Development:** Platform support and Libretro core integrations are actively expanding. Additional cores, optimizations, and features are currently planned for future updates.

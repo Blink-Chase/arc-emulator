@@ -363,7 +363,7 @@ object GameLoader {
         return coresList
     }
 
-    private fun setupSystemDirectories(context: Context, platform: Platform, storageDir: File) {
+    internal suspend fun setupSystemDirectories(context: Context, platform: Platform, storageDir: File) {
         val systemDir = File(storageDir, "system")
         if (!systemDir.exists()) systemDir.mkdirs()
 
@@ -375,6 +375,22 @@ object GameLoader {
                 
                 val configDir = File(dolphinDir, "Config").also { it.mkdirs() }
                 installDolphinShader(context, dolphinDir)
+
+                // The core needs dolphin-emu/Sys (per-game compatibility
+                // database, codehandler, per-title settings) or GameCube and Wii
+                // titles run with broken fixes. Fetch it here rather than only
+                // on core install, so anyone who installed the core before this
+                // existed gets it on their next launch instead of needing an
+                // uninstall/reinstall cycle. Non-fatal: launching offline must
+                // still let the game start.
+                if (!CoreManager.systemFilesPresent(context, CoreManager.DOLPHIN_CORE_ID)) {
+                    val fetched = CoreManager.ensureSystemFiles(context, CoreManager.DOLPHIN_CORE_ID)
+                    Log.w(
+                        TAG,
+                        if (fetched) "Downloaded Dolphin system files on launch"
+                        else "Dolphin system files still missing; launching without them"
+                    )
+                }
 
                 val wiimoteContent = """
                     [Wiimote1]
