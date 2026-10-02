@@ -2,6 +2,7 @@ package com.blinkchase.arc
 
 import android.content.Context
 import android.os.Build
+import android.os.Environment
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
@@ -20,6 +21,29 @@ import java.util.zip.ZipInputStream
 object CoreManager {
     private const val TAG = "CoreManager"
     private const val MANIFEST_URL = "https://raw.githubusercontent.com/blinkchase/arc-emulator/main/cores_manifest.json"
+
+    // Dolphin's `Sys` folder holds the per-game compatibility database the core
+    // needs to behave. This is the same archive RetroArch's "Core System Files
+    // Downloader" fetches; its root entries are `dolphin-emu/` and
+    // `dolphin-emu/Sys/`, so it extracts straight into <storageDir>/system.
+    private const val DOLPHIN_SYSTEM_URL = "https://buildbot.libretro.com/assets/system/Dolphin.zip"
+
+    const val DOLPHIN_CORE_ID = "dolphin_libretro_android"
+
+    // coreId -> folder provisioned under <storageDir>/system on install and
+    // removed again on uninstall. Only Dolphin needs a real download here; the
+    // other cores are purely scaffolded by GameLoader.setupSystemDirectories().
+    private val CORE_SYSTEM_FOLDERS = mapOf(
+        DOLPHIN_CORE_ID to "dolphin-emu"
+    )
+
+    // coreId -> platform whose system directory layout must be scaffolded.
+    private val CORE_PLATFORM = mapOf(
+        DOLPHIN_CORE_ID to Platform.GAMECUBE,
+        "pcsx2_libretro_android" to Platform.PS2,
+        "desmume_libretro_android" to Platform.DS,
+        "melonds_libretro_android" to Platform.DS
+    )
 
     sealed class DownloadState {
         object Idle : DownloadState()
@@ -100,8 +124,9 @@ object CoreManager {
     suspend fun downloadAndInstallCore(context: Context, coreItem: CoreItem): Boolean = withContext(Dispatchers.IO) {
         _downloadState.value = DownloadState.Preparing
         try {
-            // Global 45 second timeout for the entire operation
-            withTimeout(45000L) {
+            // Global 45 second timeout for the core library itself. System
+            // files are fetched after this so they have their own budget.
+            var ok = withTimeout(45000L) {
                 val abi = getSupportedAbi()
                 val primaryUrl = coreItem.downloadUrls[abi] ?: coreItem.downloadUrls["arm64-v8a"]
                 if (primaryUrl == null) {
@@ -245,6 +270,19 @@ object CoreManager {
                 _downloadState.value = DownloadState.Error("All download links failed. Last error: $lastError")
                 return@withTimeout false
             }
+
+            // Provision the system folder (Dolphin's `Sys`, configs, shader)
+            // only once the core library itself landed successfully. Success is
+            // re-asserted afterwards because provisioning moves the state back
+            // through Preparing/Downloading/Extracting, and the UI only clears
+            // its spinner when it sees Success again.
+            if (ok) {
+                // A core whose system files are missing loads but misbehaves,
+                // so a failed system download is reported as a failed install.
+                ok = provisionCoreData(context, coreItem.coreId)
+                if (ok) _downloadState.value = DownloadState.Success
+            }
+            ok
         } catch (e: TimeoutCancellationException) {
             Log.e(TAG, "Download timed out after 45 seconds")
             _downloadState.value = DownloadState.Error("Operation timed out. Please check your internet connection.")
@@ -256,9 +294,166 @@ object CoreManager {
         }
     }
 
+    /**
+     * Mirrors the storage directory resolution in MainActivity so that core
+     * installation and game loading agree on where system files live.
+     */
+    fun resolveStorageDir(context: Context): File = try {
+        val documentsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+        val publicDir = File(documentsDir, "Arc")
+        if (publicDir.exists() || publicDir.mkdirs()) publicDir
+        else context.getExternalFilesDir(null) ?: context.filesDir
+    } catch (e: Exception) {
+        context.filesDir
+    }
+
+    /**
+     * True once the core's `Sys` folder holds the real archive contents.
+     *
+     * Checks specifically for `Sys/codehandler.bin` rather than the folder
+     * merely being non-empty: Arc's own scaffold writes `Sys/Shaders/` only, so
+     * an emptiness check would see that lone shader folder and wrongly conclude
+     * the full 2725-file Sys tree was already installed.
+     */
+    fun systemFilesPresent(context: Context, coreId: String): Boolean {
+        val folderName = CORE_SYSTEM_FOLDERS[coreId] ?: return true
+        val marker = File(File(resolveStorageDir(context), "system"), "$folderName/Sys/codehandler.bin")
+        return marker.isFile && marker.length() > 0L
+    }
+
+    /**
+     * Downloads and extracts the core's system files if they are missing,
+     * making it safe to call on every launch. Returns true when the folder is
+     * usable afterwards (either already present, or freshly fetched).
+     *
+     * [reportProgress] drives [downloadState] so the Core Downloader screen can
+     * show progress. The game-load self-heal passes false so launching a game
+     * never disturbs that UI.
+     */
+    internal suspend fun ensureSystemFiles(
+        context: Context,
+        coreId: String,
+        reportProgress: Boolean = false
+    ): Boolean {
+        if (!CORE_SYSTEM_FOLDERS.containsKey(coreId)) return true
+        if (systemFilesPresent(context, coreId)) {
+            Log.d(TAG, "System files already present for $coreId")
+            return true
+        }
+        val systemDir = File(resolveStorageDir(context), "system").also { it.mkdirs() }
+        Log.d(TAG, "Fetching system files for $coreId into ${systemDir.absolutePath}")
+        return withTimeout(60_000L) {
+            downloadSystemFiles(context, systemDir, coreId, reportProgress)
+        }
+    }
+
+    /**
+     * Downloads the system files a core depends on and scaffolds the folders it
+     * expects on first install. Idempotent - an already-provisioned folder is
+     * left alone so reinstalling never re-downloads.
+     */
+    private suspend fun provisionCoreData(context: Context, coreId: String): Boolean {
+        val platform = CORE_PLATFORM[coreId] ?: return true
+        val storageDir = resolveStorageDir(context)
+
+        val systemFilesOk = ensureSystemFiles(context, coreId, reportProgress = true)
+
+        // Config files, shader and the Wiimote/Dolphin ini's the core reads.
+        GameLoader.setupSystemDirectories(context, platform, storageDir)
+        Log.d(TAG, "Provisioned system data for $coreId (systemFiles=$systemFilesOk)")
+        return systemFilesOk
+    }
+
+    /**
+     * Removes the system folder provisioned for a core when it is uninstalled.
+     *
+     * Deliberately scoped to <storageDir>/system/<folder> only. Dolphin's
+     * memory cards and saves live under <storageDir>/saves, so nothing a player
+     * has earned is ever deleted here.
+     */
+    private fun removeCoreData(context: Context, coreId: String) {
+        val folderName = CORE_SYSTEM_FOLDERS[coreId] ?: return
+        val targetDir = File(File(resolveStorageDir(context), "system"), folderName)
+        if (targetDir.exists()) {
+            Log.d(TAG, "Removing system files: ${targetDir.absolutePath}")
+            targetDir.deleteRecursively()
+        }
+    }
+
+    private suspend fun downloadSystemFiles(
+        context: Context,
+        systemDir: File,
+        coreId: String,
+        reportProgress: Boolean
+    ): Boolean {
+        val tempFile = File(context.cacheDir, "${coreId}_sys.tmp")
+        try {
+            if (reportProgress) _downloadState.value = DownloadState.Preparing
+            val connection = (URL(DOLPHIN_SYSTEM_URL).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10_000
+                readTimeout = 30_000
+            }
+            connection.connect()
+            if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+                throw java.io.IOException("HTTP ${connection.responseCode}")
+            }
+
+            val length = connection.contentLength
+            connection.inputStream.use { input ->
+                FileOutputStream(tempFile).use { output ->
+                    val data = ByteArray(8192)
+                    var total = 0L
+                    var count: Int
+                    while (input.read(data).also { count = it } != -1) {
+                        total += count
+                        if (length > 0 && reportProgress) {
+                            _downloadState.value = DownloadState.Downloading(total.toFloat() / length.toFloat())
+                        }
+                        output.write(data, 0, count)
+                    }
+                }
+            }
+
+            if (reportProgress) _downloadState.value = DownloadState.Extracting
+            val systemCanonical = systemDir.canonicalPath
+            ZipInputStream(tempFile.inputStream()).use { zip ->
+                var entry = zip.nextEntry
+                while (entry != null) {
+                    val outFile = File(systemDir, entry.name)
+                    if (!outFile.canonicalPath.startsWith(systemCanonical + File.separator)) {
+                        throw java.io.IOException("Blocked unsafe zip entry: ${entry.name}")
+                    }
+                    if (entry.isDirectory) {
+                        outFile.mkdirs()
+                    } else {
+                        outFile.parentFile?.mkdirs()
+                        FileOutputStream(outFile).use { fos -> zip.copyTo(fos) }
+                    }
+                    zip.closeEntry()
+                    entry = zip.nextEntry
+                }
+            }
+            Log.d(TAG, "Installed system files for $coreId into ${systemDir.absolutePath}")
+            return true
+        } catch (e: Exception) {
+            // Don't abort on a network hiccup - the caller decides whether a
+            // missing Sys folder is fatal, and a game launch should still be
+            // able to proceed offline.
+            Log.e(TAG, "Failed to install system files for $coreId: ${e.message}", e)
+            if (reportProgress) {
+                _downloadState.value = DownloadState.Error(e.message ?: "System file download failed")
+            }
+            return false
+        } finally {
+            tempFile.delete()
+        }
+    }
+
     fun deleteCore(context: Context, coreId: String): Boolean {
         val file = File(File(context.filesDir, "cores"), "${coreId}.so")
-        return if (file.exists()) file.delete() else false
+        val removed = if (file.exists()) file.delete() else false
+        removeCoreData(context, coreId)
+        return removed
     }
 
     private fun getSupportedAbi(): String {

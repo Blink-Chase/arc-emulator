@@ -4,6 +4,60 @@ All significant changes to this project will be documented in this file.
 
 ---
 
+## [1.6.0] - Core Expansion & Simpler Setup - 2026-10-02
+
+This release adds five new platforms (GameCube, Wii, PS2, Nintendo DS and Sega Saturn) and rebuilds the first-run experience around a built-in core downloader, a smarter BIOS Manager, and a setup guide that suggests cores based on the games you actually own.
+
+### 🕹️ New Platforms
+- **GameCube & Wii (Experimental)**: Full Dolphin integration with controller style selection, correct Wii Remote / Nunchuk / Classic Controller detection, and sideways Wiimote profiles. The required `dolphin-emu/Sys` system folder (per-game compatibility database, codehandler and shaders) is downloaded automatically when the core installs, and fetched again on launch if it is ever missing.
+- **PlayStation 2 (Experimental)**: PCSX2 core with a Vulkan renderer toggle and a forced `pcsx2_fastmem` fix so titles boot and load states safely.
+- **Nintendo DS**: DeSmuME selected by default for out-of-the-box stability with melonDS as an alternative; reliable software framebuffer rendering, screen swapping, and accurate bottom-screen touch.
+- **Sega Saturn**: Yabause by default with Beetle Saturn as the accuracy option, plus a complete 6-button touch layout (A/B/C, X/Y/Z, L, R, Start, Mode).
+
+### ✨ Core Management & Setup
+- **Core Downloader**: New in-app screen to browse, read about, and install libretro cores directly — no more tracking down and extracting files by hand.
+- **BIOS Manager Rebuild**: Detects missing BIOS files and warns at load time instead of black-screening, and auto-generates melonDS `bios7.bin`, `bios9.bin` and `firmware.bin` placeholders.
+- **Reordered Setup Guide**: Steps now run **Add Games → BIOS → Cores**, with contextual core suggestions based on the games detected in the library.
+- **Guided Tour Expansion**: Grown to 6 steps covering the Core Downloader and the Settings relaunch instructions.
+- **Experimental Core Notice**: PS2, GameCube and Wii display a warning dialog with a "Don't show again" preference.
+- **Download Feedback**: Downloads surface real progress reporting instead of appearing to hang.
+
+### 🎮 Controls
+- **GameCube Touch Layout**: Redesigned portrait and landscape layouts with authentic ergonomics — circular A and B offset, wide X and Y pill buttons, bottom START, and the C-stick placed under the action buttons.
+- **PlayStation 2 Buttons**: Added the missing SELECT and START buttons in landscape; tightened portrait D-Pad and action button spacing.
+- **Nintendo DS Touch**: Bottom screen now responds accurately and instantly to taps without dragging; swap-screen label compacted to fit its box.
+- **Wii Controller Profiles**: Profiles forwarded securely to the emulation thread via `setWiiControllerStyle()` rather than guessed at on the core side.
+- **DS Debug Overlays**: DS touch debug and cursor overlay wired into Settings.
+
+### ⚡ Rendering & Performance
+- **Vulkan Bridge**: New `vulkan_bridge.cpp` with hardware-aware software fallback and automated context lifecycle management.
+- **Library Scanning**: Optimized ROM scanning and scraper deduplication for improved indexing and metadata accuracy across platforms.
+- **Audio Log Cleanup**: Reduced audio log spam so logcat stays readable during emulation sessions.
+
+### 🛠️ Native Engine & Stability
+- **Fault Guarding**: `InvokeGuardedCoreCall()` and a heartbeat watchdog prevent crashes and provide safe exit options for hung states.
+- **Recoverable Hangs**: `g_coreWedged` refactored from a permanent one-way latch into a recoverable state, so sessions can be retried without restarting the app.
+- **EGL Rotation Fix**: Surface rebuilds no longer signal `context_reset`, which had been corrupting Dolphin 3D geometry after rotating the device.
+- **EGL Serialisation**: EGL setup and teardown serialised against `g_emuMutex` to eliminate surface lifecycle and rotation races.
+- **Guarded Startup**: The first `surfaceChanged` report for a surface only establishes its size, fixing black screens caused by a premature EGL rebuild during core startup.
+- **Crash Recovery Dialogs**: Smart recovery dialogs and refined error messaging for core load failures.
+- **Correct `.so` Extraction**: Core zips now unpack the library named by the core id rather than whichever happens to be first in the archive.
+
+### ⚙️ Input & Core Fixes
+- **PS1 Input Restored**: Fixed DualShock B/Y colliding with the analog X/Y axis IDs, which left Cross and Square permanently unresponsive.
+- **SwanStation Priority**: Listed ahead of PCSX ReARMed so PS1 games stop loading the wrong core, with port 0 announced as an analog subclass before `retro_load_game`.
+- **Missing BIOS Warning**: PS1 games warn at load when no BIOS is present instead of black-screening.
+- **N64 / PS2 / PS1 Boot Fixes**: Linked GLESv3, dropped the manual `JNI_OnLoad`, forced `pcsx2_fastmem` off, and set up EGL for surfaces that attach late so cores stop stalling.
+- **Explicit OpenGLES Binding**: `setupEGL` binds the API explicitly so Qualcomm and Adreno drivers create the correct context.
+- **Device Negotiation**: Digital buttons accepted on the analog device; pointer and mouse input restricted to DS and Dolphin.
+
+### 📂 Library & Diagnostics
+- **Debug Settings**: New Settings section with toggles for Touch Debug, High Level Performance Tests, and DS Touch/Cursor Debug, all disabled by default.
+- **LogManager**: "Nuclear Logging" mode to filter system noise and export actionable debug logs, alongside a new `clean-logcat.ps1` script.
+- **Build Maintenance**: Android Gradle Plugin upgraded to 9.4.1.
+
+---
+
 ## [1.5.0] - Input & Controller Overhaul - 2026-08-29
 
 This major update focuses on expanding the app's core capabilities with a completely rebuilt input engine, high-performance navigation, and automated metadata scraping.

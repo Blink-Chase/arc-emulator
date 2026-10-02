@@ -254,7 +254,10 @@ fun GameScreen(
     // IMMEDIATE log when GameScreen composes (Grouped)
     Utils.Logger.e("GameScreen", "=== GameScreen composing for: $gamePath ===")
 
-    val isExperimentalPlatform = platform == Platform.PS2 || platform == Platform.N64 || platform == Platform.GAMECUBE || platform == Platform.WII
+    // N64 is deliberately absent from this list. It boots reliably on
+    // mupen64plus-next, so warning players about it was a bug rather than an
+    // honest caveat. The experimental set is PS2, GameCube and Wii.
+    val isExperimentalPlatform = platform == Platform.PS2 || platform == Platform.GAMECUBE || platform == Platform.WII
     val dontAskKey = "dont_show_experimental_${platform.name}"
     var showExperimentalDialog by remember { mutableStateOf(false) }
     var dontAskChecked by remember { mutableStateOf(false) }
