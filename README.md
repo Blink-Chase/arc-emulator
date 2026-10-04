@@ -37,6 +37,7 @@ An open-source Libretro emulator for Android focused on clean user experience, h
 *   **Automated Box Art:** Background scraping for high-quality game covers via Libretro and ScreenScraper.
 *   **Stable Navigation:** Persistent game state management and "Non-blocking" transitions for a snappy feel.
 *   **Save States & Rewind:** Instant progress management with 5 visual slots and preview support.
+*   **Built-in Core Downloader:** Browse, install and update Libretro cores from inside the app — Arc suggests what you need based on the games it finds.
 
 ---
 
@@ -56,20 +57,27 @@ Arc gives you control over how your collection is displayed:
 | :--- | :--- | :--- |
 | **SNES** | ✅ Working | `snes9x_libretro_android` |
 | **GBA / GB / GBC** | ✅ Working | `mgba_libretro_android` |
-| **PS1** | ✅ Working | `pcsx_rearmed_libretro_android` |
+| **PS1** | ✅ Working | `swanstation_libretro_android` |
 | **N64** | ✅ Working | `mupen64plus_next_libretro_android` |
 | **Genesis / Mega Drive** | ✅ Working | `genesis_plus_gx_libretro_android` |
-| **GameCube** | ❌ Not Working (Planned) | `dolphin_libretro_android` |
-| **Wii** | ❌ Not Working (Planned) | `dolphin_libretro_android` |
+| **Nintendo DS** | ✅ Working | `desmume_libretro_android` |
+| **Sega Saturn** | ✅ Working | `yabause_libretro_android` |
+| **GameCube** | 🧪 Experimental | `dolphin_libretro_android` |
+| **Wii** | 🧪 Experimental | `dolphin_libretro_android` |
+| **PS2** | 🧪 Experimental | `pcsx2_libretro_android` |
+
+> [!NOTE]
+> **Experimental** platforms are playable but still being polished — expect bugs and per-game compatibility differences. GameCube and Wii also need a reasonably modern 64-bit device. Arc warns you the first time you launch one.
 
 > [!NOTE]
 > **Active Development:** Platform support and Libretro core integrations are actively expanding. Additional cores and optimizations are planned for future updates.
 
 ### Core Downloads & Import
-If a core is not bundled, you can download them from the [Libretro Nightly Builds](https://buildbot.libretro.com/nightly/android/latest/).
-*   **Mobile & Tablet Users:** Look for the **arm64-v8a** version for optimal performance.
-*   **Import via App:** Use the **Setup Guide** or navigate to **Settings > System > Import Cores** to select and install your `.so` core files.
-*   **Manual Install:** Alternatively, place the `.so` files into your `Documents/Arc/cores/` directory and use the **Rescan Cores** button in the app.
+You don't need to hunt down core files yourself — Arc installs them for you.
+*   **Core Downloader:** During first launch the **Setup Guide** offers the cores that match the games it found. You can also open **Settings > System > Core Downloader** at any time to browse the full list and tap install. Progress and errors are shown as it downloads.
+*   **Choosing a Core:** Every platform has more than one option. The one marked **recommended** is the best balance of accuracy and performance, but you can install extras and switch between them from the in-game menu.
+*   **Already have a `.so`?** Import your own from **Settings > System > Import Cores Manually**, or drop it into `Documents/Arc/cores/` and hit **Rescan Cores** in the app.
+*   **Prefer to fetch them yourself?** Cores are also on the [Libretro Nightly Builds](https://buildbot.libretro.com/nightly/android/latest/) — grab the **arm64-v8a** package on phones and tablets.
 
 ---
 
@@ -79,17 +87,17 @@ If a core is not bundled, you can download them from the [Libretro Nightly Build
 Download the latest `Arc-Emulator-vX.X.X.apk` from the [Releases](../../releases) page and install it on your Android device.
 
 ### 2. Initial Setup
-Upon first launch, the **Guided Setup** will walk you through:
-*   Configuring access to your game folders.
-*   Scanning your collection to build your library.
-*   Checking for necessary BIOS files for systems like PS1.
+Upon first launch, the **Guided Setup** walks you through three steps:
+*   **Add Games** — grant access to your game folders and scan your collection.
+*   **BIOS** — check which system files you still need to import.
+*   **Cores** — Arc suggests cores based on the games it found and installs them for you.
 
 ### 3. Folder Structure
 Arc organizes your data in a visible folder in your **Documents** directory:
 *   **`Documents/Arc/system/`**: Place your BIOS files here (e.g., `scph5501.bin`).
 *   **`Documents/Arc/saves/`**: Your game saves and state files.
 *   **`Documents/Arc/templates/`**: Your custom touch layout templates.
-*   **`Documents/Arc/cores/`**: Manually add extra `.so` cores here if they aren't bundled.
+*   **`Documents/Arc/cores/`**: Where Arc installs downloaded cores. Drop your own `.so` files here too.
 
 ---
 
