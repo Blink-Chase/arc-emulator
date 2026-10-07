@@ -1,68 +1,122 @@
 name: Bug Report
 description: Report a bug in Arc Emulator
-labels: bug
+title: "[Bug]: "
+labels: ["bug"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug!
+
+        > [!TIP]
+        > The **Diagnostics** tool in the **About** screen provides internal state information
+        > that is very helpful for troubleshooting — please paste it below if you can.
+
   - type: input
     id: version
-    label: App Version
-    placeholder: "e.g., 1.1.0"
     attributes:
+      label: App Version
+      description: You can find this in Settings > About.
+      placeholder: "e.g., 1.1.0"
+    validations:
       required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Device Model
+      description: Manufacturer and model of your phone or tablet.
+      placeholder: "e.g., Samsung Galaxy S21, Pixel 7"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Android Version
+      options:
+        - "16 (Android 16)"
+        - "15 (Android 15)"
+        - "14 (Android 14)"
+        - "13 (Android 13)"
+        - "12 (Android 12)"
+        - "Older than 12"
+    validations:
+      required: true
+
+  - type: input
+    id: gpu
+    attributes:
+      label: Graphics Driver / GPU
+      description: Optional, but helpful for rendering issues.
+      placeholder: "e.g., Adreno 730, Mali-G710"
+
+  - type: dropdown
+    id: core
+    attributes:
+      label: Libretro Core / System
+      description: Which core (and system) were you using when the bug happened?
+      options:
+        - "Not sure / N/A"
+        - "snes9x (SNES)"
+        - "mgba (GBA / GB / GBC)"
+        - "swanstation (PS1)"
+        - "mupen64plus_next (N64)"
+        - "genesis_plus_gx (Genesis / Mega Drive)"
+        - "desmume (Nintendo DS)"
+        - "yabause (Sega Saturn)"
+        - "dolphin (GameCube / Wii - Experimental)"
+        - "pcsx2 (PS2 - Experimental)"
+        - "Other core"
 
   - type: textarea
     id: description
-    label: Bug Description
-    placeholder: "Describe what's wrong. Be specific about what you were doing."
     attributes:
+      label: Bug Description
+      description: What happened? Be specific about what you were doing.
+      placeholder: "Describe what's wrong as clearly as possible."
+    validations:
       required: true
 
   - type: textarea
     id: reproduce
-    label: How to Reproduce
-    placeholder: |
-      1. Open the app
-      2. Go to Library
-      3. Tap on a game
-      4. See the error
     attributes:
+      label: How to Reproduce
+      description: Steps that reliably trigger the bug.
+      placeholder: |
+        1. Open the app
+        2. Go to Library
+        3. Tap on a game
+        4. See the error
+    validations:
       required: true
 
   - type: textarea
     id: expected
-    label: Expected Behavior
-    placeholder: "What should have happened?"
-
-  - type: input
-    id: device
-    label: Device Model
-    placeholder: "e.g., Samsung Galaxy S21, Pixel 7"
-
-  - type: dropdown
-    id: os
-    label: Operating System (Android)
-    options:
-      - "13 (Android 13)"
-      - "14 (Android 14)"
-      - "15 (Android 15)"
+    attributes:
+      label: Expected Behavior
+      description: What should have happened instead?
 
   - type: textarea
-    id: graphics
-    label: Graphics Driver / GPU
-    placeholder: "e.g., Adreno 730, Mali-G710"
+    id: logs
+    attributes:
+      label: Diagnostics / Logs
+      description: Paste output from the Diagnostics tool (About screen) or logcat if you have it.
+      render: shell
 
   - type: textarea
     id: notes
-    label: Additional Notes
-    placeholder: |
-      Any other information? (Screenshots, logs, steps to fix, etc.)
-      
-      Tip: You can take a screenshot by holding Power + Volume Down
+    attributes:
+      label: Additional Notes
+      description: Screenshots, screenshots of the crash, workarounds, etc.
+      placeholder: |
+        Drag and drop screenshots here (hold Power + Volume Down to capture).
 
   - type: checkboxes
     id: checklist
-    label: 
-    options:
-      - label: "I have searched for similar issues"
-        required: true
-      - label: "This is a new bug, not a known issue"
-        required: true
+    attributes:
+      label: Checklist
+      options:
+        - label: "I have included my app version, device, and Android version above"
+          required: true
+

@@ -144,6 +144,7 @@ If you enjoy using Arc Emulator and want to support its development, consider bu
 Found a bug or have a feature request?
 *   **Issues:** Report them on the [GitHub Issues](../../issues) page.
 *   **Feedback:** We truly value your feedback to help improve Arc.
+*   **Design Help:** Arc is a solo project thats using AI as I learn as a developer. If you're a graphic designer and would like to help give it a more polished look, please feel free to get in touch!
 *   **Bug Reports:** If a game crashes, please include details about your device, the emulator core, and the ROM type. The **Diagnostics** tool in the **About** screen provides internal state information that is very helpful for troubleshooting.
 
 ---

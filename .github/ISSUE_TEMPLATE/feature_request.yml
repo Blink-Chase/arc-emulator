@@ -1,41 +1,42 @@
 name: Feature Request
 description: Suggest a new feature for Arc Emulator
-labels: enhancement
+title: "[Feature]: "
+labels: ["enhancement"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        **Already suggested?** Give that issue a 👍 instead - that's how I decide what to build next.
+
+        Just tell me what's bugging you - a couple of sentences is plenty.
+
   - type: input
     id: version
-    label: App Version
-    placeholder: "e.g., 1.1.0"
     attributes:
-      required: true
+      label: App Version (optional)
+      placeholder: "e.g., 1.1.0"
 
   - type: textarea
     id: description
-    label: Feature Description
-    placeholder: "Describe the feature you'd like to see."
     attributes:
+      label: What would you like?
+      description: What's the feature, and what problem does it solve for you?
+      placeholder: "e.g., folders by genre — my library has 500+ games and it's hard to find anything."
+    validations:
       required: true
 
   - type: textarea
-    id: problem
-    label: Problem Solved
-    placeholder: "What problem does this solve? Why do you need this?"
-
-  - type: textarea
-    id: solution
-    label: Proposed Solution
-    placeholder: "How should this feature work?"
-
-  - type: textarea
-    id: alternatives
-    label: Alternatives Considered
-    placeholder: "Any other ways to solve this?"
+    id: notes
+    attributes:
+      label: Anything else? (optional)
+      description: How you'd imagine it working, screenshots, etc. Or just leave this blank.
+      placeholder: "e.g., maybe a dropdown next to the sort button?"
 
   - type: checkboxes
     id: checklist
-    label: 
-    options:
-      - label: "I have searched for similar feature requests"
-        required: true
-      - label: "This is a new feature, not an improvement to existing"
-        required: true
+    attributes:
+      label: Checklist
+      options:
+        - label: "I have searched the existing issues and feature requests for duplicates"
+          required: true
+
