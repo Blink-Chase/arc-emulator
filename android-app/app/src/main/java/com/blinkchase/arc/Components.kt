@@ -1,6 +1,9 @@
 package com.blinkchase.arc
 
 import android.graphics.BitmapFactory
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.os.Environment
 import android.view.SurfaceView
 import android.widget.Toast
@@ -17,6 +20,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -63,6 +67,67 @@ fun PlatformBadge(platform: Platform) {
     }
 }
 
+@Composable
+private fun GameFileLocationAction(game: GameFile, onShowLocation: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text("Show File Location") },
+        onClick = onShowLocation,
+        leadingIcon = { Icon(Icons.Default.FolderOpen, contentDescription = null) }
+    )
+}
+
+@Composable
+private fun GameFileLocationDialog(game: GameFile, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("File Location") },
+        text = {
+            SelectionContainer {
+                Text(game.path, style = MaterialTheme.typography.bodySmall)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("Game file location", game.path))
+                Toast.makeText(context, "File location copied", Toast.LENGTH_SHORT).show()
+                onDismiss()
+            }) {
+                Text("Copy")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
+}
+
+@Composable
+private fun HideGameAction(
+    game: GameFile,
+    isHidden: Boolean,
+    onHideGame: (GameFile, Boolean) -> Unit,
+    onDismissMenu: () -> Unit
+) {
+    DropdownMenuItem(
+        text = { Text(if (isHidden) "Show in Library" else "Hide from Library") },
+        onClick = {
+            onDismissMenu()
+            onHideGame(game, !isHidden)
+        },
+        leadingIcon = {
+            Icon(
+                if (isHidden) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                contentDescription = null
+            )
+        }
+    )
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun GameListItem(
@@ -70,9 +135,12 @@ fun GameListItem(
     onToggleFavorite: (GameFile) -> Unit,
     onClick: (GameFile) -> Unit,
     onRefreshMetadata: (GameFile) -> Unit = {},
-    showExtensions: Boolean = false
+    showExtensions: Boolean = false,
+    isHidden: Boolean = false,
+    onHideGame: ((GameFile, Boolean) -> Unit)? = null
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    var showLocationDialog by remember(game.path) { mutableStateOf(false) }
 
     Card(
         modifier = Modifier.fillMaxWidth().combinedClickable(
@@ -161,6 +229,16 @@ fun GameListItem(
                     },
                     leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) }
                 )
+                GameFileLocationAction(game) {
+                    showMenu = false
+                    showLocationDialog = true
+                }
+                if (onHideGame != null) {
+                    HideGameAction(game, isHidden, onHideGame) { showMenu = false }
+                }
+            }
+            if (showLocationDialog) {
+                GameFileLocationDialog(game) { showLocationDialog = false }
             }
         }
     }
@@ -413,9 +491,12 @@ fun GameGridItem(
     onToggleFavorite: (GameFile) -> Unit,
     onClick: (GameFile) -> Unit,
     onRefreshMetadata: (GameFile) -> Unit,
-    showExtensions: Boolean = false
+    showExtensions: Boolean = false,
+    isHidden: Boolean = false,
+    onHideGame: ((GameFile, Boolean) -> Unit)? = null
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    var showLocationDialog by remember(game.path) { mutableStateOf(false) }
 
     Card(
         modifier = Modifier
@@ -504,6 +585,16 @@ fun GameGridItem(
                     },
                     leadingIcon = { Icon(if (game.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, contentDescription = null) }
                 )
+                GameFileLocationAction(game) {
+                    showMenu = false
+                    showLocationDialog = true
+                }
+                if (onHideGame != null) {
+                    HideGameAction(game, isHidden, onHideGame) { showMenu = false }
+                }
+            }
+            if (showLocationDialog) {
+                GameFileLocationDialog(game) { showLocationDialog = false }
             }
         }
     }
@@ -514,9 +605,12 @@ fun GameGridItem(
 fun GamePosterItem(
     game: GameFile,
     onClick: (GameFile) -> Unit,
-    onRefreshMetadata: (GameFile) -> Unit = {}
+    onRefreshMetadata: (GameFile) -> Unit = {},
+    isHidden: Boolean = false,
+    onHideGame: ((GameFile, Boolean) -> Unit)? = null
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    var showLocationDialog by remember(game.path) { mutableStateOf(false) }
 
     Card(
         modifier = Modifier
@@ -581,6 +675,16 @@ fun GamePosterItem(
                     },
                     leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) }
                 )
+                GameFileLocationAction(game) {
+                    showMenu = false
+                    showLocationDialog = true
+                }
+                if (onHideGame != null) {
+                    HideGameAction(game, isHidden, onHideGame) { showMenu = false }
+                }
+            }
+            if (showLocationDialog) {
+                GameFileLocationDialog(game) { showLocationDialog = false }
             }
         }
     }

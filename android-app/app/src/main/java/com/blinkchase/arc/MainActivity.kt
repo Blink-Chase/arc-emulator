@@ -35,6 +35,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import android.content.res.Configuration
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
@@ -70,6 +72,7 @@ class MainActivity : ComponentActivity() {
         const val KEY_RECENTS = "recent_games"
         const val KEY_SCAN_MODE = "scan_mode"
         const val KEY_CUSTOM_PATHS = "custom_paths"
+        const val KEY_HIDDEN_GAME_PATHS = "hidden_game_paths"
         const val KEY_AUDIO_LATENCY = "audio_latency"
         const val KEY_SHOW_FF = "show_ff"
         const val KEY_AUTO_PAUSE_MENU = "auto_pause_menu"
@@ -122,7 +125,10 @@ class MainActivity : ComponentActivity() {
             Platform.WII to listOf("dolphin_libretro_android", "dolphin"),
             Platform.DS to listOf("desmume_libretro_android", "melonds_libretro_android"),
             Platform.PS2 to listOf("pcsx2_libretro_android"),
-            Platform.SATURN to listOf("yabause_libretro_android", "beetle_saturn_libretro_android")
+            Platform.SATURN to listOf("yabause_libretro_android", "beetle_saturn_libretro_android"),
+            Platform.AMIGA to listOf("puae_libretro_android"),
+            Platform.ATARI to listOf("stella_libretro_android", "stella2014_libretro_android"),
+            Platform.COMMODORE_64 to listOf("vice_x64_libretro_android", "vice_x64sc_libretro_android")
         )
     }
 
@@ -547,6 +553,7 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun ArcApp(storageDir: File, savesDir: File, isExtensionsShown: Boolean) {
         val context = LocalContext.current
+        val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
         val navController = rememberNavController()
         val prefs = remember { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
         val scope = rememberCoroutineScope()
@@ -567,7 +574,35 @@ class MainActivity : ComponentActivity() {
             activeGameCorePath = uiActiveCore
         }
 
+        fun navigateToPrimaryScreen(screen: Screen) {
+            if (screen == Screen.HOME) {
+                navController.navigate(Screen.HOME.name) {
+                    popUpTo(Screen.HOME.name) { inclusive = true }
+                }
+            } else {
+                navController.navigate(screen.name)
+            }
+        }
+
         val gameList by gameDao.getAllGames().collectAsState(initial = emptyList())
+        var hiddenGamePaths by remember {
+            mutableStateOf(prefs.getStringSet(KEY_HIDDEN_GAME_PATHS, emptySet()).orEmpty().toSet())
+        }
+        val visibleGameList = remember(gameList, hiddenGamePaths) {
+            gameList.filterNot { it.path in hiddenGamePaths }
+        }
+        val setGameHidden: (GameFile, Boolean) -> Unit = { game, isHidden ->
+            val updatedPaths = hiddenGamePaths.toMutableSet().apply {
+                if (isHidden) add(game.path) else remove(game.path)
+            }.toSet()
+            prefs.edit { putStringSet(KEY_HIDDEN_GAME_PATHS, HashSet(updatedPaths)) }
+            hiddenGamePaths = updatedPaths
+            Toast.makeText(
+                context,
+                if (isHidden) "Hidden from library" else "Shown in library",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
         val navBackStackEntry by navController.currentBackStackEntryAsState()
         val currentRoute = navBackStackEntry?.destination?.route
 
@@ -683,7 +718,11 @@ class MainActivity : ComponentActivity() {
                         
                         // Check if the file actually exists and isn't a junk file
                         val exists = file.exists()
-                        val isJunk = blockedKeywords.any { name.contains(it, true) } || name.contains(trackRegex)
+                        val isWHDLoadInstall = game.platform == Platform.AMIGA &&
+                            RomScanner.isWHDLoadInstallDirectory(file)
+                        val isJunk = (!RomScanner.isScannableFile(file) && !isWHDLoadInstall) ||
+                            blockedKeywords.any { name.contains(it, true) } ||
+                            name.contains(trackRegex)
                         val isBinWithoutCue = file.extension.lowercase() == "bin" && File(file.parentFile, "${file.nameWithoutExtension}.cue").exists()
                         
                         if (!exists || isJunk || isBinWithoutCue) {
@@ -725,18 +764,60 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 Log.d("Arc", "SCAN: Total games found: ${allGames.size}")
+                val deduplicatedGames = RomScanner.deduplicate(allGames)
+                val existingGames = gameDao.getAllGamesSnapshot()
 
                 // A scan is authoritative for file name and platform. IGNORE inserts
                 // would leave stale PS1/PS2 assignments in Room after detection changes.
-                allGames.forEach { scannedGame ->
+                deduplicatedGames.forEach { scannedGame ->
                     val existingGame = gameDao.getGameByPath(scannedGame.path)
                     if (existingGame == null) {
-                        gameDao.insertGames(listOf(scannedGame))
+                        val duplicate = existingGames.firstOrNull { storedGame ->
+                            !storedGame.path.startsWith("content://") &&
+                                storedGame.path != scannedGame.path &&
+                                File(storedGame.path).exists() &&
+                                RomScanner.duplicateKey(
+                                    storedGame.name,
+                                    detectConsolePlatform(File(storedGame.path)).takeIf { it != Platform.UNKNOWN }
+                                        ?: storedGame.platform
+                                ) ==
+                                    RomScanner.duplicateKey(scannedGame.name, scannedGame.platform)
+                        }
+                        if (duplicate != null) {
+                            gameDao.updateGame(duplicate.copy(
+                                name = scannedGame.name,
+                                path = scannedGame.path,
+                                platform = scannedGame.platform
+                            ))
+                        } else {
+                            gameDao.insertGames(listOf(scannedGame))
+                        }
                     } else if (existingGame.name != scannedGame.name || existingGame.platform != scannedGame.platform) {
                         gameDao.updateGame(existingGame.copy(
                             name = scannedGame.name,
                             platform = scannedGame.platform
                         ))
+                    }
+                }
+
+                val canonicalPaths = deduplicatedGames.associate {
+                    RomScanner.duplicateKey(it.name, it.platform) to it.path
+                }
+                gameDao.getAllGamesSnapshot().forEach { storedGame ->
+                    val storedPlatform = if (storedGame.path.startsWith("content://")) {
+                        storedGame.platform
+                    } else {
+                        detectConsolePlatform(File(storedGame.path)).takeIf { it != Platform.UNKNOWN }
+                            ?: storedGame.platform
+                    }
+                    val canonicalPath = canonicalPaths[RomScanner.duplicateKey(storedGame.name, storedPlatform)]
+                    if (canonicalPath != null &&
+                        canonicalPath != storedGame.path &&
+                        !storedGame.path.startsWith("content://") &&
+                        File(storedGame.path).exists()
+                    ) {
+                        Log.d("Arc", "SCAN: Pruning duplicate game entry: ${storedGame.name}")
+                        gameDao.deleteGame(storedGame)
                     }
                 }
                 
@@ -970,57 +1051,48 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            val firstCore = platformCores.firstOrNull() ?: "snes9x_libretro_android"
-            activeGameCorePath = finalCorePath ?: getCoreFile(savedCore ?: firstCore).absolutePath
+            if (finalCorePath == null) {
+                Toast.makeText(
+                    context,
+                    "No compatible ${game.platform.name} core is installed. Install its core from Core Downloader.",
+                    Toast.LENGTH_LONG
+                ).show()
+                navController.navigate(Screen.CORE_MANAGEMENT.name)
+                return
+            }
+
+            activeGameCorePath = finalCorePath
             buttonProps = loadLayout(game.name)
         }
 
         Scaffold(
             bottomBar = {
                 val hideBottomBarRoutes = listOf(Screen.GAME.name, Screen.ABOUT.name, Screen.HELP.name, Screen.SETUP_GUIDE.name)
-                if (currentRoute !in hideBottomBarRoutes) {
+                if (!isLandscape && currentRoute !in hideBottomBarRoutes) {
                     NavigationBar {
                         NavigationBarItem(
                             icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
                             label = { Text("Home") },
                             selected = currentRoute == Screen.HOME.name,
-                            onClick = { 
-                                if (currentRoute != Screen.HOME.name) {
-                                    navController.navigate(Screen.HOME.name) {
-                                        popUpTo(Screen.HOME.name) { inclusive = true }
-                                    }
-                                }
-                            }
+                            onClick = { navigateToPrimaryScreen(Screen.HOME) }
                         )
                         NavigationBarItem(
                             icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Library") },
                             label = { Text("Library") },
                             selected = currentRoute == Screen.LIBRARY.name,
-                            onClick = { 
-                                if (currentRoute != Screen.LIBRARY.name) {
-                                    navController.navigate(Screen.LIBRARY.name)
-                                }
-                            }
+                            onClick = { navigateToPrimaryScreen(Screen.LIBRARY) }
                         )
                         NavigationBarItem(
                             icon = { Icon(Icons.Default.Search, contentDescription = "Search") },
                             label = { Text("Search") },
                             selected = currentRoute == Screen.SEARCH.name,
-                            onClick = { 
-                                if (currentRoute != Screen.SEARCH.name) {
-                                    navController.navigate(Screen.SEARCH.name)
-                                }
-                            }
+                            onClick = { navigateToPrimaryScreen(Screen.SEARCH) }
                         )
                         NavigationBarItem(
                             icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
                             label = { Text("Settings") },
                             selected = currentRoute == Screen.SETTINGS.name,
-                            onClick = { 
-                                if (currentRoute != Screen.SETTINGS.name) {
-                                    navController.navigate(Screen.SETTINGS.name)
-                                }
-                            }
+                            onClick = { navigateToPrimaryScreen(Screen.SETTINGS) }
                         )
                     }
                 }
@@ -1048,15 +1120,45 @@ class MainActivity : ComponentActivity() {
             }
 
             Box(modifier = Modifier.fillMaxSize()) {
-                Box(modifier = Modifier.padding(innerPadding)) {
+                val layoutDirection = androidx.compose.ui.platform.LocalLayoutDirection.current
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(
+                            top = innerPadding.calculateTopPadding(),
+                            bottom = innerPadding.calculateBottomPadding()
+                        )
+                ) {
+                    val hideNavigationRoutes = listOf(Screen.GAME.name, Screen.ABOUT.name, Screen.HELP.name, Screen.SETUP_GUIDE.name)
+                    if (isLandscape && currentRoute !in hideNavigationRoutes) {
+                        ArcNavigationRail(
+                            currentRoute = currentRoute,
+                            onNavigate = { screen -> navigateToPrimaryScreen(screen) },
+                            modifier = Modifier.fillMaxHeight()
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .padding(
+                                start = innerPadding.calculateStartPadding(layoutDirection),
+                                end = innerPadding.calculateEndPadding(layoutDirection)
+                            )
+                    ) {
                     NavHost(
+                        modifier = if (isLandscape) {
+                            Modifier.widthIn(max = 1200.dp).fillMaxSize().align(Alignment.Center)
+                        } else {
+                            Modifier.fillMaxSize()
+                        },
                         navController = navController, 
                         startDestination = if (prefs.getBoolean(KEY_SETUP_COMPLETE, true)) Screen.SETUP_GUIDE.name else Screen.HOME.name
                     ) {
                         composable(Screen.HOME.name) {
                             ArcHomeScreen(
-                                games = gameList,
-                                recentGames = gameList.filter { it.lastPlayed > 0 }.sortedByDescending { it.lastPlayed }.take(6),
+                                games = visibleGameList,
+                                recentGames = visibleGameList.filter { it.lastPlayed > 0 }.sortedByDescending { it.lastPlayed }.take(6),
                                 storageDir = storageDir,
                                 gameDao = gameDao,
                                 showExtensions = isExtensionsShown,
@@ -1076,7 +1178,8 @@ class MainActivity : ComponentActivity() {
                                     }
                                 },
                                 onGoToLibrary = { navController.navigate(Screen.LIBRARY.name) },
-                                onGoToAbout = { navController.navigate(Screen.ABOUT.name) }
+                                onGoToAbout = { navController.navigate(Screen.ABOUT.name) },
+                                onHideGame = setGameHidden
                             )
 
                             // Handle initial scrape if requested from setup
@@ -1114,6 +1217,7 @@ class MainActivity : ComponentActivity() {
                                 games = gameList,
                                 showExtensions = isExtensionsShown,
                                 isScanning = isScanning,
+                                hiddenGamePaths = hiddenGamePaths,
                                 prefs = prefs,
                                 onToggleFavorite = { game ->
                                     scope.launch(Dispatchers.IO) {
@@ -1142,7 +1246,8 @@ class MainActivity : ComponentActivity() {
                                 onRefresh = { performScan() },
                                 onNavigateToImport = {
                                     navController.navigate(Screen.IMPORT.name)
-                                }
+                                },
+                                onHideGame = setGameHidden
                             )
                         }
                         composable(Screen.IMPORT.name) {
@@ -1165,7 +1270,7 @@ class MainActivity : ComponentActivity() {
                         }
                         composable(Screen.SEARCH.name) {
                             SearchScreen(
-                                games = gameList,
+                                games = visibleGameList,
                                 showExtensions = isExtensionsShown,
                                 prefs = prefs,
                                 onToggleFavorite = { game ->
@@ -1181,7 +1286,8 @@ class MainActivity : ComponentActivity() {
                                     uiActiveCore = activeGameCorePath
                                     uiButtonProps = buttonProps
                                     navController.navigate(Screen.GAME.name)
-                                }
+                                },
+                                onHideGame = setGameHidden
                             )
                         }
                         composable(Screen.SETTINGS.name) {
@@ -1190,6 +1296,8 @@ class MainActivity : ComponentActivity() {
                                 rootStorageDir = storageDir,
                                 gameDao = gameDao,
                                 games = gameList,
+                                hiddenGames = gameList.filter { it.path in hiddenGamePaths },
+                                onHideGame = setGameHidden,
                                 onGoToAbout = { navController.navigate(Screen.ABOUT.name) },
                                 onGoToHelp = { navController.navigate(Screen.HELP.name) },
                                 onGoToBios = { navController.navigate(Screen.BIOS.name) },
@@ -1323,6 +1431,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     }
+                }
                 }
 
                 // Global Tour Overlay

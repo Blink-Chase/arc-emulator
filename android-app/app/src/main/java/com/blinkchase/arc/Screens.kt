@@ -139,7 +139,8 @@ fun ArcHomeScreen(
     onGameClick: (GameFile) -> Unit,
     onToggleFavorite: (GameFile) -> Unit,
     onGoToLibrary: () -> Unit,
-    onGoToAbout: () -> Unit
+    onGoToAbout: () -> Unit,
+    onHideGame: (GameFile, Boolean) -> Unit
 ) {
     val context = LocalContext.current
     val homeIdentity = remember { prefs.getInt(MainActivity.KEY_HOME_IDENTITY, 0) }
@@ -275,7 +276,11 @@ fun ArcHomeScreen(
                                 val index = i * recentGridSize + j
                                 if (index < recentGames.size) {
                                     Box(modifier = Modifier.weight(1f)) {
-                                        GamePosterItem(game = recentGames[index], onClick = onGameClick)
+                                        GamePosterItem(
+                                            game = recentGames[index],
+                                            onClick = onGameClick,
+                                            onHideGame = onHideGame
+                                        )
                                     }
                                 } else {
                                     Spacer(modifier = Modifier.weight(1f))
@@ -297,7 +302,11 @@ fun ArcHomeScreen(
                                 val index = i * discoveryGridSize + j
                                 if (index < discoveryGames.size) {
                                     Box(modifier = Modifier.weight(1f)) {
-                                        GamePosterItem(game = discoveryGames[index], onClick = onGameClick)
+                                        GamePosterItem(
+                                            game = discoveryGames[index],
+                                            onClick = onGameClick,
+                                            onHideGame = onHideGame
+                                        )
                                     }
                                 } else {
                                     Spacer(modifier = Modifier.weight(1f))
@@ -343,33 +352,40 @@ fun LibraryScreen(
     games: List<GameFile>, 
     showExtensions: Boolean,
     isScanning: Boolean = false,
+    hiddenGamePaths: Set<String>,
     prefs: SharedPreferences,
     onToggleFavorite: (GameFile) -> Unit, 
     onGameSelected: (GameFile) -> Unit,
     onRefresh: () -> Unit,
     onRefreshMetadata: (GameFile) -> Unit,
-    onNavigateToImport: () -> Unit
+    onNavigateToImport: () -> Unit,
+    onHideGame: (GameFile, Boolean) -> Unit
 ) {
     var sortMode by remember { mutableStateOf(SortMode.NAME) }
     var filterPlatform by remember { mutableStateOf<Platform?>(null) }
+    var filtersExpanded by rememberSaveable { mutableStateOf(false) }
     var isGridView by rememberSaveable { mutableStateOf(true) }
     val viewStyle = remember { prefs.getInt(MainActivity.KEY_LIBRARY_VIEW_STYLE, 0) }
     
     val filteredGames = remember(games, filterPlatform) {
         if (filterPlatform == null) games else games.filter { it.platform == filterPlatform }
     }
-    
-    val sortedGames = remember(filteredGames, sortMode) {
+
+    val visibleGames = remember(filteredGames, hiddenGamePaths) {
+        filteredGames.filterNot { it.path in hiddenGamePaths }
+    }
+
+    val sortedGames = remember(visibleGames, sortMode) {
         when (sortMode) {
-            SortMode.NAME -> filteredGames.sortedBy { it.name }
-            SortMode.DATE_ADDED -> filteredGames.sortedByDescending { it.dateAdded }
-            SortMode.LAST_PLAYED -> filteredGames.sortedByDescending { it.lastPlayed }
+            SortMode.NAME -> visibleGames.sortedBy { it.name }
+            SortMode.DATE_ADDED -> visibleGames.sortedByDescending { it.dateAdded }
+            SortMode.LAST_PLAYED -> visibleGames.sortedByDescending { it.lastPlayed }
         }
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
         ScreenHeader(
-            title = "Library • ${games.size}",
+            title = "Library • ${visibleGames.size}",
             actions = {
                 if (isScanning) {
                     Text("Scanning...", style = MaterialTheme.typography.labelSmall)
@@ -391,6 +407,13 @@ fun LibraryScreen(
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
+                IconButton(onClick = { filtersExpanded = !filtersExpanded }) {
+                    Icon(
+                        Icons.Default.FilterList,
+                        contentDescription = if (filtersExpanded) "Collapse filters" else "Expand filters",
+                        tint = if (filtersExpanded) MaterialTheme.colorScheme.primary else Color.Gray
+                    )
+                }
                 IconButton(onClick = {
                     onRefresh()
                     onNavigateToImport()
@@ -401,22 +424,25 @@ fun LibraryScreen(
         )
         
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-            if (games.isEmpty() && !isScanning) {
-                LibraryEmptyState(onAddGames = onNavigateToImport)
-            } else {
+            if (filtersExpanded) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     SortMode.entries.forEach { mode ->
                         FilterChip(
                             selected = sortMode == mode,
                             onClick = { sortMode = mode },
-                            label = { Text(mode.name.lowercase().replace("_", " ").replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelSmall) }
+                            label = {
+                                Text(
+                                    mode.name.lowercase().replace("_", " ").replaceFirstChar { it.uppercase() },
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
                         )
                     }
                 }
-                
+
                 Row(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -424,7 +450,7 @@ fun LibraryScreen(
                     FilterChip(
                         selected = filterPlatform == null,
                         onClick = { filterPlatform = null },
-                        label = { Text("All", style = MaterialTheme.typography.labelSmall) }
+                        label = { Text("All Platforms", style = MaterialTheme.typography.labelSmall) }
                     )
                     Platform.entries.filter { it != Platform.UNKNOWN }.forEach { platform ->
                         FilterChip(
@@ -434,11 +460,25 @@ fun LibraryScreen(
                         )
                     }
                 }
-
                 Spacer(modifier = Modifier.height(8.dp))
-                
-                Box(modifier = Modifier.weight(1f)) {
-                    if (isGridView) {
+            }
+
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                if (visibleGames.isEmpty() && !isScanning) {
+                    if (games.isEmpty()) {
+                        LibraryEmptyState(onAddGames = onNavigateToImport)
+                    } else {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "No games match this filter",
+                                color = Color.Gray
+                            )
+                        }
+                    }
+                } else if (isGridView) {
                         LazyVerticalGrid(
                             columns = GridCells.Adaptive(if (viewStyle == 1) 100.dp else 120.dp),
                             modifier = Modifier.fillMaxSize(),
@@ -448,14 +488,21 @@ fun LibraryScreen(
                         ) {
                             items(sortedGames) { game ->
                                 if (viewStyle == 1) {
-                                    GamePosterItem(game, onGameSelected)
-                                } else {
+                                    GamePosterItem(
+                                        game,
+                                        onGameSelected,
+                                        isHidden = game.path in hiddenGamePaths,
+                                        onHideGame = onHideGame
+                                    )
+                } else {
                                     GameGridItem(
                                         game = game,
                                         onToggleFavorite = onToggleFavorite,
                                         onClick = onGameSelected,
                                         onRefreshMetadata = onRefreshMetadata,
-                                        showExtensions = showExtensions
+                                        showExtensions = showExtensions,
+                                        isHidden = game.path in hiddenGamePaths,
+                                        onHideGame = onHideGame
                                     )
                                 }
                             }
@@ -482,7 +529,9 @@ fun LibraryScreen(
                                         onToggleFavorite = onToggleFavorite,
                                         onClick = onGameSelected,
                                         onRefreshMetadata = onRefreshMetadata,
-                                        showExtensions = showExtensions
+                                        showExtensions = showExtensions,
+                                        isHidden = game.path in hiddenGamePaths,
+                                        onHideGame = onHideGame
                                     )
                                 }
                             }
@@ -497,7 +546,9 @@ fun LibraryScreen(
                                         onToggleFavorite = onToggleFavorite,
                                         onClick = onGameSelected,
                                         onRefreshMetadata = onRefreshMetadata,
-                                        showExtensions = showExtensions
+                                        showExtensions = showExtensions,
+                                        isHidden = game.path in hiddenGamePaths,
+                                        onHideGame = onHideGame
                                     )
                                 }
                             }
@@ -522,7 +573,6 @@ fun LibraryScreen(
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
                                 )
-                            }
                         }
                     }
                 }
@@ -574,6 +624,8 @@ fun SettingsScreen(
     rootStorageDir: File,
     gameDao: GameDao,
     games: List<GameFile>,
+    hiddenGames: List<GameFile>,
+    onHideGame: (GameFile, Boolean) -> Unit,
     onGoToAbout: () -> Unit,
     onGoToHelp: () -> Unit,
     onGoToBios: () -> Unit,
@@ -597,6 +649,7 @@ fun SettingsScreen(
     var controllerDeadzone by remember { mutableFloatStateOf(prefs.getFloat(MainActivity.KEY_CONTROLLER_DEADZONE, 0.15f)) }
     var showCoreSelectorFor by remember { mutableStateOf<Platform?>(null) }
     var showDiagnostics by remember { mutableStateOf(false) }
+    var showHiddenGamesDialog by remember { mutableStateOf(false) }
     var showWipeConfirm by remember { mutableStateOf(false) }
     var showResetConfirm by remember { mutableStateOf(false) }
     var touchDebug by remember { mutableStateOf(prefs.getBoolean(MainActivity.KEY_TOUCH_DEBUG, false)) }
@@ -777,6 +830,14 @@ fun SettingsScreen(
             }
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), thickness = 0.5.dp, color = Color.Gray.copy(alpha = 0.3f))
             SettingsCategory("LIBRARY & METADATA", Icons.Default.Storage)
+            SettingsItem(
+                title = "Hidden Games",
+                subtitle = if (hiddenGames.isEmpty()) "No games hidden" else "${hiddenGames.size} hidden"
+            ) {
+                OutlinedButton(onClick = { showHiddenGamesDialog = true }) {
+                    Text("Manage")
+                }
+            }
             var libViewStyle by remember { mutableIntStateOf(prefs.getInt(MainActivity.KEY_LIBRARY_VIEW_STYLE, 0)) }
             SettingsItem(title = "Library View Style", subtitle = if (libViewStyle == 0) "Detailed Cards" else "Poster Grid") {
                 Row {
@@ -936,6 +997,39 @@ fun SettingsScreen(
     if (showWipeConfirm) { DestructiveActionDialog(title = "Wipe Library?", message = "This will remove all games from your database. Physical ROMs will not be deleted.", onConfirm = { scope.launch(Dispatchers.IO) { gameDao.deleteAll() }; Toast.makeText(context, "Library Cleared", Toast.LENGTH_SHORT).show() }, onDismiss = { showWipeConfirm = false }) }
     if (showResetConfirm) { DestructiveActionDialog(title = "Reset All Settings?", message = "This will clear all preferences and controller layouts.", onConfirm = { prefs.edit { clear() }; Toast.makeText(context, "Settings Reset", Toast.LENGTH_SHORT).show(); refreshKey++ }, onDismiss = { showResetConfirm = false }) }
     if (showDiagnostics) { DiagnosticsDialog(context = context) { showDiagnostics = false } }
+    if (showHiddenGamesDialog) {
+        AlertDialog(
+            onDismissRequest = { showHiddenGamesDialog = false },
+            title = { Text("Hidden Games") },
+            text = {
+                if (hiddenGames.isEmpty()) {
+                    Text("No games are hidden from your library.")
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.heightIn(max = 400.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(hiddenGames, key = { it.path }) { game ->
+                            ListItem(
+                                headlineContent = { Text(game.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                supportingContent = { Text(game.path, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+                                trailingContent = {
+                                    TextButton(onClick = { onHideGame(game, false) }) {
+                                        Text("Show")
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showHiddenGamesDialog = false }) {
+                    Text("Done")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -1059,7 +1153,8 @@ fun SearchScreen(
     showExtensions: Boolean,
     prefs: SharedPreferences,
     onToggleFavorite: (GameFile) -> Unit,
-    onGameSelected: (GameFile) -> Unit
+    onGameSelected: (GameFile) -> Unit,
+    onHideGame: (GameFile, Boolean) -> Unit
 ) {
     var query by remember { mutableStateOf("") }
     var filterPlatform by remember { mutableStateOf<Platform?>(null) }
@@ -1115,7 +1210,8 @@ fun SearchScreen(
                         game = game,
                         onToggleFavorite = onToggleFavorite,
                         onClick = onGameSelected,
-                        showExtensions = showExtensions
+                        showExtensions = showExtensions,
+                        onHideGame = onHideGame
                     )
                 }
             }
