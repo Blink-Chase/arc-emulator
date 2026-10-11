@@ -3,6 +3,7 @@
 #include <cctype>
 #include <cstring>
 #include <string>
+#include <sys/stat.h>
 
 uintptr_t GetCurrentFramebuffer() {
   return 0; // Default window framebuffer
@@ -112,6 +113,40 @@ namespace {
           break;
         start = bar + 1;
       }
+    }
+
+    void ApplyAmigaCompatibilityProfile() {
+      if (!g_isAmigaCore.load())
+        return;
+      g_coreVariables["puae_model"] = "A1200";
+      g_coreVariables["puae_cpu_model"] = "68020";
+      g_coreVariables["puae_cpu_compatibility"] = "compatible";
+      g_coreVariables["puae_use_whdload"] = "files";
+
+      static const char *a1200Kickstarts[] = {
+              "kick40068.A1200",
+              "kick39106.A1200",
+      };
+      bool kickstartSelected = false;
+      for (const char *filename : a1200Kickstarts) {
+        const std::string path = g_systemDir + "/" + filename;
+        struct stat fileInfo;
+        if (stat(path.c_str(), &fileInfo) == 0 && S_ISREG(fileInfo.st_mode) &&
+                fileInfo.st_size > 0) {
+          g_coreVariables["puae_kickstart"] = filename;
+          LOGI("PUAE: selecting A1200 Kickstart '%s' from system directory",
+                  filename);
+          kickstartSelected = true;
+          break;
+        }
+      }
+      if (!kickstartSelected) {
+        LOGW("PUAE: no supported A1200 Kickstart found at '%s' (tried "
+                "kick40068.A1200 and kick39106.A1200)",
+                g_systemDir.c_str());
+      }
+
+      LOGI("PUAE: using A1200/68020 compatible profile and WHDLoad Files mode");
     }
 
 } // namespace
@@ -314,6 +349,7 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
             ResolveFastmemFromValues(option->values, option->key);
             ResolveRendererFromValues(option->values, option->key);
           }
+          ApplyAmigaCompatibilityProfile();
           if (g_isDolphinCore.load()) {
             g_coreVariables["dolphin_shader_compilation_mode"] = "aot";
             g_coreVariables["dolphin_wait_for_shaders"] = "false";
@@ -346,6 +382,7 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
           ResolveRendererFromValues(option->values, option->key);
         }
       }
+      ApplyAmigaCompatibilityProfile();
       if (g_isDolphinCore.load()) {
         g_coreVariables["dolphin_shader_compilation_mode"] = "aot";
         g_coreVariables["dolphin_wait_for_shaders"] = "false";
@@ -377,6 +414,7 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
           }
         }
       }
+      ApplyAmigaCompatibilityProfile();
       return true;
     }
     case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY:
@@ -413,6 +451,8 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
 
         count++;
       }
+
+      ApplyAmigaCompatibilityProfile();
 
       // Parallel N64 Overrides
       g_coreVariables["parallel-n64-gfxplugin"] = "gliden64";

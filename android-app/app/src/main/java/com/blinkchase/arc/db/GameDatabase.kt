@@ -13,6 +13,9 @@ interface GameDao {
     @Query("SELECT * FROM games ORDER BY name ASC")
     fun getAllGames(): Flow<List<GameFile>>
 
+    @Query("SELECT * FROM games ORDER BY name ASC")
+    suspend fun getAllGamesSnapshot(): List<GameFile>
+
     @Query("SELECT * FROM games WHERE platform = :platform ORDER BY name ASC")
     fun getGamesByPlatform(platform: Platform): Flow<List<GameFile>>
 

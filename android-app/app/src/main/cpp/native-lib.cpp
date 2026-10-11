@@ -1,4 +1,5 @@
 #include <unistd.h>
+#include <algorithm>
 #include "audio.h"
 #include "core.h"
 #include "environment.h"
@@ -533,10 +534,25 @@ JNIEXPORT void JNICALL Java_com_blinkchase_arc_MainActivity_setTouchInput(
   // physical spot inside the core's own frame. Without this, touch would work
   // but would be mirrored vertically after a swap.
   const int16_t outY =
-      g_dsSwapScreens.load() ? static_cast<int16_t>(-y) : static_cast<int16_t>(y);
+      g_isDsCore.load() && g_dsSwapScreens.load()
+          ? static_cast<int16_t>(-y)
+          : static_cast<int16_t>(y);
+  const bool isPressed = pressed == JNI_TRUE;
+  if (g_isAmigaCore.load()) {
+    if (isPressed && g_touchPressed.load()) {
+      constexpr int kAmigaPixelsPerNormalizedUnit = 205;
+      const int dx = std::clamp((x - g_touchX.load()) / kAmigaPixelsPerNormalizedUnit, -127, 127);
+      const int dy = std::clamp((outY - g_touchY.load()) / kAmigaPixelsPerNormalizedUnit, -127, 127);
+      g_touchMouseDeltaX.fetch_add(dx);
+      g_touchMouseDeltaY.fetch_add(dy);
+    } else if (isPressed) {
+      g_touchMouseDeltaX.store(0);
+      g_touchMouseDeltaY.store(0);
+    }
+  }
   g_touchX.store((int16_t)x);
   g_touchY.store(outY);
-  g_touchPressed.store(pressed == JNI_TRUE);
+  g_touchPressed.store(isPressed);
 }
 
 JNIEXPORT void JNICALL

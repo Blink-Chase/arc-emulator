@@ -152,6 +152,7 @@ bool LoadCore(const char *libPath) {
     g_isPcsx2Core.store(std::string(libPath).find("pcsx2") != std::string::npos);
     g_isDsCore.store(std::string(libPath).find("melonds") != std::string::npos ||
             std::string(libPath).find("desmume") != std::string::npos);
+    g_isAmigaCore.store(std::string(libPath).find("puae") != std::string::npos);
     g_isN64Core.store(std::string(libPath).find("mupen64plus") != std::string::npos ||
             std::string(libPath).find("parallel_n64") != std::string::npos);
     g_isPs1Core.store(std::string(libPath).find("swanstation") != std::string::npos ||
@@ -248,6 +249,7 @@ void UnloadCore() {
     g_isDolphinCore.store(false);
     g_isPcsx2Core.store(false);
     g_isDsCore.store(false);
+    g_isAmigaCore.store(false);
     g_isN64Core.store(false);
     g_isPs1Core.store(false);
     g_isSwanStationCore.store(false);

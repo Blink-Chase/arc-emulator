@@ -1,5 +1,6 @@
 #include "input.h"
 #include "environment.h"
+#include <algorithm>
 
 namespace {
 
@@ -38,7 +39,18 @@ void LogInputDiagnostic(unsigned port, unsigned device, unsigned index,
 // Digit lookup shared by the JOYPAD and ANALOG paths. g_joypadBits uses the
 // standard libretro bit order, so a query for id N is just a single bit test.
 int16_t DigitalButton(unsigned id) {
-    const uint16_t buttons = g_joypadBits.load();
+    uint16_t buttons = g_joypadBits.load();
+    constexpr int16_t kAnalogDirectionThreshold = 16384;
+    const int16_t analogX = g_analogX.load();
+    const int16_t analogY = g_analogY.load();
+    if (analogY < -kAnalogDirectionThreshold)
+        buttons |= static_cast<uint16_t>(1u << RETRO_DEVICE_ID_JOYPAD_UP);
+    if (analogY > kAnalogDirectionThreshold)
+        buttons |= static_cast<uint16_t>(1u << RETRO_DEVICE_ID_JOYPAD_DOWN);
+    if (analogX < -kAnalogDirectionThreshold)
+        buttons |= static_cast<uint16_t>(1u << RETRO_DEVICE_ID_JOYPAD_LEFT);
+    if (analogX > kAnalogDirectionThreshold)
+        buttons |= static_cast<uint16_t>(1u << RETRO_DEVICE_ID_JOYPAD_RIGHT);
     if (id == RETRO_DEVICE_ID_JOYPAD_MASK)
         return static_cast<int16_t>(buttons);
     if (id < 16)
@@ -106,9 +118,9 @@ static int16_t ResolveInputState(unsigned port, unsigned device, unsigned index,
             return DigitalButton(id);
     }
 
-    // 3. TOUCH / POINTER (DS & DOLPHIN ONLY)
+    // 3. TOUCH / POINTER (DS, Amiga, and Dolphin)
     if (baseDevice == RETRO_DEVICE_POINTER) {
-        if (!g_isDsCore.load() && !g_isDolphinCore.load()) {
+        if (!g_isDsCore.load() && !g_isAmigaCore.load() && !g_isDolphinCore.load()) {
             return 0;
         }
 
@@ -128,10 +140,15 @@ static int16_t ResolveInputState(unsigned port, unsigned device, unsigned index,
         return 0;
     }
 
-    // 4. MOUSE (DS ONLY)
+    // 4. MOUSE (touch-generated Amiga mouse and DS click)
     if (baseDevice == RETRO_DEVICE_MOUSE && index == 0) {
-        if (g_isDsCore.load() && id == RETRO_DEVICE_ID_MOUSE_LEFT)
+        if ((g_isDsCore.load() || g_isAmigaCore.load()) &&
+                id == RETRO_DEVICE_ID_MOUSE_LEFT)
             return g_touchPressed.load() ? 1 : 0;
+        if (g_isAmigaCore.load() && id == RETRO_DEVICE_ID_MOUSE_X)
+            return static_cast<int16_t>(std::clamp(g_touchMouseDeltaX.exchange(0), -32768, 32767));
+        if (g_isAmigaCore.load() && id == RETRO_DEVICE_ID_MOUSE_Y)
+            return static_cast<int16_t>(std::clamp(g_touchMouseDeltaY.exchange(0), -32768, 32767));
         return 0;
     }
 
