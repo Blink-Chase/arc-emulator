@@ -27,6 +27,11 @@ object ArcInputMap {
     const val BTN_LEFT = "btn_left"
     const val BTN_RIGHT = "btn_right"
 
+    private val genericButtonOrder = listOf(
+        BTN_B, BTN_Y, BTN_SELECT, BTN_START, BTN_UP, BTN_DOWN, BTN_LEFT, BTN_RIGHT,
+        BTN_A, BTN_X, BTN_L1, BTN_R1, BTN_L2, BTN_R2, BTN_L3, BTN_R3
+    )
+
     const val AXIS_LEFT_X = "axis_left_x"
     const val AXIS_LEFT_Y = "axis_left_y"
     const val AXIS_RIGHT_X = "axis_right_x"
@@ -50,10 +55,35 @@ object ArcInputMap {
         KeyEvent.KEYCODE_BUTTON_THUMBR -> BTN_R3
         KeyEvent.KEYCODE_BUTTON_START -> BTN_START
         KeyEvent.KEYCODE_BUTTON_SELECT -> BTN_SELECT
+        KeyEvent.KEYCODE_BUTTON_C -> BTN_L2
+        KeyEvent.KEYCODE_BUTTON_Z -> BTN_R2
+        KeyEvent.KEYCODE_BUTTON_MODE -> BTN_SELECT
         KeyEvent.KEYCODE_DPAD_UP -> BTN_UP
         KeyEvent.KEYCODE_DPAD_DOWN -> BTN_DOWN
         KeyEvent.KEYCODE_DPAD_LEFT -> BTN_LEFT
         KeyEvent.KEYCODE_DPAD_RIGHT -> BTN_RIGHT
+        in KeyEvent.KEYCODE_BUTTON_1..KeyEvent.KEYCODE_BUTTON_16 ->
+            genericButtonOrder[keyCode - KeyEvent.KEYCODE_BUTTON_1]
+        else -> null
+    }
+
+    fun toLibretroButtonId(button: String): Int? = when (button) {
+        BTN_A -> MainActivity.BTN_A
+        BTN_B -> MainActivity.BTN_B
+        BTN_X -> MainActivity.BTN_X
+        BTN_Y -> MainActivity.BTN_Y
+        BTN_L1 -> MainActivity.BTN_L
+        BTN_R1 -> MainActivity.BTN_R
+        BTN_L2 -> MainActivity.BTN_L2
+        BTN_R2 -> MainActivity.BTN_R2
+        BTN_L3 -> MainActivity.BTN_L3
+        BTN_R3 -> MainActivity.BTN_R3
+        BTN_START -> MainActivity.BTN_START
+        BTN_SELECT -> MainActivity.BTN_SELECT
+        BTN_UP -> MainActivity.BTN_UP
+        BTN_DOWN -> MainActivity.BTN_DOWN
+        BTN_LEFT -> MainActivity.BTN_LEFT
+        BTN_RIGHT -> MainActivity.BTN_RIGHT
         else -> null
     }
 

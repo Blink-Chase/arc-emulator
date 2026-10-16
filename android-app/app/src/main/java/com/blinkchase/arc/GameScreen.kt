@@ -301,8 +301,6 @@ fun GameScreen(
                     } else {
                         android.util.Log.e("GameScreen", "Failed to load game: ${result.errorMessage}")
                         loadError = result.errorMessage
-                        delay(3000)
-                        onBack()
                     }
                 }
             }
@@ -401,6 +399,10 @@ fun GameScreen(
                         Icon(Icons.Default.Warning, "Error", tint = Color.Red, modifier = Modifier.size(48.dp))
                         Spacer(Modifier.height(16.dp))
                         Text("Error: $loadError", color = Color.Red)
+                        Spacer(Modifier.height(16.dp))
+                        Button(onClick = onBack) {
+                            Text("Back to Library")
+                        }
                     } else {
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.size(64.dp), strokeWidth = 4.dp)
                         Spacer(Modifier.height(24.dp))
@@ -711,18 +713,16 @@ private fun GameViewSurface(
                         onSurfaceViewAvailable(this)
                         keepScreenOn = true
                         holder.setFormat(PixelFormat.RGBX_8888)
-                        if (platform == Platform.DS) {
+                        if (platform == Platform.DS || platform == Platform.AMIGA) {
                             var lastNx = 0
                             var lastNy = 0
                             setOnTouchListener { v, event ->
                                 val vWidth = v.width.toFloat()
                                 val vHeight = v.height.toFloat()
                                 if (vWidth > 0f && vHeight > 0f) {
-                                    // Libretro pointer coordinates span the WHOLE video frame in
-                                    // [-32768, 32767]. The DS core maps them onto its own screen
-                                    // layout (Top/Bottom, Bottom/Top, Left/Right, Hybrid...) and
-                                    // decides which part of the frame is the touch screen, so no
-                                    // "bottom half" preselection happens here.
+                                    // Libretro pointer coordinates span the whole video frame in
+                                    // [-32768, 32767]. DS consumes them as an absolute stylus;
+                                    // Amiga uses the same touch stream as a relative mouse.
                                     val action = event.actionMasked
                                     
                                     val isUpOrCancel = action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL

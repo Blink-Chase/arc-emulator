@@ -92,6 +92,7 @@ fun ControlsOverlay(
         } else {
             Box(modifier = Modifier.fillMaxSize()) {
                 when (platform) {
+                    Platform.AMIGA -> PortraitAmigaLayout(config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onMenuClick, onInteraction)
                     Platform.N64 -> PortraitN64Layout(config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onMenuClick, onInteraction, vScale)
                     Platform.PS1, Platform.PS2 -> PortraitPS1Layout(model, config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onMenuClick, onInteraction, vScale)
                     Platform.GENESIS -> PortraitGenesisLayout(config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onMenuClick, onInteraction, vScale)
@@ -139,6 +140,7 @@ private fun LandscapeControlsLayout(
     Box(modifier = Modifier.fillMaxSize()) {
         MenuButton(modifier = Modifier.align(Alignment.TopCenter).padding(16.dp), onClick = onMenuClick, opacity = globalOpacity, onInteraction = onInteraction)
         when (platform) {
+            Platform.AMIGA -> LandscapeAmigaLayout(config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
             Platform.N64 -> LandscapeN64Layout(config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
             Platform.PS1, Platform.PS2 -> LandscapePS1Layout(model, config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
             Platform.GENESIS -> LandscapeGenesisLayout(config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
@@ -149,6 +151,115 @@ private fun LandscapeControlsLayout(
             else -> LandscapeSNESLayout(model, config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
         }
     }
+}
+
+@Composable
+private fun PortraitAmigaLayout(
+    config: ControlLayoutConfig, opacity: Float, size: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit,
+    onMenu: () -> Unit, onInteraction: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        ShoulderButtonsPortrait(
+            config, opacity, size, buttonProps, selectedId, onSelect, enabled,
+            isEditing, onUpdate, onMenu, onInteraction
+        )
+        Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                DPadLayout(
+                    config, opacity, size * 0.72f, buttonProps, selectedId, onSelect,
+                    enabled, isEditing, onUpdate, onInteraction
+                )
+                AmigaActionButtons(
+                    opacity, size * 0.72f, buttonProps, selectedId, onSelect,
+                    enabled, isEditing, onUpdate, onInteraction
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LandscapeAmigaLayout(
+    config: ControlLayoutConfig, opacity: Float, size: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit,
+    onInteraction: () -> Unit
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.align(Alignment.CenterStart).padding(start = 32.dp)) {
+            DPadLayout(
+                config, opacity, size * 0.82f, buttonProps, selectedId, onSelect,
+                enabled, isEditing, onUpdate, onInteraction
+            )
+        }
+        Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 32.dp)) {
+            AmigaActionButtons(
+                opacity, size, buttonProps, selectedId, onSelect,
+                enabled, isEditing, onUpdate, onInteraction
+            )
+        }
+        Row(
+            modifier = Modifier.align(Alignment.TopStart).padding(start = 40.dp, top = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            AmigaButton("L1", MainActivity.BTN_L, 44f, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+            AmigaButton("R1", MainActivity.BTN_R, 44f, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+            AmigaButton("L2", MainActivity.BTN_L2, 44f, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+            AmigaButton("R2", MainActivity.BTN_R2, 44f, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+        }
+    }
+}
+
+@Composable
+private fun AmigaActionButtons(
+    opacity: Float, size: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit,
+    onInteraction: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            AmigaButton("FIRE 1", MainActivity.BTN_B, 58f * size, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+            AmigaButton("FIRE 2", MainActivity.BTN_A, 58f * size, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            AmigaButton("SPACE", MainActivity.BTN_X, 58f * size, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+            AmigaButton("ENTER", MainActivity.BTN_START, 58f * size, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            AmigaButton("MOUSE L", MainActivity.BTN_L2, 58f * size, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+            AmigaButton("MOUSE R", MainActivity.BTN_R2, 58f * size, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+        }
+    }
+}
+
+@Composable
+private fun AmigaButton(
+    label: String, buttonId: Int, size: Float, opacity: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit,
+    onInteraction: () -> Unit
+) {
+    GameButton(
+        text = label,
+        buttonId = buttonId,
+        modifier = Modifier.size((size * 1.45f).dp, size.dp),
+        props = buttonProps[buttonId],
+        isSelected = selectedId == buttonId,
+        onSelect = { onSelect(buttonId) },
+        enabled = enabled,
+        isEditing = isEditing,
+        onUpdateProps = onUpdate,
+        alpha = opacity,
+        onInteraction = onInteraction,
+        textStyle = MaterialTheme.typography.labelSmall
+    )
 }
 
 @Composable
@@ -1383,4 +1494,3 @@ private tailrec fun Context.findMainActivity(): MainActivity? = when (this) {
     is ContextWrapper -> baseContext.findMainActivity()
     else -> null
 }
-

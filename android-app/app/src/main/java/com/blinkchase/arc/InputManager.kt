@@ -205,37 +205,14 @@ class InputManager(private val activity: MainActivity) {
                (source and InputDevice.SOURCE_JOYSTICK == InputDevice.SOURCE_JOYSTICK)
         
         // Some controllers report as keyboard but have specific gamepad keycodes
-        val isGamepadKey = event.keyCode in listOf(
-            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, 
-            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
-            KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_BUTTON_B,
-            KeyEvent.KEYCODE_BUTTON_X, KeyEvent.KEYCODE_BUTTON_Y,
-            KeyEvent.KEYCODE_BUTTON_L1, KeyEvent.KEYCODE_BUTTON_R1,
-            KeyEvent.KEYCODE_BUTTON_START, KeyEvent.KEYCODE_BUTTON_SELECT
-        )
+        val isGamepadKey = ArcInputMap.fromKeyCode(event.keyCode) != null
 
         return isGamepadSource || isGamepadKey
     }
 
     private fun mapKeyCodeToButton(keyCode: Int): Int {
-        return when (keyCode) {
-            KeyEvent.KEYCODE_BUTTON_A -> MainActivity.BTN_A
-            KeyEvent.KEYCODE_BUTTON_B -> MainActivity.BTN_B
-            KeyEvent.KEYCODE_BUTTON_X -> MainActivity.BTN_X
-            KeyEvent.KEYCODE_BUTTON_Y -> MainActivity.BTN_Y
-            KeyEvent.KEYCODE_BUTTON_L1 -> MainActivity.BTN_L
-            KeyEvent.KEYCODE_BUTTON_R1 -> MainActivity.BTN_R
-            KeyEvent.KEYCODE_BUTTON_L2 -> MainActivity.BTN_L2
-            KeyEvent.KEYCODE_BUTTON_R2 -> MainActivity.BTN_R2
-            KeyEvent.KEYCODE_BUTTON_THUMBL -> MainActivity.BTN_L3
-            KeyEvent.KEYCODE_BUTTON_THUMBR -> MainActivity.BTN_R3
-            KeyEvent.KEYCODE_BUTTON_START -> MainActivity.BTN_START
-            KeyEvent.KEYCODE_BUTTON_SELECT -> MainActivity.BTN_SELECT
-            KeyEvent.KEYCODE_DPAD_UP -> MainActivity.BTN_UP
-            KeyEvent.KEYCODE_DPAD_DOWN -> MainActivity.BTN_DOWN
-            KeyEvent.KEYCODE_DPAD_LEFT -> MainActivity.BTN_LEFT
-            KeyEvent.KEYCODE_DPAD_RIGHT -> MainActivity.BTN_RIGHT
-            else -> -1
-        }
+        return ArcInputMap.fromKeyCode(keyCode)?.let { buttonId ->
+            ArcInputMap.toLibretroButtonId(buttonId)
+        } ?: -1
     }
 }
