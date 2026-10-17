@@ -93,6 +93,7 @@ fun ControlsOverlay(
             Box(modifier = Modifier.fillMaxSize()) {
                 when (platform) {
                     Platform.AMIGA -> PortraitAmigaLayout(config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onMenuClick, onInteraction)
+                    Platform.C64 -> PortraitC64Layout(config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onMenuClick, onInteraction)
                     Platform.N64 -> PortraitN64Layout(config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onMenuClick, onInteraction, vScale)
                     Platform.PS1, Platform.PS2 -> PortraitPS1Layout(model, config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onMenuClick, onInteraction, vScale)
                     Platform.GENESIS -> PortraitGenesisLayout(config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onMenuClick, onInteraction, vScale)
@@ -141,6 +142,12 @@ private fun LandscapeControlsLayout(
         MenuButton(modifier = Modifier.align(Alignment.TopCenter).padding(16.dp), onClick = onMenuClick, opacity = globalOpacity, onInteraction = onInteraction)
         when (platform) {
             Platform.AMIGA -> LandscapeAmigaLayout(config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
+            Platform.C64 -> LandscapeC64Layout(config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
+            Platform.ATARI -> LandscapeAtariLayout(false, config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
+            Platform.ATARI_7800 -> LandscapeAtariLayout(true, config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
+            Platform.LYNX -> LandscapeLynxLayout(config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
+            Platform.TURBOGRAFX -> LandscapeTurboGrafxLayout(config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
+            Platform.WONDERSWAN -> LandscapeWonderSwanLayout(config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
             Platform.N64 -> LandscapeN64Layout(config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
             Platform.PS1, Platform.PS2 -> LandscapePS1Layout(model, config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
             Platform.GENESIS -> LandscapeGenesisLayout(config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
@@ -151,6 +158,115 @@ private fun LandscapeControlsLayout(
             else -> LandscapeSNESLayout(model, config, globalOpacity, globalSizeMultiplier, buttonProps, selectedButtonId, onSelectButton, enabled, isEditing, onUpdateProps, onInteraction)
         }
     }
+}
+
+@Composable
+private fun PortraitC64Layout(
+    config: ControlLayoutConfig, opacity: Float, size: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit,
+    onMenu: () -> Unit, onInteraction: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            C64Button("RUN/STOP", MainActivity.BTN_L2, size, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+            MenuButton(onClick = onMenu, opacity = opacity, onInteraction = onInteraction)
+            C64Button("RETURN", MainActivity.BTN_R2, size, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+        }
+        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            Box(modifier = Modifier.align(Alignment.CenterStart).padding(start = 8.dp)) {
+                DPadLayout(config, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+            }
+            Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 8.dp)) {
+                C64ActionButtons(size, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+            }
+            Row(
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                C64Button("KEYBOARD", MainActivity.BTN_SELECT, size, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+                C64Button("ENTER", MainActivity.BTN_START, size, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+            }
+        }
+    }
+}
+
+@Composable
+private fun LandscapeC64Layout(
+    config: ControlLayoutConfig, opacity: Float, size: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit,
+    onInteraction: () -> Unit
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.align(Alignment.TopStart).padding(start = 24.dp, top = 8.dp)) {
+            C64Button("RUN/STOP", MainActivity.BTN_L2, size, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+        }
+        Box(modifier = Modifier.align(Alignment.TopEnd).padding(end = 24.dp, top = 8.dp)) {
+            C64Button("RETURN", MainActivity.BTN_R2, size, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+        }
+        Box(modifier = Modifier.align(Alignment.CenterStart).padding(start = 24.dp)) {
+            DPadLayout(config, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+        }
+        Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 24.dp)) {
+            C64ActionButtons(size, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+        }
+        Row(
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            C64Button("KEYBOARD", MainActivity.BTN_SELECT, size, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+            C64Button("ENTER", MainActivity.BTN_START, size, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+        }
+    }
+}
+
+@Composable
+private fun C64ActionButtons(
+    size: Float, opacity: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit,
+    onInteraction: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        C64Button("SPACE", MainActivity.BTN_X, size, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            C64Button("FIRE", MainActivity.BTN_B, size, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+            C64Button("FIRE 2", MainActivity.BTN_A, size, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+        }
+        C64Button("SHIFT", MainActivity.BTN_Y, size, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+    }
+}
+
+@Composable
+private fun C64Button(
+    label: String, buttonId: Int, size: Float, opacity: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit,
+    onInteraction: () -> Unit
+) {
+    GameButton(
+        text = label,
+        buttonId = buttonId,
+        modifier = Modifier.size((64 * size).dp, (42 * size).dp),
+        props = buttonProps[buttonId],
+        isSelected = selectedId == buttonId,
+        onSelect = { onSelect(buttonId) },
+        enabled = enabled,
+        isEditing = isEditing,
+        onUpdateProps = onUpdate,
+        alpha = opacity,
+        onInteraction = onInteraction,
+        textStyle = MaterialTheme.typography.labelSmall
+    )
 }
 
 @Composable
@@ -385,7 +501,7 @@ private fun LandscapeDSLayout(
             GameButton(text = "START", buttonId = MainActivity.BTN_START, modifier = Modifier.size((70 * size).dp, (30 * size).dp), props = buttonProps[MainActivity.BTN_START], isSelected = selectedId == MainActivity.BTN_START, onSelect = { onSelect(MainActivity.BTN_START) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, onInteraction = onInteraction)
         }
 
-        Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 32.dp)) { SNESActionButtons(ControllerModel.GENERIC_ABXY, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction) }
+        Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 32.dp)) { SNESActionButtons(ControllerModel.GENERIC_ABXY, config, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction) }
     }
 }
 
@@ -415,7 +531,7 @@ private fun PortraitDSLayout(
                 }
             }
 
-            Box(modifier = Modifier.align(Alignment.TopEnd).padding(end = 16.dp, top = (16 * vScale).dp)) { SNESActionButtons(ControllerModel.GENERIC_ABXY, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction) }
+            Box(modifier = Modifier.align(Alignment.TopEnd).padding(end = 16.dp, top = (16 * vScale).dp)) { SNESActionButtons(ControllerModel.GENERIC_ABXY, config, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction) }
         }
     }
 }
@@ -511,7 +627,7 @@ private fun PortraitSNESLayout(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 DPadLayout(config, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
-                SNESActionButtons(model, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+                SNESActionButtons(model, config, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
             }
             
             // Move Select/Start to the bottom center area
@@ -529,9 +645,177 @@ private fun LandscapeSNESLayout(
     enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit, onInteraction: () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
-        Box(modifier = Modifier.align(Alignment.CenterStart).padding(start = 32.dp)) { DPadLayout(config, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction) }
-        Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 32.dp)) { SNESActionButtons(model, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction) }
+        Box(modifier = Modifier.align(Alignment.CenterStart).padding(start = 32.dp).offset(y = (-18).dp)) { DPadLayout(config, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction) }
+        Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 32.dp).offset(y = (-18).dp)) { SNESActionButtons(model, config, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction) }
     }
+}
+
+@Composable
+private fun LandscapeAtariLayout(
+    is7800: Boolean, config: ControlLayoutConfig, opacity: Float, size: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit,
+    onInteraction: () -> Unit
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.align(Alignment.CenterStart).padding(start = 24.dp).offset(y = (-14).dp)) {
+            DPadLayout(config, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+        }
+        if (is7800) {
+            Row(
+                modifier = Modifier.align(Alignment.CenterEnd).padding(end = 28.dp).offset(y = (-14).dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                RetroPlatformButton("1", MainActivity.BTN_B, Platform.ATARI_7800, config, size, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+                RetroPlatformButton("2", MainActivity.BTN_A, Platform.ATARI_7800, config, size, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+            }
+            Row(
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                RetroPlatformButton("SELECT", MainActivity.BTN_SELECT, Platform.ATARI_7800, config, size * 0.72f, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+                RetroPlatformButton("PAUSE", MainActivity.BTN_START, Platform.ATARI_7800, config, size * 0.72f, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+            }
+        } else {
+            Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 40.dp).offset(y = (-14).dp)) {
+                RetroPlatformButton("FIRE", MainActivity.BTN_B, Platform.ATARI, config, size * 1.15f, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+            }
+        }
+    }
+}
+
+@Composable
+private fun LandscapeLynxLayout(
+    config: ControlLayoutConfig, opacity: Float, size: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit,
+    onInteraction: () -> Unit
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.align(Alignment.CenterStart).padding(start = 24.dp).offset(y = (-16).dp)) {
+            DPadLayout(config, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+        }
+        Column(
+            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 24.dp).offset(y = (-16).dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                RetroPlatformButton("A", MainActivity.BTN_B, Platform.LYNX, config, size, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+                RetroPlatformButton("B", MainActivity.BTN_A, Platform.LYNX, config, size, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                RetroPlatformButton("OPT 1", MainActivity.BTN_SELECT, Platform.LYNX, config, size * 0.8f, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+                RetroPlatformButton("OPT 2", MainActivity.BTN_START, Platform.LYNX, config, size * 0.8f, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+            }
+        }
+    }
+}
+
+@Composable
+private fun LandscapeTurboGrafxLayout(
+    config: ControlLayoutConfig, opacity: Float, size: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit,
+    onInteraction: () -> Unit
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.align(Alignment.CenterStart).padding(start = 24.dp).offset(y = (-16).dp)) {
+            DPadLayout(config, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+        }
+        Column(
+            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 28.dp).offset(y = (-16).dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            RetroPlatformButton("I", MainActivity.BTN_B, Platform.TURBOGRAFX, config, size, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+            RetroPlatformButton("II", MainActivity.BTN_A, Platform.TURBOGRAFX, config, size, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+        }
+        Row(
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            RetroPlatformButton("SELECT", MainActivity.BTN_SELECT, Platform.TURBOGRAFX, config, size * 0.72f, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+            RetroPlatformButton("RUN", MainActivity.BTN_START, Platform.TURBOGRAFX, config, size * 0.72f, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+        }
+    }
+}
+
+@Composable
+private fun LandscapeWonderSwanLayout(
+    config: ControlLayoutConfig, opacity: Float, size: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit,
+    onInteraction: () -> Unit
+) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.align(Alignment.CenterStart).padding(start = 24.dp).offset(y = (-16).dp)) {
+            DPadLayout(config, opacity, size, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+        }
+        Box(modifier = Modifier.align(Alignment.CenterEnd).padding(end = 26.dp).offset(y = (-16).dp)) {
+            WonderSwanActionButtons(config, size, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+        }
+        Row(
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            RetroPlatformButton("OPTION", MainActivity.BTN_SELECT, Platform.WONDERSWAN, config, size * 0.72f, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+            RetroPlatformButton("START", MainActivity.BTN_START, Platform.WONDERSWAN, config, size * 0.72f, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+        }
+    }
+}
+
+@Composable
+private fun WonderSwanActionButtons(
+    config: ControlLayoutConfig, size: Float, opacity: Float,
+    buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
+    enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit,
+    onInteraction: () -> Unit
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            RetroPlatformButton("X", MainActivity.BTN_X, Platform.WONDERSWAN, config, size * 0.78f, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+            RetroPlatformButton("Y", MainActivity.BTN_Y, Platform.WONDERSWAN, config, size * 0.78f, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            RetroPlatformButton("A", MainActivity.BTN_B, Platform.WONDERSWAN, config, size * 0.78f, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+            RetroPlatformButton("B", MainActivity.BTN_A, Platform.WONDERSWAN, config, size * 0.78f, opacity, buttonProps, selectedId, onSelect, enabled, isEditing, onUpdate, onInteraction)
+        }
+    }
+}
+
+@Composable
+private fun RetroPlatformButton(
+    label: String, buttonId: Int, platform: Platform, config: ControlLayoutConfig,
+    size: Float, opacity: Float, buttonProps: Map<Int, ButtonProps>,
+    selectedId: Int?, onSelect: (Int?) -> Unit, enabled: Boolean,
+    isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit, onInteraction: () -> Unit
+) {
+    val classic = config.visualStyle == VisualStyle.CLASSIC
+    val color = if (classic) {
+        when (platform) {
+            Platform.ATARI, Platform.ATARI_7800 -> Color(0xFFC62828)
+            Platform.LYNX -> Color(0xFF424242)
+            Platform.TURBOGRAFX -> Color(0xFF6A1B9A)
+            else -> Color(0xFF455A64)
+        }
+    } else {
+        platform.getColor()
+    }
+    GameButton(
+        text = label,
+        buttonId = buttonId,
+        modifier = Modifier.size((58 * size).dp, (50 * size).dp),
+        props = buttonProps[buttonId],
+        isSelected = selectedId == buttonId,
+        onSelect = { onSelect(buttonId) },
+        enabled = enabled,
+        isEditing = isEditing,
+        onUpdateProps = onUpdate,
+        alpha = opacity,
+        buttonColor = color,
+        borderColor = if (classic) Color.LightGray.copy(alpha = 0.75f) else Color.Transparent,
+        onInteraction = onInteraction,
+        textStyle = MaterialTheme.typography.labelSmall
+    )
 }
 
 @Composable
@@ -892,7 +1176,7 @@ private fun DPadLayout(
 
 @Composable
 private fun SNESActionButtons(
-    model: ControllerModel, opacity: Float, size: Float,
+    model: ControllerModel, config: ControlLayoutConfig, opacity: Float, size: Float,
     buttonProps: Map<Int, ButtonProps>, selectedId: Int?, onSelect: (Int?) -> Unit,
     enabled: Boolean, isEditing: Boolean, onUpdate: (Int, ButtonProps) -> Unit, onInteraction: () -> Unit
 ) {
@@ -903,20 +1187,21 @@ private fun SNESActionButtons(
         else -> listOf("A", "B", "X", "Y")
     }
     
-    // SNES Colors: Green, Blue, Red, Yellow
-    val colorA = Color(0xFFF44336) // Red
-    val colorB = Color(0xFFFFEB3B) // Yellow
-    val colorX = Color(0xFF2196F3) // Blue
-    val colorY = Color(0xFF4CAF50) // Green
-    
+    val classic = config.visualStyle == VisualStyle.CLASSIC
+    val colorA = if (classic) Color(0xFF673AB7) else MaterialTheme.colorScheme.primary
+    val colorB = if (classic) Color(0xFFE53935) else MaterialTheme.colorScheme.primary
+    val colorX = if (classic) Color(0xFF2196F3) else MaterialTheme.colorScheme.primary
+    val colorY = if (classic) Color(0xFFFFEB3B) else MaterialTheme.colorScheme.primary
+    val borderColor = if (classic) Color.LightGray.copy(alpha = 0.7f) else Color.Transparent
+
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        GameButton(text = labelX, buttonId = MainActivity.BTN_X, modifier = Modifier.size(btnSize), props = buttonProps[MainActivity.BTN_X], isSelected = selectedId == MainActivity.BTN_X, onSelect = { onSelect(MainActivity.BTN_X) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = colorX, onInteraction = onInteraction)
+        GameButton(text = labelX, buttonId = MainActivity.BTN_X, modifier = Modifier.size(btnSize), props = buttonProps[MainActivity.BTN_X], isSelected = selectedId == MainActivity.BTN_X, onSelect = { onSelect(MainActivity.BTN_X) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = colorX, borderColor = borderColor, onInteraction = onInteraction)
         Row {
-            GameButton(text = labelY, buttonId = MainActivity.BTN_Y, modifier = Modifier.size(btnSize), props = buttonProps[MainActivity.BTN_Y], isSelected = selectedId == MainActivity.BTN_Y, onSelect = { onSelect(MainActivity.BTN_Y) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = colorY, onInteraction = onInteraction)
+            GameButton(text = labelY, buttonId = MainActivity.BTN_Y, modifier = Modifier.size(btnSize), props = buttonProps[MainActivity.BTN_Y], isSelected = selectedId == MainActivity.BTN_Y, onSelect = { onSelect(MainActivity.BTN_Y) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = colorY, borderColor = borderColor, onInteraction = onInteraction)
             Spacer(Modifier.size(btnSize))
-            GameButton(text = labelA, buttonId = MainActivity.BTN_A, modifier = Modifier.size(btnSize), props = buttonProps[MainActivity.BTN_A], isSelected = selectedId == MainActivity.BTN_A, onSelect = { onSelect(MainActivity.BTN_A) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = colorA, onInteraction = onInteraction)
+            GameButton(text = labelA, buttonId = MainActivity.BTN_A, modifier = Modifier.size(btnSize), props = buttonProps[MainActivity.BTN_A], isSelected = selectedId == MainActivity.BTN_A, onSelect = { onSelect(MainActivity.BTN_A) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = colorA, borderColor = borderColor, onInteraction = onInteraction)
         }
-        GameButton(text = labelB, buttonId = MainActivity.BTN_B, modifier = Modifier.size(btnSize), props = buttonProps[MainActivity.BTN_B], isSelected = selectedId == MainActivity.BTN_B, onSelect = { onSelect(MainActivity.BTN_B) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = colorB, onInteraction = onInteraction)
+        GameButton(text = labelB, buttonId = MainActivity.BTN_B, modifier = Modifier.size(btnSize), props = buttonProps[MainActivity.BTN_B], isSelected = selectedId == MainActivity.BTN_B, onSelect = { onSelect(MainActivity.BTN_B) }, enabled = enabled, isEditing = isEditing, onUpdateProps = onUpdate, alpha = opacity, buttonColor = colorB, borderColor = borderColor, onInteraction = onInteraction)
     }
 }
 

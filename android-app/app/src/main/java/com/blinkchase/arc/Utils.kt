@@ -353,12 +353,26 @@ object LibraryDiagnostics {
     }
 }
 
-fun detectConsolePlatform(file: File): Platform {
-    val name = file.name.lowercase()
-    val ext = file.extension.lowercase()
-    val fileSize = file.length()
-    val path = file.absolutePath.lowercase()
+fun detectConsolePlatform(file: File): Platform =
+    detectConsolePlatform(file.name, file.absolutePath, file.length(), file)
+
+internal fun detectConsolePlatform(
+    fileName: String,
+    filePath: String,
+    fileSize: Long,
+    archiveFile: File? = null
+): Platform {
+    val name = fileName.lowercase()
+    val ext = fileName.substringAfterLast('.', "").lowercase()
+    val path = filePath.lowercase()
     val normalizedPath = path.replace('\\', '/')
+    val isPs2 = Regex("(?i)(?:ps2|playstation[\\s_-]*2)").containsMatchIn("$name $path")
+
+    val isC64Directory = normalizedPath.split('/').any { it.contains(Regex("(?i)(^|[^a-z0-9])(c64|commodore\\s*64|commodore64)([^a-z0-9]|$)")) }
+    val cleanNameForMatch = name.replace(Regex("[^a-z0-9]"), "")
+    if (isC64Directory || cleanNameForMatch.contains("bombfusion", true)) {
+        return Platform.C64
+    }
 
     if (ext == "wbfs" || ext == "wii") return Platform.WII
     if (ext == "gcm" || ext == "gc") return Platform.GAMECUBE
@@ -367,15 +381,87 @@ fun detectConsolePlatform(file: File): Platform {
     if (ext == "gb") return Platform.GB
     if (ext == "gbc") return Platform.GBC
     if (ext == "sfc" || ext == "smc") return Platform.SNES
+    if (ext == "pce" || ext == "sgx") return Platform.TURBOGRAFX
+    if (ext == "ws" || ext == "wsc") return Platform.WONDERSWAN
     if (ext == "n64" || ext == "z64" || ext == "v64") return Platform.N64
     if (ext == "md" || ext == "gen" || ext == "smd") return Platform.GENESIS
     if (ext == "gdi" || ext == "cdi") return Platform.DREAMCAST
     if (ext == "ss") return Platform.SATURN
     if (ext == "adf" || ext == "adz" || ext == "dms" || ext == "fdi" || ext == "hdf" || ext == "ipf" || ext == "lha") return Platform.AMIGA
     if (ext == "a26") return Platform.ATARI
-    if (ext in setOf("crt", "d64", "d71", "d81", "g64", "nib", "p00", "prg", "t64", "tap")) {
-        return Platform.COMMODORE_64
+    if (ext == "a78") return Platform.ATARI_7800
+    if (ext == "lnx") return Platform.LYNX
+    if (ext in setOf("crt", "d2m", "d4m", "d64", "d6z", "d71", "d7z", "d80", "d81", "d82", "d8z", "g41", "g4z", "g64", "g6z", "nib", "nbz", "p00", "prg", "t64", "tap")) {
+        return Platform.C64
     }
+
+    if (ext == "zip" && archiveFile != null) {
+        try {
+            java.util.zip.ZipFile(archiveFile).use { zip ->
+                val entries = zip.entries()
+                val entryPlatforms = mutableListOf<Platform>()
+                while (entries.hasMoreElements()) {
+                    val entry = entries.nextElement()
+                    if (entry.isDirectory) continue
+                    val entryName = entry.name.lowercase()
+                    val entryExt = entryName.substringAfterLast('.', "")
+                    val entryPlatform = when (entryExt) {
+                        "gbc" -> Platform.GBC
+                        "gb" -> Platform.GB
+                        "gba" -> Platform.GBA
+                        "sfc", "smc" -> Platform.SNES
+                        "pce", "sgx" -> Platform.TURBOGRAFX
+                        "ws", "wsc" -> Platform.WONDERSWAN
+                        "nds" -> Platform.DS
+                        "n64", "z64", "v64" -> Platform.N64
+                        "gen", "md", "smd" -> Platform.GENESIS
+                        "gcm", "gc", "rvz" -> Platform.GAMECUBE
+                        "wbfs", "wii" -> Platform.WII
+                        "gdi", "cdi" -> Platform.DREAMCAST
+                        "ss" -> Platform.SATURN
+                        "a26" -> Platform.ATARI
+                        "a78" -> Platform.ATARI_7800
+                        "lnx" -> Platform.LYNX
+                        "d64", "d71", "d81", "g64", "nib", "p00", "prg", "t64", "tap" -> Platform.C64
+                        "cue", "chd", "pbp", "iso" -> when {
+                            entryName.contains("ps2", true) -> Platform.PS2
+                            entryName.contains("saturn", true) -> Platform.SATURN
+                            else -> Platform.PS1
+                        }
+                        else -> Platform.UNKNOWN
+                    }
+                    if (entryPlatform != Platform.UNKNOWN) entryPlatforms.add(entryPlatform)
+                }
+                entryPlatforms.groupingBy { it }.eachCount()
+                    .maxByOrNull { it.value }?.key?.let { return it }
+            }
+        } catch (_: Exception) {
+            // Use folder hints for unreadable or content-ambiguous archives.
+        }
+    }
+
+    val pathParts = normalizedPath.split('/')
+    if (pathParts.any {
+            it.contains(Regex("(?i)(^|[^a-z0-9])(?:atari[\\s_-]*)?lynx([^a-z0-9]|$)"))
+        }) {
+        return Platform.LYNX
+    }
+    if (pathParts.any {
+            it.contains(Regex("(?i)(^|[^a-z0-9])(?:atari[\\s_-]*)?7800([^a-z0-9]|$)"))
+        }) {
+        return Platform.ATARI_7800
+    }
+    if (pathParts.any {
+            it.contains(Regex("(?i)(^|[^a-z0-9])(?:atari[\\s_-]*)?2600([^a-z0-9]|$)"))
+        }) {
+        return Platform.ATARI
+    }
+
+    val isWonderSwanDirectory = normalizedPath
+        .split('/')
+        .dropLast(1)
+        .any { it.matches(Regex("(?i)wonder[\\s_-]*swan(?:[\\s_-]*color)?")) }
+    if (isWonderSwanDirectory && ext == "bin") return Platform.WONDERSWAN
 
     val isAmigaDirectory = normalizedPath
         .split('/')
@@ -383,15 +469,15 @@ fun detectConsolePlatform(file: File): Platform {
     if (isAmigaDirectory && ext in setOf("bin", "chd", "cue", "iso", "m3u", "zip")) {
         return Platform.AMIGA
     }
-    if (normalizedPath.split('/').any {
-            it.contains(Regex("(?i)(^|[^a-z0-9])(atari|atari\\s*2600|2600)([^a-z0-9]|$)"))
+    if (pathParts.any {
+            it.contains(Regex("(?i)(^|[^a-z0-9])atari([^a-z0-9]|$)"))
         } && ext in setOf("bin", "zip")) {
         return Platform.ATARI
     }
     if (normalizedPath.split('/').any {
             it.contains(Regex("(?i)(^|[^a-z0-9])(c64|commodore\\s*64)([^a-z0-9]|$)"))
         } && ext in setOf("bin", "zip")) {
-        return Platform.COMMODORE_64
+        return Platform.C64
     }
 
     return when {
@@ -412,17 +498,19 @@ fun detectConsolePlatform(file: File): Platform {
         }
         name.contains("gc", true) || name.contains("gamecube", true) -> Platform.GAMECUBE
         ext == "cue" || ext == "chd" || ext == "pbp" -> {
-            if (name.contains("ps2", true) || path.contains("ps2", true)) Platform.PS2
+            if (isPs2) Platform.PS2
             else if (name.contains("saturn", true) || path.contains("saturn", true)) Platform.SATURN
             else Platform.PS1
         }
         ext == "bin" -> {
-            if (name.contains("ps2", true) || path.contains("ps2", true)) Platform.PS2
+            if (isPs2) Platform.PS2
             else if (name.contains("saturn", true) || path.contains("saturn", true)) Platform.SATURN
             else Platform.PS1
         }
         name.contains(".iso", true) || ext == "iso" -> {
             if (name.contains("gc", true) || name.contains("gamecube", true)) Platform.GAMECUBE
+            else if (isPs2) Platform.PS2
+            else if (fileSize < 900 * 1024 * 1024L || name.contains("ps1", true) || path.contains("ps1", true)) Platform.PS1
             else Platform.PS2
         }
         else -> Platform.UNKNOWN
