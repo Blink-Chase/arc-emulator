@@ -18,6 +18,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -79,13 +80,80 @@ private fun GameFileLocationAction(game: GameFile, onShowLocation: () -> Unit) {
 @Composable
 private fun GameFileLocationDialog(game: GameFile, onDismiss: () -> Unit) {
     val context = LocalContext.current
+    val file = remember(game.path) { File(game.path) }
+    val parentDir = remember(file) { if (file.isDirectory) file else file.parentFile }
+    val relatedFiles = remember(parentDir) {
+        parentDir?.listFiles()?.filter { it.isFile && !it.name.startsWith(".") } ?: emptyList()
+    }
+    val fileSizeFormatted = remember(file) {
+        if (file.exists() && file.isFile) {
+            val sizeMb = file.length().toDouble() / (1024 * 1024)
+            if (sizeMb >= 1.0) String.format(java.util.Locale.US, "%.1f MB", sizeMb)
+            else String.format(java.util.Locale.US, "%.1f KB", file.length().toDouble() / 1024)
+        } else if (file.exists() && file.isDirectory) {
+            "Directory / WHDLoad Install"
+        } else {
+            "Unknown size"
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("File Location") },
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.FolderOpen, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("File & Storage Info")
+            }
+        },
         text = {
-            SelectionContainer {
-                Text(game.path, style = MaterialTheme.typography.bodySmall)
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text("Path:", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Spacer(modifier = Modifier.height(4.dp))
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    shape = MaterialTheme.shapes.small
+                ) {
+                    SelectionContainer {
+                        Text(
+                            text = game.path,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Size: $fileSizeFormatted", style = MaterialTheme.typography.bodyMedium)
+                    Text("Related files in folder: ${relatedFiles.size}", style = MaterialTheme.typography.bodyMedium)
+                }
+                if (relatedFiles.size > 1) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Other files in directory:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 120.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                        shape = MaterialTheme.shapes.small
+                    ) {
+                        LazyColumn(
+                            modifier = Modifier.padding(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            items(relatedFiles.filter { it.absolutePath != file.absolutePath }) { relFile ->
+                                Text(
+                                    text = "• ${relFile.name}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
@@ -95,7 +163,7 @@ private fun GameFileLocationDialog(game: GameFile, onDismiss: () -> Unit) {
                 Toast.makeText(context, "File location copied", Toast.LENGTH_SHORT).show()
                 onDismiss()
             }) {
-                Text("Copy")
+                Text("Copy Path")
             }
         },
         dismissButton = {

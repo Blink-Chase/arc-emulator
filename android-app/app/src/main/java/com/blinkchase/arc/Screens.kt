@@ -2,12 +2,10 @@ package com.blinkchase.arc
 
 import android.content.*
 import android.net.Uri
-import android.os.Environment
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
@@ -35,7 +33,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
 import androidx.core.content.edit
 import coil.compose.AsyncImage
 import com.blinkchase.arc.db.GameDao
@@ -676,15 +673,20 @@ fun SettingsScreen(
 
     val pathLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         uri?.let {
-            val path = it.path ?: ""
-            val split = path.split(":")
-            if (split.size > 1) {
-                val real = Environment.getExternalStorageDirectory().absolutePath + "/" + split[1]
-                val new = customPaths + real
+            try {
+                SafRomStorage.persistTreeReadPermission(context, it)
+                val new = customPaths + it.toString()
                 customPaths = new
-                prefs.edit { putStringSet(MainActivity.KEY_CUSTOM_PATHS, new) }
+                scanMode = 1
+                prefs.edit {
+                    putStringSet(MainActivity.KEY_CUSTOM_PATHS, new)
+                    putInt(MainActivity.KEY_SCAN_MODE, 1)
+                }
                 refreshKey++
                 onRefresh()
+            } catch (e: Exception) {
+                Log.e("ArcStorage", "Unable to retain access to selected ROM folder", e)
+                Toast.makeText(context, "Could not keep access to that folder: ${e.message}", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -735,6 +737,10 @@ fun SettingsScreen(
                         Icon(icon, null, tint = if (themeMode == mode) MaterialTheme.colorScheme.primary else Color.Gray)
                     }
                 } }
+            }
+            var hideSecondaryFiles by remember { mutableStateOf(prefs.getBoolean(MainActivity.KEY_HIDE_SECONDARY_FILES, true)) }
+            SettingsItem(title = "Hide Secondary Disks / Sides in Library", subtitle = "When enabled, multi-disk companion files (Disk 2, Side B, etc.) are hidden from library view") {
+                Switch(checked = hideSecondaryFiles, onCheckedChange = { hideSecondaryFiles = it; prefs.edit { putBoolean(MainActivity.KEY_HIDE_SECONDARY_FILES, it) } })
             }
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), thickness = 0.5.dp, color = Color.Gray.copy(alpha = 0.3f))
             SettingsCategory("EMULATION", Icons.Default.SportsEsports)
@@ -860,13 +866,32 @@ fun SettingsScreen(
                     Column(modifier = Modifier.padding(8.dp)) {
                         customPaths.forEach { path ->
                             ListItem(
-                                headlineContent = { Text(path.split("/").last(), style = MaterialTheme.typography.bodyMedium) },
-                                supportingContent = { Text(path, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                headlineContent = {
+                                    Text(
+                                        if (path.startsWith("content://")) "External storage folder" else path.split("/").last(),
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                },
+                                supportingContent = {
+                                    Text(
+                                        if (path.startsWith("content://")) "SAF permission saved" else path,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                },
                                 trailingContent = {
                                     IconButton(onClick = { 
                                         val new = customPaths - path
                                         customPaths = new
                                         prefs.edit { putStringSet(MainActivity.KEY_CUSTOM_PATHS, new) }
+                                        if (path.startsWith("content://")) {
+                                            try {
+                                                SafRomStorage.releaseTreeReadPermission(context, Uri.parse(path))
+                                            } catch (e: Exception) {
+                                                Log.w("ArcStorage", "Unable to release removed folder permission", e)
+                                            }
+                                        }
                                         refreshKey++
                                         onRefresh()
                                     }) { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }
@@ -1459,14 +1484,15 @@ fun SetupGuideScreen(
 
     val pathLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         uri?.let {
-            val path = it.path ?: ""
-            val split = path.split(":")
-            if (split.size > 1) {
-                val real = Environment.getExternalStorageDirectory().absolutePath + "/" + split[1]
-                val new = customPaths + real
+            try {
+                SafRomStorage.persistTreeReadPermission(context, it)
+                val new = customPaths + it.toString()
                 customPaths = new
                 prefs.edit { putStringSet(MainActivity.KEY_CUSTOM_PATHS, new); putInt(MainActivity.KEY_SCAN_MODE, 1) }
                 onScanLibrary()
+            } catch (e: Exception) {
+                Log.e("ArcStorage", "Unable to retain access to selected ROM folder", e)
+                Toast.makeText(context, "Could not keep access to that folder: ${e.message}", Toast.LENGTH_LONG).show()
             }
         }
     }

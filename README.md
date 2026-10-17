@@ -38,6 +38,7 @@ An open-source Libretro emulator for Android focused on clean user experience, h
 *   **Stable Navigation:** Persistent game state management and "Non-blocking" transitions for a snappy feel.
 *   **Save States & Rewind:** Instant progress management with 5 visual slots and preview support.
 *   **Built-in Core Downloader:** Browse, install and update Libretro cores from inside the app — Arc suggests what you need based on the games it finds.
+*   **External ROM Folders:** Select storage through Android's Storage Access Framework; Arc keeps read access and stages games into private cache when a core needs a filesystem path.
 
 ---
 
@@ -118,6 +119,11 @@ Every button in Arc is independent. In Edit Mode, tap a button to adjust its **S
 
 ### Missing BIOS Files
 Systems like PS1 and GBA perform best with original BIOS files. Use the **BIOS Manager** in Settings to check your status; it will show a ✅ if the file is correctly placed in `/Documents/Arc/system/`.
+
+### Amiga IPF Disk Support (CAPSIMG)
+Installing the PUAE core also downloads CAPSIMG 1.2 directly from the [upstream release](https://github.com/rsn8887/capsimg/releases/tag/1.2) into `Documents/Arc/system/`. CAPSIMG is only needed for IPF-format Amiga disks; other Amiga formats do not require it. Arc does not bundle or host the CAPSIMG binary.
+
+CAPSIMG is licensed for **non-commercial use only**. Commercial use requires separate permission from the rights holder; downloading it directly from GitHub does not change that restriction. Review the [upstream license](https://raw.githubusercontent.com/rsn8887/capsimg/master/LICENCE.txt) before using the feature.
 
 ### Controller Stick Drift
 If your physical controller has stick drift, navigate to **Settings > Input Device > Analog Deadzone** and adjust the slider to increase the "null zone" of your thumbsticks.
