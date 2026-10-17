@@ -5,7 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import android.content.ComponentName
 import android.content.pm.PackageManager
 import android.Manifest
 import android.util.Log
@@ -33,7 +32,6 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import android.content.res.Configuration
@@ -73,6 +71,7 @@ class MainActivity : ComponentActivity() {
         const val KEY_SCAN_MODE = "scan_mode"
         const val KEY_CUSTOM_PATHS = "custom_paths"
         const val KEY_HIDDEN_GAME_PATHS = "hidden_game_paths"
+        const val KEY_HIDE_SECONDARY_FILES = "hide_secondary_files"
         const val KEY_AUDIO_LATENCY = "audio_latency"
         const val KEY_SHOW_FF = "show_ff"
         const val KEY_AUTO_PAUSE_MENU = "auto_pause_menu"
@@ -112,6 +111,8 @@ class MainActivity : ComponentActivity() {
 
         val AVAILABLE_CORES = mapOf(
             Platform.SNES to listOf("snes9x_libretro_android", "snes9x2010_libretro_android", "snes9x"),
+            Platform.TURBOGRAFX to listOf("mednafen_pce_fast_libretro_android", "mednafen_supergrafx_libretro_android"),
+            Platform.WONDERSWAN to listOf("mednafen_wswan_libretro_android"),
             Platform.GBA to listOf("mgba_libretro_android", "vba_next_libretro_android", "mgba"),
             Platform.GB to listOf("mgba_libretro_android", "gambatte_libretro_android", "mgba", "gambatte"),
             Platform.GBC to listOf("mgba_libretro_android", "gambatte_libretro_android", "mgba", "gambatte"),
@@ -128,7 +129,9 @@ class MainActivity : ComponentActivity() {
             Platform.SATURN to listOf("yabause_libretro_android", "beetle_saturn_libretro_android"),
             Platform.AMIGA to listOf("puae_libretro_android"),
             Platform.ATARI to listOf("stella_libretro_android", "stella2014_libretro_android"),
-            Platform.COMMODORE_64 to listOf("vice_x64_libretro_android", "vice_x64sc_libretro_android")
+            Platform.ATARI_7800 to listOf("prosystem_libretro_android"),
+            Platform.LYNX to listOf("handy_libretro_android"),
+            Platform.C64 to listOf("vice_x64_libretro_android", "vice_x64sc_libretro_android")
         )
     }
 
@@ -172,6 +175,7 @@ class MainActivity : ComponentActivity() {
     external fun nativeLoadGame(romPath: String): Boolean
     external fun nativePauseGame()
     external fun nativeResumeGame()
+    external fun nativeCycleDisk(direction: Int): Boolean
     external fun nativeForceNextFrame()
     external fun resetGame(): Int
     external fun nativeQuitGame()
@@ -588,8 +592,11 @@ class MainActivity : ComponentActivity() {
         var hiddenGamePaths by remember {
             mutableStateOf(prefs.getStringSet(KEY_HIDDEN_GAME_PATHS, emptySet()).orEmpty().toSet())
         }
+        val hideSecondaryFiles = remember { prefs.getBoolean(KEY_HIDE_SECONDARY_FILES, true) }
         val visibleGameList = remember(gameList, hiddenGamePaths) {
-            gameList.filterNot { it.path in hiddenGamePaths }
+            gameList.filterNot { game ->
+                game.path in hiddenGamePaths || (hideSecondaryFiles && isSecondaryFile(game.name))
+            }
         }
         val setGameHidden: (GameFile, Boolean) -> Unit = { game, isHidden ->
             val updatedPaths = hiddenGamePaths.toMutableSet().apply {
@@ -645,6 +652,11 @@ class MainActivity : ComponentActivity() {
 
                         // Platform detection logic based on filename
                         val platform = when {
+                            fileName.endsWith(".a26", true) -> Platform.ATARI
+                            fileName.endsWith(".a78", true) -> Platform.ATARI_7800
+                            fileName.endsWith(".lnx", true) -> Platform.LYNX
+                            fileName.endsWith(".pce", true) || fileName.endsWith(".sgx", true) -> Platform.TURBOGRAFX
+                            fileName.endsWith(".ws", true) || fileName.endsWith(".wsc", true) -> Platform.WONDERSWAN
                             fileName.endsWith(".sfc", true) || fileName.endsWith(".smc", true) -> Platform.SNES
                             fileName.endsWith(".gba", true) -> Platform.GBA
                             fileName.endsWith(".gb", true) -> Platform.GB
@@ -733,13 +745,13 @@ class MainActivity : ComponentActivity() {
                 }
 
                 val mode = prefs.getInt(KEY_SCAN_MODE, 0)
-                val pathsToScan = if (mode == 1) {
+                val pathsToScan: List<String> = if (mode == 1) {
                     try {
                         val allPrefs = prefs.all
                         val value = allPrefs[KEY_CUSTOM_PATHS]
                         if (value is Set<*>) {
                             @Suppress("UNCHECKED_CAST")
-                            (value as Set<String>).map { File(it) }
+                            (value as Set<String>).toList()
                         } else {
                             Log.w("Arc", "Custom paths not a set, skipping. Type: ${value?.javaClass?.name}")
                             emptyList()
@@ -749,18 +761,36 @@ class MainActivity : ComponentActivity() {
                         emptyList()
                     }
                 } else {
-                    listOf(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS))
+                    listOf(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS).absolutePath)
                 }
                 Log.d("Arc", "SCAN: Scanning ${pathsToScan.size} paths")
                 val allGames = mutableListOf<GameFile>()
-                pathsToScan.forEach { dir ->
-                    Log.d("Arc", "SCAN: Checking directory: ${dir.absolutePath}")
-                    if (dir.exists() && dir.isDirectory) {
-                        val found = RomScanner.scan(dir)
-                        Log.d("Arc", "SCAN: Found ${found.size} games in ${dir.name}")
-                        allGames.addAll(found)
+                pathsToScan.forEach { path ->
+                    if (path.startsWith("content://")) {
+                        try {
+                            val found = SafRomStorage.scanTree(this@MainActivity, path.toUri())
+                            Log.d("Arc", "SCAN: Found ${found.size} games in SAF tree")
+                            allGames.addAll(found)
+                        } catch (e: Exception) {
+                            Log.e("Arc", "SCAN: Unable to read selected SAF tree", e)
+                            runOnUiThread {
+                                Toast.makeText(
+                                    this@MainActivity,
+                                    "Could not scan a selected storage folder: ${e.message}",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        }
                     } else {
-                        Log.w("Arc", "SCAN: Directory does not exist: ${dir.absolutePath}")
+                        val directory = File(path)
+                        Log.d("Arc", "SCAN: Checking directory: ${directory.absolutePath}")
+                        if (directory.exists() && directory.isDirectory) {
+                            val found = RomScanner.scan(directory)
+                            Log.d("Arc", "SCAN: Found ${found.size} games in ${directory.name}")
+                            allGames.addAll(found)
+                        } else {
+                            Log.w("Arc", "SCAN: Directory does not exist: ${directory.absolutePath}")
+                        }
                     }
                 }
                 Log.d("Arc", "SCAN: Total games found: ${allGames.size}")
@@ -1025,6 +1055,13 @@ class MainActivity : ComponentActivity() {
             if (finalCorePath == null) {
                 val keywords = when (game.platform) {
                     Platform.SNES -> listOf("snes")
+                    Platform.TURBOGRAFX -> listOf("pce_fast", "supergrafx")
+                    Platform.WONDERSWAN -> listOf("wswan")
+                    Platform.ATARI -> listOf("stella")
+                    Platform.ATARI_7800 -> listOf("prosystem")
+                    Platform.LYNX -> listOf("handy")
+                    Platform.AMIGA -> listOf("puae", "amiga")
+                    Platform.C64 -> listOf("vice_x64", "vice")
                     Platform.GBA -> listOf("gba", "vba")
                     Platform.GB, Platform.GBC -> listOf("gambatte", "mgba", "sameboy")
                     Platform.GENESIS -> listOf("genesis", "picodrive", "md")
@@ -1391,7 +1428,10 @@ class MainActivity : ComponentActivity() {
                                 onResetControls = { buttonProps = emptyMap() },
                                 onBack = {
                                     saveLayout(activeGameName)
-                                    navController.popBackStack()
+                                    navController.navigate(Screen.LIBRARY.name) {
+                                        popUpTo(Screen.GAME.name) { inclusive = true }
+                                        launchSingleTop = true
+                                    }
                                 },
                                 onTogglePause = { if (it) pauseGame() else resumeGame() },
                                 onSaveState = { filePath ->
@@ -1518,4 +1558,17 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+}
+
+private fun isSecondaryFile(name: String): Boolean {
+    val lower = name.lowercase()
+    val secondaryPatterns = listOf(
+        "disk 2", "disk 3", "disk 4", "disk 5", "disk 6",
+        "disc 2", "disc 3", "disc 4", "disc 5", "disc 6",
+        "side b", "side c", "side d", "side 2", "side 3",
+        "part 2", "part 3", "track 2", "track 3"
+    )
+    return secondaryPatterns.any { lower.contains(it) } ||
+           Regex("(?i)\\b(disk|disc|side|part)\\s*[2-9]\\b").containsMatchIn(lower) ||
+           Regex("(?i)\\b(side|disk|disc)\\s*[b-z]\\b").containsMatchIn(lower)
 }

@@ -1,11 +1,13 @@
 package com.blinkchase.arc
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.IOException
 
 object GameLoader {
     private const val TAG = "GameLoader"
@@ -42,11 +44,35 @@ object GameLoader {
         Log.d(TAG, "Device Architecture: $deviceArch")
         
         // Step 2: Check if game file exists
-        val gameFile = File(gamePath)
-        if (!gameFile.exists()) {
+        val gameUri = if (gamePath.startsWith("content://")) Uri.parse(gamePath) else null
+        val gameFile = try {
+            gameUri?.let { SafRomStorage.stageUri(context, it) } ?: File(gamePath)
+        } catch (e: IOException) {
+            Log.e(TAG, "Unable to stage game from SAF", e)
+            return@withContext LoadResult(false, "Unable to open game from external storage: ${e.message}")
+        }
+        if (!gameFile.isFile) {
             return@withContext LoadResult(false, "Game file not found: $gamePath")
         }
         Log.d(TAG, "Game file exists: ${gameFile.length()} bytes")
+        val contentPath = if (platform == Platform.C64 || platform == Platform.AMIGA) {
+            try {
+                val playlist = if (platform == Platform.C64) {
+                    C64DiskPlaylist.create(context.cacheDir, gameFile)
+                } else {
+                    AmigaDiskPlaylist.create(context.cacheDir, gameFile)
+                }
+                playlist?.absolutePath ?: gameFile.absolutePath
+            } catch (e: IOException) {
+                Log.e(TAG, "Unable to prepare $platform disk playlist", e)
+                return@withContext LoadResult(false, "Unable to prepare $platform disk playlist: ${e.message}")
+            }
+        } else {
+            gameFile.absolutePath
+        }
+        if (contentPath != gameFile.absolutePath) {
+            Log.i(TAG, "Loading $platform multi-disk playlist: $contentPath")
+        }
 
         // Step 3: Clean up previous state
         Log.d(TAG, "Cleaning up previous state...")
@@ -68,6 +94,19 @@ object GameLoader {
 
         // Step 4.5: Specialized System Directory Setup for high-end cores
         setupSystemDirectories(context, platform, storageDir)
+
+        if (platform == Platform.AMIGA && gameFile.extension.equals("ipf", ignoreCase = true)) {
+            val capsImgLibrary = File(storageDir, "system/capsimg.so")
+            if (!capsImgLibrary.isFile || capsImgLibrary.length() == 0L ||
+                LibraryDiagnostics.checkLibraryArchitecture(capsImgLibrary).status != "MATCH"
+            ) {
+                return@withContext LoadResult(
+                    false,
+                    "This IPF Amiga disk needs CAPSIMG (capsimg.so), which is not installed. " +
+                        "Install PUAE from Core Downloader while online, then try again."
+                )
+            }
+        }
 
         if (platform == Platform.PS2) {
             val missingBios = checkForMissingBios(platform, storageDir)
@@ -211,7 +250,7 @@ object GameLoader {
                     Log.d(TAG, "Core loaded successfully, attempting to load game...")
                     
                     // Try loading the game
-                    if (mainActivity.loadGame(gamePath)) {
+                    if (mainActivity.loadGame(contentPath)) {
                         // Success!
                         loadSuccess = true
                         successfulCore = coreInfo.name

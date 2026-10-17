@@ -309,6 +309,16 @@ fun GameScreen(
 
     val isAnyMenuOpen = showMenu || showControlSettings || showCheats || showSaveManager || showTemplateManager || showSaveTemplateDialog
 
+    fun quitToLibrary() {
+        scope.launch(Dispatchers.IO) {
+            onQuit()
+            withContext(Dispatchers.Main) {
+                isLeaving = true
+                onBack()
+            }
+        }
+    }
+
     // A dialog drawn over the surface swallows the ACTION_UP that would release
     // the stylus, so a press can stay stuck for as long as the menu is open.
     LaunchedEffect(isAnyMenuOpen) {
@@ -400,7 +410,7 @@ fun GameScreen(
                         Spacer(Modifier.height(16.dp))
                         Text("Error: $loadError", color = Color.Red)
                         Spacer(Modifier.height(16.dp))
-                        Button(onClick = onBack) {
+                        Button(onClick = ::quitToLibrary) {
                             Text("Back to Library")
                         }
                     } else {
@@ -504,10 +514,7 @@ fun GameScreen(
                         )
                         Spacer(Modifier.height(16.dp))
                         Button(onClick = {
-                            scope.launch(Dispatchers.IO) {
-                                onQuit()
-                                withContext(Dispatchers.Main) { isLeaving = true; onBack() }
-                            }
+                            quitToLibrary()
                         }) { Text("Quit to Library") }
                     }
                 }
@@ -517,12 +524,21 @@ fun GameScreen(
 
     if (showMenu) {
         GameMenuDialog(
+            platform = platform,
             isPaused = isPaused,
             isEditingControls = isEditingControls,
             screenScale = screenScale,
             onScreenScaleChange = { screenScale = it; prefs.edit().putInt(MainActivity.KEY_SCREEN_SCALE, it.ordinal).apply() },
             onDismiss = { showMenu = false; resumeIfAutoPaused() },
             onResume = { isPaused = false; onTogglePause(false); wasPausedByMenu = false; showMenu = false },
+            onNextDisk = {
+                val queued = mainActivity?.nativeCycleDisk(1) == true
+                Toast.makeText(
+                    context,
+                    if (queued) "Next disk queued" else "This game has no multi-disk playlist",
+                    Toast.LENGTH_SHORT
+                ).show()
+            },
             onToggleEditControls = { isEditingControls = !isEditingControls },
             onControlSettings = { showControlSettings = true; showMenu = false },
             onControllerMapping = { showMenu = false; isNavigatingToMapper = true; wasPlayingBeforeNavigation = !isPaused || wasPausedByMenu; mainActivity?.pauseGame(); mainActivity?.setSurface(null); onControllerMapping() },
@@ -533,7 +549,7 @@ fun GameScreen(
             onSaveStates = { showSaveManager = true; showMenu = false },
             onSaveTemplate = { showSaveTemplateDialog = true; showMenu = false },
             onApplyTemplate = { showTemplateManager = true; showMenu = false },
-            onQuit = { showMenu = false; scope.launch(Dispatchers.IO) { onQuit(); withContext(Dispatchers.Main) { isLeaving = true; onBack() } } },
+            onQuit = { showMenu = false; quitToLibrary() },
             onRestartGame = {
                 showMenu = false
                 isGameLoaded = false
@@ -820,12 +836,14 @@ private fun GameViewSurface(
 
 @Composable
 fun GameMenuDialog(
+    platform: Platform,
     isPaused: Boolean,
     isEditingControls: Boolean,
     screenScale: ScreenScale,
     onScreenScaleChange: (ScreenScale) -> Unit,
     onDismiss: () -> Unit,
     onResume: () -> Unit,
+    onNextDisk: () -> Unit,
     onToggleEditControls: () -> Unit,
     onResetControls: () -> Unit,
     onControlSettings: () -> Unit,
@@ -875,6 +893,11 @@ fun GameMenuDialog(
                 }
                 OutlinedButton(onClick = onControllerMapping, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Default.Gamepad, null); Spacer(Modifier.width(8.dp)); Text("Controller Mapping")
+                }
+                if (platform == Platform.C64 || platform == Platform.AMIGA) {
+                    OutlinedButton(onClick = onNextDisk, modifier = Modifier.fillMaxWidth()) {
+                        Text("Insert Next Disk")
+                    }
                 }
                 var vulkanRequested by remember { mutableStateOf(mainActivity?.nativeIsVulkanRequested() ?: true) }
                 var vulkanActive by remember { mutableStateOf(mainActivity?.nativeIsVulkanActive() ?: false) }
