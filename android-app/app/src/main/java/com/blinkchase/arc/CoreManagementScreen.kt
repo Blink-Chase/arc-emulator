@@ -366,6 +366,14 @@ fun CoreCard(
             
             Spacer(modifier = Modifier.height(12.dp))
             Text(text = item.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (item.coreId == CoreManager.PUAE_CORE_ID) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "IPF support downloads CAPSIMG 1.2 directly from its upstream GitHub release. Its license permits non-commercial use only; commercial use requires separate permission. See the README for the license details.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
             
             // Progress Section with Waves
             if (isDownloading) {

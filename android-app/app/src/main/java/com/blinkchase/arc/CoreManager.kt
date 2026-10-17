@@ -14,8 +14,10 @@ import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 import java.util.zip.ZipInputStream
 
 object CoreManager {
@@ -29,6 +31,14 @@ object CoreManager {
     private const val DOLPHIN_SYSTEM_URL = "https://buildbot.libretro.com/assets/system/Dolphin.zip"
 
     const val DOLPHIN_CORE_ID = "dolphin_libretro_android"
+    const val PUAE_CORE_ID = "puae_libretro_android"
+
+    private const val CAPSIMG_RELEASE_URL =
+        "https://github.com/rsn8887/capsimg/releases/download/1.2/Capsimg_for_Retroarch.zip"
+    private const val CAPSIMG_RELEASE_SHA256 =
+        "f401d22e2432ff37541489c7291f8a5e34dfd9a48475337fe578ff653887d685"
+    private const val MAX_CAPSIMG_ARCHIVE_BYTES = 8L * 1024L * 1024L
+    private const val MAX_CAPSIMG_LIBRARY_BYTES = 1024L * 1024L
 
     // coreId -> folder provisioned under <storageDir>/system on install and
     // removed again on uninstall. Only Dolphin needs a real download here; the
@@ -115,13 +125,13 @@ object CoreManager {
         if (items.none { it.coreId == "puae_libretro_android" }) {
             items.add(
                 CoreItem(
-                    coreId = "puae_libretro_android",
+                    coreId = PUAE_CORE_ID,
                     displayName = "PUAE",
                     platform = "AMIGA",
                     version = "Libretro nightly",
                     isRecommended = true,
-                    description = "Amiga emulator core supporting floppy, hard-drive, and CD images.",
-                    downloadUrls = getAndroidCoreUrls("puae_libretro_android")
+                    description = "Amiga emulator core supporting floppy, hard-drive, and CD images. CAPSIMG is installed from its upstream release for IPF disk support.",
+                    downloadUrls = getAndroidCoreUrls(PUAE_CORE_ID)
                 )
             )
         }
@@ -293,6 +303,9 @@ object CoreManager {
                 // A core whose system files are missing loads but misbehaves,
                 // so a failed system download is reported as a failed install.
                 ok = provisionCoreData(context, coreItem.coreId)
+                if (ok && coreItem.coreId == PUAE_CORE_ID) {
+                    ensureCapsImgInstalled(context)
+                }
                 if (ok) _downloadState.value = DownloadState.Success
             }
             ok
@@ -375,6 +388,127 @@ object CoreManager {
         GameLoader.setupSystemDirectories(context, platform, storageDir)
         Log.d(TAG, "Provisioned system data for $coreId (systemFiles=$systemFilesOk)")
         return systemFilesOk
+    }
+
+    private suspend fun ensureCapsImgInstalled(context: Context) {
+        val abi = getSupportedAbi()
+        val systemDir = File(resolveStorageDir(context), "system")
+        if (!systemDir.isDirectory && !systemDir.mkdirs()) {
+            throw IOException("Unable to create Amiga system directory: ${systemDir.absolutePath}")
+        }
+
+        val installedLibrary = File(systemDir, "capsimg.so")
+        if (installedLibrary.isFile && installedLibrary.length() > 0L &&
+            LibraryDiagnostics.checkLibraryArchitecture(installedLibrary).status == "MATCH"
+        ) {
+            Log.d(TAG, "Compatible CAPSIMG library is already installed for $abi")
+            return
+        }
+
+        val archiveFile = File.createTempFile("capsimg-", ".zip", context.cacheDir)
+        val stagedLibrary = File.createTempFile("capsimg-", ".so", systemDir)
+        try {
+            _downloadState.value = DownloadState.Downloading(0f)
+            val connection = URL(CAPSIMG_RELEASE_URL).openConnection() as HttpURLConnection
+            connection.connectTimeout = 10000
+            connection.readTimeout = 20000
+            try {
+                connection.connect()
+                if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+                    throw IOException("CAPSIMG download failed: HTTP ${connection.responseCode}")
+                }
+                if (connection.contentLengthLong > MAX_CAPSIMG_ARCHIVE_BYTES) {
+                    throw IOException("CAPSIMG archive is larger than the allowed limit")
+                }
+
+                val digest = MessageDigest.getInstance("SHA-256")
+                var totalBytes = 0L
+                val contentLength = connection.contentLengthLong
+                connection.inputStream.use { input ->
+                    FileOutputStream(archiveFile).use { output ->
+                        val buffer = ByteArray(8192)
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            totalBytes += count
+                            if (totalBytes > MAX_CAPSIMG_ARCHIVE_BYTES) {
+                                throw IOException("CAPSIMG archive is larger than the allowed limit")
+                            }
+                            digest.update(buffer, 0, count)
+                            output.write(buffer, 0, count)
+                            if (contentLength > 0L) {
+                                _downloadState.value =
+                                    DownloadState.Downloading(totalBytes.toFloat() / contentLength)
+                            }
+                        }
+                    }
+                }
+                val actualSha256 = digest.digest().joinToString("") {
+                    (it.toInt() and 0xff).toString(16).padStart(2, '0')
+                }
+                if (actualSha256 != CAPSIMG_RELEASE_SHA256) {
+                    throw IOException("CAPSIMG archive checksum did not match the pinned upstream release")
+                }
+            } finally {
+                connection.disconnect()
+            }
+
+            _downloadState.value = DownloadState.Verifying
+            _downloadState.value = DownloadState.Extracting
+            if (!extractCapsImgLibrary(archiveFile, abi, stagedLibrary)) {
+                throw IOException("CAPSIMG release does not contain an Android library for $abi")
+            }
+            val architecture = LibraryDiagnostics.checkLibraryArchitecture(stagedLibrary)
+            if (architecture.status != "MATCH") {
+                throw IOException("CAPSIMG architecture check failed: ${architecture.message}")
+            }
+
+            if (installedLibrary.exists() && !installedLibrary.delete()) {
+                throw IOException("Unable to replace the incompatible CAPSIMG library")
+            }
+            if (!stagedLibrary.renameTo(installedLibrary)) {
+                throw IOException("Unable to install CAPSIMG in ${installedLibrary.absolutePath}")
+            }
+            Log.i(TAG, "Installed upstream CAPSIMG 1.2 for $abi")
+        } finally {
+            archiveFile.delete()
+            stagedLibrary.delete()
+        }
+    }
+
+    internal fun extractCapsImgLibrary(archiveFile: File, abi: String, outputFile: File): Boolean {
+        val supportedAbis = setOf("arm64-v8a", "armeabi-v7a", "armeabi", "x86_64", "x86", "mips64", "mips")
+        if (abi !in supportedAbis) return false
+
+        val expectedEntry = "Android/$abi/capsimg.so"
+        return try {
+            ZipInputStream(archiveFile.inputStream()).use { zip ->
+                var entry = zip.nextEntry
+                while (entry != null) {
+                    if (!entry.isDirectory && entry.name == expectedEntry) {
+                        var totalBytes = 0L
+                        FileOutputStream(outputFile).use { output ->
+                            val buffer = ByteArray(8192)
+                            while (true) {
+                                val count = zip.read(buffer)
+                                if (count < 0) break
+                                totalBytes += count
+                                if (totalBytes > MAX_CAPSIMG_LIBRARY_BYTES) {
+                                    throw IOException("CAPSIMG library exceeds the allowed size")
+                                }
+                                output.write(buffer, 0, count)
+                            }
+                        }
+                        return outputFile.isFile && outputFile.length() > 0L
+                    }
+                    entry = zip.nextEntry
+                }
+            }
+            false
+        } catch (e: IOException) {
+            outputFile.delete()
+            throw e
+        }
     }
 
     /**
@@ -495,6 +629,11 @@ object CoreManager {
         list.add(CoreItem("snes9x_libretro_android", "Snes9x", "SNES", "1.62.1", true, "Recommended core for modern SNES emulation. High compatibility, excellent performance, and supports cheats and fast-forward.", createUrls("snes9x")))
         list.add(CoreItem("snes9x2010_libretro_android", "Snes9x 2010", "SNES", "1.52.4", false, "Lightweight SNES core optimized for low-end or older device architectures.", createUrls("snes9x2010")))
 
+        // TurboGrafx-16 / PC Engine and WonderSwan
+        list.add(CoreItem("mednafen_pce_fast_libretro_android", "Beetle PCE Fast", "TURBOGRAFX", "Libretro nightly", true, "PC Engine and TurboGrafx-16 emulator core.", createUrls("mednafen_pce_fast_libretro_android")))
+        list.add(CoreItem("mednafen_supergrafx_libretro_android", "Beetle SuperGrafx", "SUPERGRAFX", "Libretro nightly", false, "SuperGrafx emulator core for the distinct SuperGrafx system.", createUrls("mednafen_supergrafx_libretro_android")))
+        list.add(CoreItem("mednafen_wswan_libretro_android", "Beetle WonderSwan", "WONDERSWAN", "Libretro nightly", true, "WonderSwan and WonderSwan Color emulator core.", createUrls("mednafen_wswan_libretro_android")))
+
         // GBA
         list.add(CoreItem("mgba_libretro_android", "mGBA", "GBA", "0.10.2", true, "Highly accurate, feature-rich Game Boy Advance emulator core with perfect frame pacing and audio sync.", createUrls("mgba")))
         list.add(CoreItem("vba_next_libretro_android", "VBA-Next", "GBA", "1.0.2", false, "High-performance Game Boy Advance core tailored for extreme power savings or legacy hardware profiles.", createUrls("vba_next")))
@@ -539,15 +678,17 @@ object CoreManager {
         list.add(CoreItem("beetle_saturn_libretro_android", "Beetle Saturn", "SATURN", "1.24", false, "High accuracy Sega Saturn core offering superior preservation rendering logic lines.", createUrls("beetle_saturn")))
 
         // Amiga
-        list.add(CoreItem("puae_libretro_android", "PUAE", "AMIGA", "Libretro nightly", true, "Amiga emulator core supporting floppy, hard-drive, and CD images.", createUrls("puae_libretro_android")))
+        list.add(CoreItem(PUAE_CORE_ID, "PUAE", "AMIGA", "Libretro nightly", true, "Amiga emulator core supporting floppy, hard-drive, and CD images. CAPSIMG is installed from its upstream release for IPF disk support.", createUrls(PUAE_CORE_ID)))
 
         // Atari 2600
         list.add(CoreItem("stella_libretro_android", "Stella", "ATARI", "Libretro nightly", true, "Atari 2600 emulator core supporting cartridge images and ZIP archives.", createUrls("stella_libretro_android")))
         list.add(CoreItem("stella2014_libretro_android", "Stella 2014", "ATARI", "Libretro nightly", false, "Legacy Atari 2600 core for devices that need an older, lighter implementation.", createUrls("stella2014_libretro_android")))
+        list.add(CoreItem("prosystem_libretro_android", "ProSystem", "ATARI_7800", "Libretro nightly", true, "Atari 7800 emulator core.", createUrls("prosystem_libretro_android")))
+        list.add(CoreItem("handy_libretro_android", "Handy", "LYNX", "Libretro nightly", true, "Atari Lynx emulator core.", createUrls("handy_libretro_android")))
 
         // Commodore 64
-        list.add(CoreItem("vice_x64_libretro_android", "VICE x64", "COMMODORE_64", "Libretro nightly", true, "Commodore 64 emulator supporting disks, tapes, cartridges, and program files.", createUrls("vice_x64_libretro_android")))
-        list.add(CoreItem("vice_x64sc_libretro_android", "VICE x64sc", "COMMODORE_64", "Libretro nightly", false, "Accuracy-focused Commodore 64 emulator core.", createUrls("vice_x64sc_libretro_android")))
+        list.add(CoreItem("vice_x64_libretro_android", "VICE x64", "C64", "Libretro nightly", true, "Commodore 64 emulator supporting disks, tapes, cartridges, and program files.", createUrls("vice_x64_libretro_android")))
+        list.add(CoreItem("vice_x64sc_libretro_android", "VICE x64sc", "C64", "Libretro nightly", false, "Accuracy-focused Commodore 64 emulator core.", createUrls("vice_x64sc_libretro_android")))
 
         return list
     }
