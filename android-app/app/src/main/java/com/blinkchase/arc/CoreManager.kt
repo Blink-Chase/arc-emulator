@@ -112,6 +112,19 @@ object CoreManager {
             items.addAll(getLibretroBuildbotManifest())
             _downloadState.value = DownloadState.Idle
         }
+        if (items.none { it.coreId == "puae_libretro_android" }) {
+            items.add(
+                CoreItem(
+                    coreId = "puae_libretro_android",
+                    displayName = "PUAE",
+                    platform = "AMIGA",
+                    version = "Libretro nightly",
+                    isRecommended = true,
+                    description = "Amiga emulator core supporting floppy, hard-drive, and CD images.",
+                    downloadUrls = getAndroidCoreUrls("puae_libretro_android")
+                )
+            )
+        }
         return@withContext items
     }
 
@@ -460,6 +473,12 @@ object CoreManager {
         return if (Build.SUPPORTED_ABIS.isNotEmpty()) Build.SUPPORTED_ABIS[0] else "arm64-v8a"
     }
 
+    private fun getAndroidCoreUrls(coreName: String): Map<String, String> {
+        return listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86").associateWith { abi ->
+            "https://buildbot.libretro.com/nightly/android/latest/$abi/$coreName.so.zip"
+        }
+    }
+
     private fun getLibretroBuildbotManifest(): List<CoreItem> {
         val list = mutableListOf<CoreItem>()
         val abis = listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
@@ -518,6 +537,17 @@ object CoreManager {
         list.add(CoreItem("yabause_libretro_android", "Yabause", "SATURN", "0.9.15", true, "Sega Saturn core focusing on core architectural compatibility mapping layers.", createUrls("yabause")))
         // Beetle Saturn: Highly precise accuracy preservation layer for perfect asset rendering lines.
         list.add(CoreItem("beetle_saturn_libretro_android", "Beetle Saturn", "SATURN", "1.24", false, "High accuracy Sega Saturn core offering superior preservation rendering logic lines.", createUrls("beetle_saturn")))
+
+        // Amiga
+        list.add(CoreItem("puae_libretro_android", "PUAE", "AMIGA", "Libretro nightly", true, "Amiga emulator core supporting floppy, hard-drive, and CD images.", createUrls("puae_libretro_android")))
+
+        // Atari 2600
+        list.add(CoreItem("stella_libretro_android", "Stella", "ATARI", "Libretro nightly", true, "Atari 2600 emulator core supporting cartridge images and ZIP archives.", createUrls("stella_libretro_android")))
+        list.add(CoreItem("stella2014_libretro_android", "Stella 2014", "ATARI", "Libretro nightly", false, "Legacy Atari 2600 core for devices that need an older, lighter implementation.", createUrls("stella2014_libretro_android")))
+
+        // Commodore 64
+        list.add(CoreItem("vice_x64_libretro_android", "VICE x64", "COMMODORE_64", "Libretro nightly", true, "Commodore 64 emulator supporting disks, tapes, cartridges, and program files.", createUrls("vice_x64_libretro_android")))
+        list.add(CoreItem("vice_x64sc_libretro_android", "VICE x64sc", "COMMODORE_64", "Libretro nightly", false, "Accuracy-focused Commodore 64 emulator core.", createUrls("vice_x64sc_libretro_android")))
 
         return list
     }

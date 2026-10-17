@@ -327,6 +327,7 @@ object GameLoader {
                                        preferredFile.name.contains("swanstation") ||
                                        preferredFile.name.contains("dolphin") ||
                                        preferredFile.name.contains("pcsx2") ||
+                                       preferredFile.name.contains("puae") ||
                                        preferredFile.name.contains("melonds") ||
                                        preferredFile.name.contains("beetle"),
                         archCheck = LibraryDiagnostics.checkLibraryArchitecture(preferredFile)
@@ -351,6 +352,7 @@ object GameLoader {
                                            coreName.contains("duckstation") ||
                                            coreName.contains("dolphin") ||
                                            coreName.contains("pcsx2") ||
+                                           coreName.contains("puae") ||
                                            coreName.contains("melonds") ||
                                            coreName.contains("beetle"),
                             archCheck = LibraryDiagnostics.checkLibraryArchitecture(coreFile)
