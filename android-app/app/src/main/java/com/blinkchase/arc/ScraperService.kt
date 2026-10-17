@@ -14,6 +14,17 @@ object ScraperService {
 
     private const val LIBRETRO_BASE_URL = "https://thumbnails.libretro.com"
     private const val SCREENSCRAPER_BASE_URL = "https://www.screenscraper.fr/api2/jeuInfos.php"
+    private val ROM_EXTENSIONS = setOf(
+        "a26", "adf", "adz", "bin", "cdi", "chd", "cue", "d64", "dms", "fdi", "gb",
+        "gba", "gbc", "gcm", "gc", "gen", "gdi", "hdf", "ipf", "iso", "lha", "m3u",
+        "md", "n64", "nds", "pbp", "pce", "rvz", "sfc", "smc", "smd", "ss", "v64",
+        "wbfs", "wii", "ws", "z64", "zip"
+    )
+
+    private fun titleWithoutRomExtension(name: String): String {
+        val extension = name.substringAfterLast('.', "").lowercase()
+        return if (extension in ROM_EXTENSIONS) name.dropLast(extension.length + 1) else name
+    }
 
     private fun getScreenScraperSystemId(platform: Platform): Int? = when (platform) {
         Platform.GENESIS -> 1
@@ -24,6 +35,7 @@ object ScraperService {
         Platform.DS -> 15
         Platform.SATURN -> 18
         Platform.DREAMCAST -> 24
+        Platform.AMIGA -> 64
         else -> null
     }
 
@@ -41,12 +53,13 @@ object ScraperService {
         Platform.DS -> "Nintendo - Nintendo DS"
         Platform.SATURN -> "Sega - Saturn"
         Platform.DREAMCAST -> "Sega - Dreamcast"
+        Platform.AMIGA -> "Commodore - Amiga"
         else -> null
     }
 
     fun generateLibretroUrl(game: GameFile, nameOverride: String? = null, type: String = "Named_Boxarts"): String? {
         val platformStr = getLibretroPlatform(game.platform) ?: return null
-        val nameToUse = (nameOverride ?: game.name.substringBeforeLast("."))
+        val nameToUse = (nameOverride ?: titleWithoutRomExtension(game.name))
             .replace(Regex("\\.nkit$", RegexOption.IGNORE_CASE), "")
             .replace("&", "_")
             .replace("*", "_")
@@ -77,7 +90,7 @@ object ScraperService {
     }
 
     fun fuzzyMatch(name: String): String {
-        var clean = name.substringBeforeLast(".")
+        var clean = titleWithoutRomExtension(name)
         clean = clean.replace(Regex("\\.nkit$", RegexOption.IGNORE_CASE), "")
         // Strips region tags (USA), (Europe), etc. but keeps Disc info if possible
         // Actually for a clean base match, we strip everything in brackets
@@ -85,6 +98,39 @@ object ScraperService {
         clean = clean.replace(Regex("\\[.*?\\]"), "")
         
         return clean.trim().replace(Regex("\\s+"), " ")
+    }
+
+    internal fun amigaNameVariants(name: String): List<String> {
+        val candidates = linkedSetOf(name.trim())
+        val withoutReleaseMetadata = name.replace(
+            Regex("(?i)(?:[_\\s]+v\\d+(?:\\.\\d+)*(?:[_\\s]+\\d+){0,2}|[_\\s]+\\d{2,4}(?:[_\\s]+\\d{2,8})?)$"),
+            ""
+        ).trim()
+        candidates.add(withoutReleaseMetadata)
+
+        for (candidate in candidates.toList()) {
+            val spaced = candidate.replace('_', ' ').replace(Regex("\\s+"), " ").trim()
+            candidates.add(spaced)
+            candidates.add(candidate.lowercase())
+            candidates.add(candidate.replace(Regex("([a-z])([A-Z])")) {
+                "${it.groupValues[1]}${it.groupValues[2].lowercase()}"
+            })
+            val camelSpaced = spaced.replace(Regex("(?<=[a-z])(?=[A-Z])"), " ")
+            candidates.add(camelSpaced)
+            candidates.add(camelSpaced.replaceFirstChar { it.lowercase() })
+            candidates.add(spaced.replaceFirstChar { it.lowercase() })
+        }
+        val regionBases = candidates.toList().filter {
+            it.isNotEmpty() &&
+                (it != name || withoutReleaseMetadata == name) &&
+                !it.contains(Regex("(?i)_v\\d"))
+        }
+        for (base in regionBases) {
+            candidates.add("$base (Europe)")
+            candidates.add("$base (USA)")
+            candidates.add("$base (World)")
+        }
+        return candidates.filter { it.isNotEmpty() }
     }
 
     private val SERIAL_REGEX = Regex("([A-Z]{3,4})[-_\\s.]?(\\d{3,5})", RegexOption.IGNORE_CASE)
@@ -95,13 +141,16 @@ object ScraperService {
             return@withContext true
         }
 
-        val baseName = game.name.substringBeforeLast(".")
+        val baseName = titleWithoutRomExtension(game.name)
             .replace(Regex("\\.nkit$", RegexOption.IGNORE_CASE), "")
         
         val serialMatch = SERIAL_REGEX.find(baseName)
         val extractedSerial = serialMatch?.let { "${it.groupValues[1].uppercase()}-${it.groupValues[2]}" }
 
         val namesToTry = mutableListOf<String>()
+        if (game.platform == Platform.AMIGA) {
+            namesToTry.addAll(amigaNameVariants(baseName))
+        }
         
         // --- 0. HARDCODED SERIAL MAPPING (FOR PROBLEMATIC GAMES) ---
         if (extractedSerial == "SCUS-97328" || extractedSerial == "SCUS97328") {
@@ -148,8 +197,10 @@ object ScraperService {
         namesToTry.add(titleOnly)
         
         // 4. Region variations on title
-        for (r in regions) {
-            namesToTry.add("$titleOnly $r")
+        if (game.platform != Platform.AMIGA) {
+            for (r in regions) {
+                namesToTry.add("$titleOnly $r")
+            }
         }
         
         // 5. Special Case: Multi-disc games (Disc X)
@@ -281,7 +332,7 @@ object ScraperService {
                 }
             }
             
-            val queryName = game.name.substringBeforeLast(".")
+            val queryName = titleWithoutRomExtension(game.name)
                 .replace(Regex("\\.nkit$", RegexOption.IGNORE_CASE), "")
             
             val names = listOf(

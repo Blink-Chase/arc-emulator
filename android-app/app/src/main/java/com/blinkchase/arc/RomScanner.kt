@@ -4,6 +4,67 @@ import android.util.Log
 import java.io.File
 
 object RomScanner {
+    private val supportedRomExtensions = setOf(
+        "a26", "adf", "adz", "bin", "cdi", "chd", "crt", "cue", "d64", "d71", "d81",
+        "dms", "fdi", "g64", "gb", "gba", "gbc", "gcm", "gc", "gen", "gdi", "hdf",
+        "ipf", "iso", "lha", "m3u", "md", "n64", "nds", "nib", "p00", "pbp", "pce",
+        "prg", "rvz", "sfc", "smc", "smd", "ss", "t64", "tap", "v64", "wbfs", "wii",
+        "ws", "z64", "zip"
+    )
+
+    private val masterFileExtensions = setOf(
+        "a26", "adf", "adz", "chd", "crt", "cue", "d64", "d71", "d81", "dms", "fdi",
+        "g64", "gb", "gba", "gbc", "gdi", "hdf", "ipf", "lha", "m3u", "n64", "nds",
+        "nib", "p00", "pce", "pbp", "prg", "rvz", "sfc", "smc", "t64", "tap", "v64",
+        "wbfs", "ws", "z64", "zip"
+    )
+
+    private fun normalizeGameTitle(rawName: String): String {
+        val extension = rawName.substringAfterLast('.', "").lowercase()
+        var title = if (extension in supportedRomExtensions) {
+            rawName.dropLast(extension.length + 1)
+        } else {
+            rawName
+        }
+        title = title.replace(Regex("(?i)\\s*\\((USA|Europe|Japan|World|En|Fr|De|Es|It|Rev\\s*\\d+|Rev\\d+|Beta|Prototype|Sample|Demo|Disk\\s*\\d+.*?|Disc\\s*\\d+.*?).*?\\)", RegexOption.IGNORE_CASE), "")
+        title = title.replace(Regex("(?i)\\s*\\[.*?]", RegexOption.IGNORE_CASE), "")
+        title = title.replace(Regex("(?i)\\s*\\((Disc|Disk|Track|Part|Side)\\s*\\d+.*?\\)|\\s*\\[(Disc|Disk|Track|Part|Side)\\s*\\d+.*?\\]|\\s*disk\\s*\\d+|\\s*disc\\s*\\d+", RegexOption.IGNORE_CASE), "")
+        return title.trim().lowercase()
+    }
+
+    fun isScannableFile(file: File): Boolean {
+        if (!file.isFile || file.extension.lowercase() !in supportedRomExtensions) return false
+        if (file.name.startsWith(".")) return false
+
+        val stem = file.nameWithoutExtension.trim()
+        val diskLabel = Regex("(?i)^(disk|disc|track|part|data|audio|side)(?:[\\s._-]*\\d+)?$")
+        val blockedKeywords = listOf("replit", "license", "readme", "install", "debug", ".nomedia", "changelog", "credits", "config", "cache")
+        return !stem.matches(diskLabel) && blockedKeywords.none { stem.contains(it, true) }
+    }
+
+    internal fun shouldSkipDirectory(directory: File): Boolean {
+        val name = directory.name
+        val blockedFolders = listOf("node_modules", "Android", "replit", "debug", "tmp", "temp", "cache")
+        return name.startsWith(".") || blockedFolders.any { it.equals(name, true) }
+    }
+
+    fun isWHDLoadInstallDirectory(directory: File): Boolean =
+        directory.isDirectory && directory.listFiles()?.any {
+            it.isFile && it.extension.equals("slave", ignoreCase = true)
+        } == true
+
+    internal fun findWHDLoadInstallDirectories(directory: File): List<File> =
+        directory.walkTopDown()
+            .onEnter { !shouldSkipDirectory(it) }
+            .filter(::isWHDLoadInstallDirectory)
+            .toList()
+
+    fun duplicateKey(name: String, platform: Platform): Pair<String, Platform> =
+        Pair(normalizeGameTitle(name), platform)
+
+    fun deduplicate(games: List<GameFile>): List<GameFile> =
+        games.sortedBy { it.path }.distinctBy { duplicateKey(it.name, it.platform) }
+
     fun scan(directory: File): List<GameFile> {
         val games = mutableListOf<GameFile>()
         Log.d("ArcScanner", "Scanning directory: ${directory.absolutePath}")
@@ -12,18 +73,10 @@ object RomScanner {
             // Group files by parent directory to handle multi-disc/multi-track sets as units
             directory.walkTopDown()
                 .onEnter { 
-                    val name = it.name
-                    if (name.startsWith(".")) return@onEnter false
-                    val blockedFolders = listOf("node_modules", "Android", "replit", "debug", "tmp", "temp", "cache")
-                    if (blockedFolders.any { b -> name.equals(b, true) }) return@onEnter false
-                    
-                    if (name.equals("Roms", true) && it.parentFile?.name?.equals("Arc", true) == true) return@onEnter false
-                    true
+                    !shouldSkipDirectory(it)
                 }
                 .filter { file ->
-                    val name = file.name
-                    val blockedKeywords = listOf("replit", "license", "readme", "install", "debug", ".nomedia", "changelog", "credits", "config", "cache")
-                    file.isFile && !name.startsWith(".") && blockedKeywords.none { b -> name.contains(b, true) }
+                    isScannableFile(file)
                 }
                 .groupBy { it.parentFile?.absolutePath ?: "root" }
                 .forEach { (_, folderFiles) ->
@@ -32,7 +85,12 @@ object RomScanner {
                     // 1. Priority #1: Proper Master Files
                     val masterFiles = folderFiles.filter { f ->
                         val ext = f.extension.lowercase()
-                        ext == "cue" || ext == "gdi" || ext == "m3u" || ext == "chd" || ext == "rvz" || ext == "wbfs" || ext == "nds" || ext == "gba" || ext == "sfc" || ext == "smc" || ext == "n64" || ext == "z64"
+                        val isMasterExt = ext in masterFileExtensions
+                        if (!isMasterExt) return@filter false
+
+                        // Filter out secondary disks (Disk 2, Disk 3, etc.) for multi-disk systems
+                        val isSecondaryDisk = f.name.contains(Regex("(Disc|Disk|Track|Part|Data|Audio|Side)\\s*([2-9]|0[2-9]|\\d{2,})", RegexOption.IGNORE_CASE))
+                        !isSecondaryDisk
                     }
 
                     if (masterFiles.isNotEmpty()) {
@@ -51,9 +109,6 @@ object RomScanner {
                         
                         if (primaryCandidates.isNotEmpty()) {
                             folderGames.add(primaryCandidates.sortedBy { it.name }.first())
-                        } else if (folderFiles.isNotEmpty()) {
-                            // Last resort: Just take the first file alphabetic
-                            folderGames.add(folderFiles.sortedBy { it.name }.first())
                         }
                     }
 
@@ -61,14 +116,31 @@ object RomScanner {
                         val platform = detectConsolePlatform(file)
 
                         if (platform != Platform.UNKNOWN) {
-                            Log.d("ArcScanner", "Found Game: ${file.name} ($platform)")
-                            games.add(GameFile(name = file.name, path = file.absolutePath, platform = platform))
+                            var gameName = file.name.substringBeforeLast('.')
+                            if (platform == Platform.AMIGA) {
+                                gameName = gameName.replace(Regex("(?i)\\s*\\((Disc|Disk|Track|Part)\\s*\\d+.*?\\)|\\s*\\[(Disc|Disk|Track|Part)\\s*\\d+.*?]|\\s*disk\\s*\\d+", RegexOption.IGNORE_CASE), "").trim()
+                            }
+                            if (gameName.isNotEmpty() && !gameName.equals("disk", true)) {
+                                Log.d("ArcScanner", "Found Game: $gameName ($platform)")
+                                games.add(GameFile(name = gameName, path = file.absolutePath, platform = platform))
+                            }
                         }
                     }
                 }
+
+            findWHDLoadInstallDirectories(directory).forEach { installDirectory ->
+                games.add(
+                    GameFile(
+                        name = installDirectory.name,
+                        path = installDirectory.absolutePath,
+                        platform = Platform.AMIGA
+                    )
+                )
+            }
         } else {
             Log.e("ArcScanner", "Directory does not exist or cannot be read")
         }
-        return games
+        // Deduplicate games by normalized title and platform to prevent multi-extension / region duplicates (.n64 and .z64, Pokemon Blue variants, etc.)
+        return deduplicate(games)
     }
 }
