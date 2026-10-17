@@ -65,7 +65,8 @@ enum class VerticalAlignment {
 }
 
 enum class Platform {
-    SNES, GBA, GB, GBC, GENESIS, N64, PS1, GAMECUBE, WII, DS, PS2, SATURN, DREAMCAST, UNKNOWN;
+    SNES, GBA, GB, GBC, GENESIS, N64, PS1, GAMECUBE, WII, DS, PS2, SATURN, DREAMCAST,
+    AMIGA, ATARI, COMMODORE_64, TURBOGRAFX, WONDERSWAN, UNKNOWN;
 
     fun getColor(): Color = when (this) {
         SNES -> Color(0xFF9575CD) // Purple
@@ -80,6 +81,11 @@ enum class Platform {
         PS2 -> Color(0xFF3F51B5) // Indigo
         SATURN -> Color(0xFFFFB74D) // Orange
         DREAMCAST -> Color(0xFFFFCC80) // Light Orange
+        AMIGA -> Color(0xFFFFD54F) // Amber
+        ATARI -> Color(0xFFE53935) // Atari Red
+        COMMODORE_64 -> Color(0xFF5C6BC0) // C64 Blue
+        TURBOGRAFX -> Color(0xFFFF7043) // TG16 Orange
+        WONDERSWAN -> Color(0xFF26A69A) // WonderSwan Teal
         UNKNOWN -> Color(0xFFBDBDBD) // Grey
     }
 }

@@ -358,7 +358,8 @@ fun detectConsolePlatform(file: File): Platform {
     val ext = file.extension.lowercase()
     val fileSize = file.length()
     val path = file.absolutePath.lowercase()
-    
+    val normalizedPath = path.replace('\\', '/')
+
     if (ext == "wbfs" || ext == "wii") return Platform.WII
     if (ext == "gcm" || ext == "gc") return Platform.GAMECUBE
     if (ext == "nds") return Platform.DS
@@ -370,6 +371,28 @@ fun detectConsolePlatform(file: File): Platform {
     if (ext == "md" || ext == "gen" || ext == "smd") return Platform.GENESIS
     if (ext == "gdi" || ext == "cdi") return Platform.DREAMCAST
     if (ext == "ss") return Platform.SATURN
+    if (ext == "adf" || ext == "adz" || ext == "dms" || ext == "fdi" || ext == "hdf" || ext == "ipf" || ext == "lha") return Platform.AMIGA
+    if (ext == "a26") return Platform.ATARI
+    if (ext in setOf("crt", "d64", "d71", "d81", "g64", "nib", "p00", "prg", "t64", "tap")) {
+        return Platform.COMMODORE_64
+    }
+
+    val isAmigaDirectory = normalizedPath
+        .split('/')
+        .any { it.contains(Regex("(?i)(^|[^a-z0-9])amiga([^a-z0-9]|$)")) }
+    if (isAmigaDirectory && ext in setOf("bin", "chd", "cue", "iso", "m3u", "zip")) {
+        return Platform.AMIGA
+    }
+    if (normalizedPath.split('/').any {
+            it.contains(Regex("(?i)(^|[^a-z0-9])(atari|atari\\s*2600|2600)([^a-z0-9]|$)"))
+        } && ext in setOf("bin", "zip")) {
+        return Platform.ATARI
+    }
+    if (normalizedPath.split('/').any {
+            it.contains(Regex("(?i)(^|[^a-z0-9])(c64|commodore\\s*64)([^a-z0-9]|$)"))
+        } && ext in setOf("bin", "zip")) {
+        return Platform.COMMODORE_64
+    }
 
     return when {
         name.contains("wii", true) -> Platform.WII
@@ -402,7 +425,7 @@ fun detectConsolePlatform(file: File): Platform {
             if (name.contains("gc", true) || name.contains("gamecube", true)) Platform.GAMECUBE
             else Platform.PS2
         }
-        else -> Platform.PS2
+        else -> Platform.UNKNOWN
     }
 }
 
