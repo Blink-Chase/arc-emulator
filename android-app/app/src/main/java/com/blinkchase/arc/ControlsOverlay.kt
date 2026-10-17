@@ -1779,3 +1779,4 @@ private tailrec fun Context.findMainActivity(): MainActivity? = when (this) {
     is ContextWrapper -> baseContext.findMainActivity()
     else -> null
 }
+// Platform layouts: Atari, Atari 7800, Lynx, WonderSwan, TurboGrafx  
