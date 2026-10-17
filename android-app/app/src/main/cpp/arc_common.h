@@ -206,6 +206,10 @@ extern std::atomic<bool> g_saveStateRequested;
 extern std::atomic<bool> g_loadStateRequested;
 extern std::atomic<bool> g_stateOperationSuccess;
 extern std::string g_stateFilePath; // New: Path to read/write from emu thread
+bool QueueDiskChange(int direction);
+void ResetDiskControl();
+void RefreshDiskControlState();
+void ProcessDiskControlRequest();
 
 extern uint8_t* g_stateBuffer;
 extern size_t g_stateBufferCapacity;

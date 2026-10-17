@@ -33,6 +33,10 @@ namespace {
 // The exact Vulkan value string advertised by the core's renderer option,
 // discovered at option-registration time (it only exists with ENABLE_VULKAN).
     std::string g_pcsx2VulkanValue;
+    retro_disk_control_ext_callback g_diskControlCallbacks = {};
+    std::atomic<int> g_diskChangeRequest{0};
+    std::atomic<unsigned> g_diskCount{0};
+    std::atomic<bool> g_diskControlAvailable{false};
 
 // Scan a retro_core_option_value[] for the Vulkan renderer value. Doubles as
 // the ENABLE_VULKAN capability probe: no value => no Vulkan in this build.
@@ -151,8 +155,114 @@ namespace {
 
 } // namespace
 
+void ResetDiskControl() {
+  g_diskControlCallbacks = {};
+  g_diskChangeRequest.store(0);
+  g_diskCount.store(0);
+  g_diskControlAvailable.store(false);
+}
+
+void RefreshDiskControlState() {
+  if (!g_diskControlAvailable.load() || !g_diskControlCallbacks.get_num_images ||
+          !g_diskControlCallbacks.get_image_index) {
+    g_diskCount.store(0);
+    return;
+  }
+  const unsigned count = g_diskControlCallbacks.get_num_images();
+  g_diskCount.store(count);
+  if (count > 0) {
+    LOGI("DISK: core exposes %u images; current image is %u", count,
+         g_diskControlCallbacks.get_image_index());
+  }
+}
+
+bool QueueDiskChange(int direction) {
+  if (!g_diskControlAvailable.load() || g_diskCount.load() < 2 || direction == 0)
+    return false;
+  g_diskChangeRequest.fetch_add(direction > 0 ? 1 : -1);
+  return true;
+}
+
+void ProcessDiskControlRequest() {
+  int request = g_diskChangeRequest.exchange(0);
+  if (request == 0 || !g_diskControlAvailable.load() ||
+          !g_diskControlCallbacks.get_num_images ||
+          !g_diskControlCallbacks.get_image_index ||
+          !g_diskControlCallbacks.set_image_index ||
+          !g_diskControlCallbacks.set_eject_state) {
+    return;
+  }
+
+  const unsigned count = g_diskControlCallbacks.get_num_images();
+  if (count < 2) {
+    g_diskCount.store(count);
+    LOGW("DISK: ignoring disk change because the core exposes fewer than two images");
+    return;
+  }
+  g_diskCount.store(count);
+
+  const bool wasEjected = g_diskControlCallbacks.get_eject_state &&
+          g_diskControlCallbacks.get_eject_state();
+  if (!wasEjected && !g_diskControlCallbacks.set_eject_state(true)) {
+    LOGE("DISK: core refused to eject the current image");
+    return;
+  }
+
+  const int direction = request > 0 ? 1 : -1;
+  unsigned index = g_diskControlCallbacks.get_image_index();
+  int remaining = request > 0 ? request : -request;
+  while (remaining-- > 0) {
+    index = direction > 0 ? (index + 1) % count : (index + count - 1) % count;
+  }
+
+  const bool changed = g_diskControlCallbacks.set_image_index(index);
+  const bool reinserted = wasEjected || g_diskControlCallbacks.set_eject_state(false);
+  if (!changed || !reinserted) {
+    LOGE("DISK: failed to change image to %u (changed=%d reinserted=%d)",
+         index, changed ? 1 : 0, reinserted ? 1 : 0);
+    return;
+  }
+  LOGI("DISK: switched to image %u of %u", index + 1, count);
+}
+
 bool EnvironmentCallback(unsigned cmd, void *data) {
   switch (cmd) {
+    case RETRO_ENVIRONMENT_GET_DISK_CONTROL_INTERFACE_VERSION:
+      if (!data)
+        return false;
+      *static_cast<unsigned *>(data) = 1;
+      return true;
+    case RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE:
+      g_diskControlCallbacks = {};
+      if (data) {
+        const auto *legacy =
+                static_cast<retro_disk_control_callback *>(data);
+        g_diskControlCallbacks.set_eject_state = legacy->set_eject_state;
+        g_diskControlCallbacks.get_eject_state = legacy->get_eject_state;
+        g_diskControlCallbacks.get_image_index = legacy->get_image_index;
+        g_diskControlCallbacks.set_image_index = legacy->set_image_index;
+        g_diskControlCallbacks.get_num_images = legacy->get_num_images;
+      }
+      g_diskControlAvailable.store(
+              g_diskControlCallbacks.get_num_images &&
+              g_diskControlCallbacks.get_image_index &&
+              g_diskControlCallbacks.set_image_index &&
+              g_diskControlCallbacks.set_eject_state);
+      LOGI("DISK: legacy disk control interface %s",
+           g_diskControlAvailable.load() ? "registered" : "incomplete");
+      return true;
+    case RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE:
+      g_diskControlCallbacks = data
+              ? *static_cast<retro_disk_control_ext_callback *>(data)
+              : retro_disk_control_ext_callback{};
+      g_diskControlAvailable.store(
+              g_diskControlCallbacks.get_num_images &&
+              g_diskControlCallbacks.get_image_index &&
+              g_diskControlCallbacks.set_image_index &&
+              g_diskControlCallbacks.set_eject_state);
+      LOGI("DISK: extended disk control interface %s",
+           g_diskControlAvailable.load() ? "registered" : "incomplete");
+      return true;
     case 69:
     case 8388611:
     case (4 | RETRO_ENVIRONMENT_EXPERIMENTAL):
@@ -332,9 +442,6 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
         *(uint64_t *)data = 0;
         return true;
       }
-          return false;
-    case RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE:
-      LOGI("SET_DISK_CONTROL_EXT_INTERFACE: unavailable");
           return false;
     case RETRO_ENVIRONMENT_SET_CORE_OPTIONS:
       if (!data)

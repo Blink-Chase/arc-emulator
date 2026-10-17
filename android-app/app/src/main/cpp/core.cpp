@@ -384,6 +384,7 @@ void EmuThreadFunc() {
 
         // 2. GAME LOADING
         if (g_loadRequested.load()) {
+            ResetDiskControl();
             if (core_init) core_init();
             struct retro_system_info system_info = {};
             if (core_get_system_info) core_get_system_info(&system_info);
@@ -452,6 +453,7 @@ void EmuThreadFunc() {
                 LOGI("CORE: retro_load_game returned successfully");
                 g_coreGameLoaded = true;
                 gameLoaded = true;
+                RefreshDiskControlState();
 
                 // Setup EGL & invoke context_reset ONCE right after retro_load_game finishes
                 if (g_useHwRender && !g_useVulkan && g_nativeWindow && !eglInitialized) {
@@ -517,6 +519,8 @@ void EmuThreadFunc() {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
             continue;
         }
+
+        ProcessDiskControlRequest();
 
         // A surface resize is rebuilt only once the size has stopped changing.
         // Compose reports several intermediate sizes during a rotation; acting on

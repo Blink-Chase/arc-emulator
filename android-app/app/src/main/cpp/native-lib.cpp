@@ -185,6 +185,11 @@ JNIEXPORT void JNICALL Java_com_blinkchase_arc_MainActivity_nativeResumeGame(
   g_isPaused.store(false);
 }
 
+JNIEXPORT jboolean JNICALL Java_com_blinkchase_arc_MainActivity_nativeCycleDisk(
+    JNIEnv *env, jobject thiz, jint direction) {
+  return QueueDiskChange(direction) ? JNI_TRUE : JNI_FALSE;
+}
+
 JNIEXPORT jint JNICALL
 Java_com_blinkchase_arc_MainActivity_resetGame(JNIEnv *env, jobject thiz) {
   if (!g_isRunning.load() || !core_reset)
