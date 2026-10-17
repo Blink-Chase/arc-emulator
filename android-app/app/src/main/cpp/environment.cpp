@@ -389,14 +389,27 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
       g_hwRender.get_proc_address = GetProcAddress;
       g_hwRender.get_current_framebuffer = GetCurrentFramebuffer;
 
-      // Force GLES 3.2 for SwanStation / PS1 to allow Adreno GLSL display shaders to compile
+      // GLES version handshake.
+      //
+      // This must stay byte-identical to the last known-good build for every
+      // core EXCEPT PS1. Previously this block forced GLES 3.2 on *all* GLES
+      // cores unconditionally, and Dolphin (GameCube / Wii) depends on that -
+      // Dolphin dies with SIGSEGV inside retro_init if it is handed anything
+      // lower. Scoping the force to PS1 only left Dolphin with whatever version
+      // it asked for, which is the regression that broke GameCube / Wii.
+      //
+      // So: PS1 cores get pinned down to 3.0 for Adreno compatibility, and
+      // every other GLES core keeps the 3.2 the working build always gave it.
       if (hw->context_type == RETRO_HW_CONTEXT_OPENGLES2 ||
               hw->context_type == RETRO_HW_CONTEXT_OPENGLES3 ||
               hw->context_type == RETRO_HW_CONTEXT_OPENGLES_VERSION) {
+        const unsigned minor = g_isPs1Core.load() ? 0u : 2u;
         hw->version_major = 3;
-        hw->version_minor = 2;
+        hw->version_minor = minor;
         g_hwRender.version_major = 3;
-        g_hwRender.version_minor = 2;
+        g_hwRender.version_minor = minor;
+        LOGI("SET_HW_RENDER: GLES 3.%u (ps1=%d)", minor,
+             g_isPs1Core.load() ? 1 : 0);
       }
 
       return true;
@@ -432,6 +445,11 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
     case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:
     case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS:
     case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
+      // Deliberately a plain acknowledgement. An earlier revision returned false
+      // for a NULL payload here, which changed the contract for cores (Dolphin
+      // calls SET_CONTROLLER_INFO during init) with no benefit, so this is back
+      // to always returning true.
+      return true;
       return true;
     case RETRO_ENVIRONMENT_GET_PERF_INTERFACE:
     case RETRO_ENVIRONMENT_GET_SENSOR_INTERFACE:
@@ -584,7 +602,15 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
       g_coreVariables["mupen64plus-EnableFBEmulation"] = "True";
 
       // SwanStation Overrides
-      g_coreVariables["swanstation_controller_1_type"] = "AnalogController";
+      g_coreVariables["swanstation_controller_1_type"] = "analog";
+      g_coreVariables["swanstation_controller_1_analog_toggle"] = "enabled";
+      g_coreVariables["swanstation_Pad1_Type"] = "Analog Controller";
+      g_coreVariables["swanstation_Pad1Type"] = "Analog Controller";
+      g_coreVariables["swanstation_Controller1_Type"] = "Analog Controller";
+      g_coreVariables["swanstation_ControllerPorts_Pad1Type"] = "Analog Controller";
+      g_coreVariables["swanstation_Controller_AnalogCombo"] = "Disabled";
+      g_coreVariables["swanstation_Controller_EnableRumble"] = "Enabled";
+      g_coreVariables["swanstation_ControllerPorts_MultitapMode"] = "Disabled";
 
       if (g_isDolphinCore.load()) {
         g_coreVariables["dolphin_shader_compilation_mode"] = "aot";
@@ -604,11 +630,43 @@ bool EnvironmentCallback(unsigned cmd, void *data) {
       return true;
     }
     case RETRO_ENVIRONMENT_GET_VARIABLE: {
-      if (!data)
-        return false;
+      if (!data) return false;
       struct retro_variable *var = (struct retro_variable *)data;
       if (var->key) {
         std::string key(var->key);
+        LOGI("GET_VARIABLE requested: %s", key.c_str());
+
+        // SwanStation Intelligent Fallback for any swanstation_ key
+        if (key.rfind("swanstation_", 0) == 0) {
+          if (g_coreVariables.find(key) != g_coreVariables.end()) {
+            var->value = g_coreVariables[key].c_str();
+          } else {
+            if (key.find("Type") != std::string::npos || key.find("type") != std::string::npos) {
+              static const char *defaultType = "Analog Controller";
+              var->value = defaultType;
+            } else if (key.find("Enable") != std::string::npos || key.find("Mode") != std::string::npos) {
+              static const char *defaultEnabled = "Enabled";
+              var->value = defaultEnabled;
+            } else {
+              static const char *defaultVal = "Disabled";
+              var->value = defaultVal;
+            }
+            LOGI("GET_VARIABLE swanstation dynamic fallback: %s -> %s", key.c_str(), var->value);
+          }
+          return true;
+        }
+
+        // SwanStation Rendering Intercepts (Fixes Adreno Shader Error)
+        if (key == "swanstation_gpu_renderer") {
+          static const char *swanRenderer = "OpenGL";
+          var->value = swanRenderer;
+          return true;
+        }
+        if (key == "swanstation_gpu_backend") {
+          static const char *swanBackend = "OpenGLES";
+          var->value = swanBackend;
+          return true;
+        }
         if (key != "pcsx2_renderer" && key != "pcsx2_fastmem" &&
                 key != "melonds_screen_layout" && key != "desmume_screens_layout" &&
                 key != "melonds_touch_mode" && key != "desmume_pointer_type" &&
