@@ -166,3 +166,4 @@ bool set_rumble_state(unsigned port, enum retro_rumble_effect effect,
         uint16_t strength) {
     return true;
 }
+// Input diagnostic for joypad B  

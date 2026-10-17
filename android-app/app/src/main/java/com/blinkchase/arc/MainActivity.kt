@@ -1572,3 +1572,4 @@ private fun isSecondaryFile(name: String): Boolean {
            Regex("(?i)\\b(disk|disc|side|part)\\s*[2-9]\\b").containsMatchIn(lower) ||
            Regex("(?i)\\b(side|disk|disc)\\s*[b-z]\\b").containsMatchIn(lower)
 }
+external fun getCoreRotation(): Int 
