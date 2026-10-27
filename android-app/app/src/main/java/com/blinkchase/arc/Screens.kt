@@ -700,7 +700,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
                         Text("Profile", style = MaterialTheme.typography.titleMedium)
-                        Text("Version 1.6.0 (Latest)", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        Text("Version 1.7.0 (Latest)", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                     }
                 }
             }

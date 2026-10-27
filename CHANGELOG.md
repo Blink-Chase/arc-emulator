@@ -4,6 +4,32 @@ All significant changes to this project will be documented in this file.
 
 ---
 
+## [1.7.0] - Core Expansions & ZIP Support - 2026-10-15
+
+This release introduces five new classic computer and console platforms (Amiga, Atari, Commodore 64, TurboGrafx-16 / PC Engine, and WonderSwan), direct ZIP archive playback without extraction, improved landscape / dual-orientation UI, and robust Storage Access Framework (SAF) improvements.
+
+### 🕹️ New Platforms & Cores
+
+- **Commodore Amiga (PUAE)**: Full Amiga support with custom disk playlist management for multi-disk floppy games.
+- **Atari (Stella / ProSystem)**: Classic Atari emulation with optimized aspect ratios and touch controls.
+- **Commodore 64 (VICE)**: C64 emulation featuring dedicated disk playlist utilities for seamless multi-file game loading.
+- **TurboGrafx-16 / PC Engine (Mednafen PCE Fast)**: High-speed PCE emulation with crisp 16-bit visuals and sound.
+- **WonderSwan (Mednafen WSwan)**: Handheld WonderSwan / WonderSwan Color emulation supporting both portrait and landscape screen rotation.
+
+### 📦 Archive & Storage Enhancements
+
+- **Direct ZIP Playback**: Play ROMs directly compressed inside `.zip` archives without manual extraction, saving internal storage and decluttering file pickers.
+- **Storage Access Framework (SafRomStorage)**: Upgraded SAF integration for robust, permission-stable access to external SD cards and shared folders across Android versions.
+- **Multi-Disk Playlists**: Integrated disk swap handlers for Amiga and C64 multi-disk games.
+
+### 📐 Landscape & Dual Orientation UI
+
+- **Navigation Rail (ArcNavigationRail.kt)**: Re-engineered landscape navigation rail providing spacious, easy-to-reach menus and library controls when rotating your device.
+- **Responsive Controls Overlay (ControlsOverlay.kt)**: Refined touch layout responsiveness and scaling across landscape and portrait orientations.
+- **Lifecycle Context Preservation**: Maintained stable EGL contexts and surface binding during screen rotation to prevent graphics corruption or crashes.
+
+---
+
 ## [1.6.0] - Core Expansion & Simpler Setup - 2026-10-02
 
 This release adds five new platforms (GameCube, Wii, PS2, Nintendo DS and Sega Saturn) and rebuilds the first-run experience around a built-in core downloader, a smarter BIOS Manager, and a setup guide that suggests cores based on the games you actually own.

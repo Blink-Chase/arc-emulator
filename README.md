@@ -63,15 +63,19 @@ Arc gives you control over how your collection is displayed:
 | **Genesis / Mega Drive** | ✅ Working | `genesis_plus_gx_libretro_android` |
 | **Nintendo DS** | ✅ Working | `desmume_libretro_android` |
 | **Sega Saturn** | ✅ Working | `yabause_libretro_android` |
+| **Commodore Amiga** | ⚠️ Playable (Keybinds) | `puae_libretro_android` |
+| **Atari (2600 / 7800)** | ✅ Working | `stella_libretro_android` |
+| **Commodore 64** | ⚠️ Playable (Keybinds) | `vice_libretro_android` |
+| **TurboGrafx-16 / PCE** | ✅ Working | `mednafen_pce_fast_libretro_android` |
+| **WonderSwan / Color** | ✅ Working | `mednafen_wswan_libretro_android` |
 | **GameCube** | 🧪 Experimental | `dolphin_libretro_android` |
 | **Wii** | 🧪 Experimental | `dolphin_libretro_android` |
 | **PS2** | 🧪 Experimental | `pcsx2_libretro_android` |
 
 > [!NOTE]
-> **Experimental** platforms are playable but still being polished — expect bugs and per-game compatibility differences. GameCube and Wii also need a reasonably modern 64-bit device. Arc warns you the first time you launch one.
-
-> [!NOTE]
-> **Active Development:** Platform support and Libretro core integrations are actively expanding. Additional cores and optimizations are planned for future updates.
+> **Platform Notes:**
+> * **Experimental Systems (GameCube, Wii, PS2):** Playable but require a modern 64-bit device; expect occasional bugs and per-game compatibility differences.
+> * **Computer Systems (Amiga & C64):** Fully playable, though custom keybind mapping or a physical keyboard/gamepad is often needed depending on the title.
 
 ### Core Downloads & Import
 You don't need to hunt down core files yourself — Arc installs them for you.
